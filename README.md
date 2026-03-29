@@ -42,7 +42,7 @@ brew install ffmpeg
 ## Setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/dj-flac-tagger.git
+git clone https://github.com/apj72/dj-flac-tagger.git
 cd dj-flac-tagger
 python3 -m venv venv
 source venv/bin/activate
