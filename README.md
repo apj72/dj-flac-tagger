@@ -5,10 +5,14 @@ A local web tool for DJs to create lossless digital copies of vinyl records and 
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+## Why?
+
+OBS Studio is primarily a video recording tool — it outputs `.mkv` video files even when all you care about is the audio. If you configure OBS to use FLAC as the audio encoder, the lossless audio is trapped inside a large video container alongside an unnecessary video stream. This tool solves that by stripping out just the audio track, keeping it bit-for-bit lossless, and producing a properly tagged FLAC file with artwork — ready to drop straight into your DJ library.
+
 ## What It Does
 
-1. **Extracts audio** from MKV/MP4/MOV recordings — lossless stream copy when the source is already FLAC, otherwise converts to FLAC
-2. **Fetches metadata** from Bandcamp, Discogs, or any URL — title, artist, album, year, genre, label, catalogue number
+1. **Extracts audio** from MKV/MP4/MOV recordings — lossless stream copy when the source is already FLAC, otherwise converts to FLAC. The video track is discarded.
+2. **Fetches metadata** from Bandcamp, Discogs, Apple Music, or any URL — title, artist, album, year, genre, label, catalogue number
 3. **Embeds cover artwork** directly into the FLAC file
 4. **Copies the tagged FLAC** to a configurable destination folder (e.g. your Rekordbox library)
 5. **Moves the source MKV to Bin** after extraction (optional, recoverable from macOS Trash)
@@ -18,7 +22,7 @@ A local web tool for DJs to create lossless digital copies of vinyl records and 
 This tool is designed around a recording workflow using:
 
 - **[BlackHole](https://existential.audio/blackhole/)** — a virtual audio driver for macOS that routes system audio (e.g. from a DJ controller or browser) into OBS as a capture source. Use the 16-channel version.
-- **[OBS Studio](https://obsproject.com/)** — open-source screen/audio recorder. Configure it to record with **FLAC audio** for lossless quality.
+- **[OBS Studio](https://obsproject.com/)** — open-source screen/audio recorder. Configure it to record with **FLAC audio** for lossless quality. OBS outputs `.mkv` video files — this tool extracts the lossless audio from those files.
 
 ### Recommended OBS Settings
 
