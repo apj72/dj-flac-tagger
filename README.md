@@ -76,6 +76,7 @@ Open **http://localhost:5123** in your browser.
 |--------|-------------|
 | **Discogs** (master or release URL) | Artist, album, year, genre, styles, label, cat no., artwork, full tracklist |
 | **Bandcamp** (track or album URL) | Artist, album, year, genre tags, artwork |
+| **Apple Music** (song URL) | Artist, album, year, genre, track number, high-res artwork |
 | **Any URL** | Title, artwork (via Open Graph tags) |
 | **Manual** | Type everything yourself |
 

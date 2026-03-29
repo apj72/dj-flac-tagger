@@ -187,6 +187,77 @@ def scrape_bandcamp(url):
     return meta
 
 
+def scrape_apple_music(url):
+    resp = requests.get(url, headers=HEADERS, timeout=15)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    meta = {}
+
+    ld_json = soup.find("script", type="application/ld+json")
+    if ld_json:
+        try:
+            data = json.loads(ld_json.string)
+            meta["title"] = data.get("name", "")
+
+            if "datePublished" in data:
+                year_match = re.search(r"(\d{4})", data["datePublished"])
+                if year_match:
+                    meta["date"] = year_match.group(1)
+
+            audio = data.get("audio", {})
+
+            artists = audio.get("byArtist", [])
+            if artists:
+                meta["artist"] = " / ".join(a.get("name", "") for a in artists)
+
+            album_info = audio.get("inAlbum", {})
+            if album_info:
+                meta["album"] = album_info.get("name", "")
+                album_artists = album_info.get("byArtist", [])
+                if album_artists:
+                    meta["albumartist"] = " / ".join(a.get("name", "") for a in album_artists)
+
+                # High-res artwork: replace size suffix to get 1200x1200
+                album_img = album_info.get("image", "")
+                if album_img:
+                    meta["artwork_url"] = re.sub(r"/\d+x\d+\w*\.\w+$", "/1200x1200bb.jpg", album_img)
+
+            if not meta.get("artwork_url") and data.get("image"):
+                meta["artwork_url"] = re.sub(r"/\d+x\d+\w*\.\w+$", "/1200x1200bb.jpg", data["image"])
+
+            genres = audio.get("genre", [])
+            if isinstance(genres, list):
+                genres = [g for g in genres if g.lower() != "music"]
+                if genres:
+                    meta["genre"] = " / ".join(genres)
+
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # Fallback to OG tags
+    if not meta.get("title"):
+        og_title = soup.find("meta", property="og:title")
+        if og_title:
+            title_text = og_title.get("content", "")
+            by_split = title_text.split(" by ")
+            if by_split:
+                meta["title"] = by_split[0].strip()
+
+    if not meta.get("artwork_url"):
+        og_image = soup.find("meta", property="og:image")
+        if og_image:
+            meta["artwork_url"] = og_image.get("content", "")
+
+    # Track number from music:album:track
+    track_meta = soup.find("meta", property="music:album:track")
+    if track_meta:
+        meta["tracknumber"] = track_meta.get("content", "")
+
+    meta["source"] = "apple_music"
+    return meta
+
+
 def parse_discogs_url(url):
     m = re.search(r"discogs\.com/(master|release)/(\d+)", url)
     if m:
@@ -379,6 +450,8 @@ def fetch_metadata():
                 meta = scrape_bandcamp(url)
             elif "discogs.com" in url:
                 meta = fetch_discogs(url)
+            elif "music.apple.com" in url:
+                meta = scrape_apple_music(url)
             else:
                 meta = scrape_generic(url)
         except Exception as e:
