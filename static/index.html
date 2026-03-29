@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DJ FLAC Tagger</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>DJ FLAC Tagger</h1>
+      <p class="subtitle">Extract &middot; Tag &middot; Embed Artwork</p>
+    </header>
+
+    <main>
+      <!-- Settings (collapsible) -->
+      <section class="card settings-card" id="settings-section">
+        <h2 class="settings-toggle" id="settings-toggle">
+          <span class="step-alt">&#9881;</span> Settings
+          <span class="toggle-arrow" id="toggle-arrow">&#9660;</span>
+        </h2>
+        <div id="settings-body" class="settings-body hidden">
+          <div class="field-row">
+            <label for="cfg-source">Source folder (OBS recordings)</label>
+            <input type="text" id="cfg-source" placeholder="~/DJ-Mixes" />
+          </div>
+          <div class="field-row">
+            <label for="cfg-dest">Destination folder (FLAC output copy)</label>
+            <input type="text" id="cfg-dest" placeholder="~/Documents/Rekordbox-music/FLACs" />
+          </div>
+          <button id="save-settings-btn" class="btn btn-primary btn-sm">Save Settings</button>
+          <span id="settings-status" class="settings-status hidden">Saved</span>
+        </div>
+      </section>
+
+      <!-- Step 1: Source file -->
+      <section class="card" id="source-section">
+        <h2><span class="step">1</span> Source File</h2>
+        <div class="dir-bar">
+          <input type="text" id="dir-input" placeholder="~/DJ-Mixes" />
+          <button id="browse-btn" class="btn btn-secondary">Browse</button>
+        </div>
+        <div id="file-list" class="file-list"></div>
+        <div id="probe-info" class="probe-info hidden"></div>
+      </section>
+
+      <!-- Step 2: Track info / URL -->
+      <section class="card" id="lookup-section">
+        <h2><span class="step">2</span> Track Info</h2>
+        <div class="field-row">
+          <label for="track-url">Bandcamp / Discogs / URL</label>
+          <input type="url" id="track-url" placeholder="https://discogs.com/master/... or bandcamp.com/track/..." />
+        </div>
+        <div class="field-row">
+          <label for="track-name">Or track name</label>
+          <input type="text" id="track-name" placeholder="Pump Up the Jam (Felix.cw Remix)" />
+        </div>
+        <button id="fetch-btn" class="btn btn-primary">Fetch Metadata</button>
+        <div id="fetch-status" class="status hidden"></div>
+      </section>
+
+      <!-- Track selector (shown for multi-track releases) -->
+      <section class="card hidden" id="tracklist-section">
+        <h2><span class="step-alt">&#9835;</span> Select Track</h2>
+        <div id="tracklist" class="tracklist"></div>
+      </section>
+
+      <!-- Step 3: Metadata editor -->
+      <section class="card" id="metadata-section">
+        <h2><span class="step">3</span> Metadata</h2>
+        <div class="metadata-layout">
+          <div class="artwork-panel">
+            <div id="artwork-preview" class="artwork-placeholder">
+              <span>No artwork</span>
+            </div>
+            <div class="field-row">
+              <label for="artwork-url">Artwork URL</label>
+              <input type="url" id="artwork-url" placeholder="https://..." />
+            </div>
+            <button id="preview-art-btn" class="btn btn-secondary btn-sm">Load Artwork</button>
+          </div>
+          <div class="fields-panel">
+            <div class="field-row">
+              <label for="meta-title">Title</label>
+              <input type="text" id="meta-title" />
+            </div>
+            <div class="field-row">
+              <label for="meta-artist">Artist</label>
+              <input type="text" id="meta-artist" />
+            </div>
+            <div class="field-row">
+              <label for="meta-albumartist">Album Artist</label>
+              <input type="text" id="meta-albumartist" />
+            </div>
+            <div class="field-row">
+              <label for="meta-album">Album</label>
+              <input type="text" id="meta-album" />
+            </div>
+            <div class="field-row inline-fields">
+              <div class="field-row">
+                <label for="meta-date">Year</label>
+                <input type="text" id="meta-date" placeholder="2024" />
+              </div>
+              <div class="field-row">
+                <label for="meta-genre">Genre</label>
+                <input type="text" id="meta-genre" placeholder="Electronic / Dance" />
+              </div>
+            </div>
+            <div class="field-row inline-fields">
+              <div class="field-row">
+                <label for="meta-label">Label</label>
+                <input type="text" id="meta-label" />
+              </div>
+              <div class="field-row">
+                <label for="meta-catno">Cat No.</label>
+                <input type="text" id="meta-catno" />
+              </div>
+            </div>
+            <div class="field-row">
+              <label for="meta-comment">Comment</label>
+              <textarea id="meta-comment" rows="2"></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 4: Extract -->
+      <section class="card" id="extract-section">
+        <h2><span class="step">4</span> Extract &amp; Tag</h2>
+        <label class="checkbox-row">
+          <input type="checkbox" id="delete-source" checked />
+          <span>Move source MKV to Bin after extraction</span>
+        </label>
+        <button id="extract-btn" class="btn btn-accent" disabled>Extract FLAC &amp; Apply Tags</button>
+        <div id="result" class="result hidden"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
