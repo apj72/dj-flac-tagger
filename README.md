@@ -1,6 +1,6 @@
 # DJ FLAC Tagger
 
-A local web tool for DJs to extract lossless audio from OBS screen recordings and tag them with full metadata and artwork — ready for import into Rekordbox, Traktor, or any DJ software.
+A local web tool for DJs to create lossless digital copies of vinyl records and other audio sources. Record your vinyl through OBS with BlackHole, then use this tool to extract the FLAC audio, auto-tag it with metadata and artwork from Discogs, Bandcamp, or Apple Music, and have it ready for import into Rekordbox, Traktor, or any DJ software.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
