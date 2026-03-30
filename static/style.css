@@ -189,6 +189,7 @@ label {
 .btn-accent:hover:not(:disabled) { background: var(--accent-hover); }
 
 .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+.btn-clear { margin-left: auto; }
 
 /* File list */
 .file-list {

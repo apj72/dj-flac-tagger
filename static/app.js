@@ -109,8 +109,30 @@ function formatDuration(secs) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-// ---- Populate metadata fields ----
+// ---- Clear / Populate metadata fields ----
+function clearAllFields() {
+  $("#meta-title").value = "";
+  $("#meta-artist").value = "";
+  $("#meta-albumartist").value = "";
+  $("#meta-album").value = "";
+  $("#meta-date").value = "";
+  $("#meta-genre").value = "";
+  $("#meta-comment").value = "";
+  $("#meta-label").value = "";
+  $("#meta-catno").value = "";
+  $("#artwork-url").value = "";
+  $("#artwork-preview").innerHTML = "<span>No artwork</span>";
+  $("#track-url").value = "";
+  $("#track-name").value = "";
+  $("#tracklist-section").classList.add("hidden");
+  $("#fetch-status").classList.add("hidden");
+  $("#result").classList.add("hidden");
+  currentTracklist = [];
+}
+
 function populateFields(meta) {
+  clearAllFields();
+
   if (meta.title) $("#meta-title").value = meta.title;
   if (meta.artist) $("#meta-artist").value = meta.artist;
   if (meta.albumartist) $("#meta-albumartist").value = meta.albumartist;
@@ -320,6 +342,7 @@ $("#preview-art-btn").addEventListener("click", () => {
 });
 
 $("#extract-btn").addEventListener("click", extractAndTag);
+$("#clear-btn").addEventListener("click", clearAllFields);
 
 // ---- Init ----
 loadSettings().then(() => browseFiles());
