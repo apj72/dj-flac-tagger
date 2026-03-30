@@ -879,5 +879,61 @@ def retag_batch():
     return jsonify({"results": results})
 
 
+@app.route("/api/browse-flacs")
+def browse_flacs():
+    cfg = load_config()
+    directory = request.args.get("dir", cfg["destination_dir"])
+    directory = resolve(directory)
+    if not os.path.isdir(directory):
+        return jsonify({"error": f"Directory not found: {directory}"}), 404
+
+    files = []
+    for f in sorted(Path(directory).iterdir()):
+        if f.suffix.lower() in (".flac",):
+            files.append({
+                "name": f.name,
+                "path": str(f),
+                "size_mb": round(f.stat().st_size / (1024 * 1024), 1),
+            })
+    return jsonify({"directory": directory, "files": files})
+
+
+@app.route("/api/read-tags", methods=["POST"])
+def read_tags():
+    """Read existing FLAC metadata and report whether artwork is embedded."""
+    data = request.get_json()
+    filepath = data.get("filepath")
+    if not filepath or not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 404
+
+    try:
+        audio = FLAC(filepath)
+    except Exception as e:
+        return jsonify({"error": f"Not a valid FLAC: {e}"}), 400
+
+    reverse_map = {
+        "title": "title",
+        "artist": "artist",
+        "albumartist": "albumartist",
+        "album": "album",
+        "date": "date",
+        "genre": "genre",
+        "comment": "comment",
+        "organization": "label",
+        "catalognumber": "catno",
+        "tracknumber": "tracknumber",
+    }
+
+    meta = {}
+    for vorbis_key, field in reverse_map.items():
+        vals = audio.get(vorbis_key, [])
+        if vals:
+            meta[field] = vals[0]
+
+    meta["has_artwork"] = len(audio.pictures) > 0
+
+    return jsonify(meta)
+
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5123, debug=True)

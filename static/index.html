@@ -161,6 +161,93 @@
         <div id="result" class="result hidden"></div>
       </section>
 
+      <!-- Fix Metadata (standalone tagger) -->
+      <section class="card" id="fix-section">
+        <h2 class="settings-toggle" id="fix-toggle">
+          <span class="step-alt">&#9998;</span> Fix Metadata
+          <span class="toggle-arrow" id="fix-arrow">&#9660;</span>
+        </h2>
+        <div id="fix-body" class="settings-body hidden">
+          <p class="hint">Browse existing FLACs, edit metadata &amp; artwork, and save — no extraction needed.</p>
+          <div class="dir-bar">
+            <input type="text" id="fix-dir-input" placeholder="~/Music/FLACs" />
+            <button id="fix-browse-btn" class="btn btn-secondary">Browse</button>
+          </div>
+          <div id="fix-file-list" class="file-list"></div>
+          <div id="fix-current-tags" class="probe-info hidden"></div>
+
+          <div id="fix-meta-panel" class="hidden">
+            <div class="metadata-layout">
+              <div class="artwork-panel">
+                <div id="fix-artwork-preview" class="artwork-placeholder">
+                  <span>No artwork</span>
+                </div>
+                <div class="field-row">
+                  <label for="fix-artwork-url">Artwork URL</label>
+                  <input type="url" id="fix-artwork-url" placeholder="https://..." />
+                </div>
+                <button id="fix-preview-art-btn" class="btn btn-secondary btn-sm">Load Artwork</button>
+              </div>
+              <div class="fields-panel">
+                <div class="field-row">
+                  <label for="fix-url">Fetch from URL</label>
+                  <div class="dir-bar">
+                    <input type="url" id="fix-url" placeholder="Bandcamp / Discogs / Apple Music..." />
+                    <button id="fix-fetch-btn" class="btn btn-secondary btn-sm">Fetch</button>
+                  </div>
+                </div>
+                <div id="fix-fetch-status" class="status hidden"></div>
+                <div id="fix-tracklist-section" class="hidden" style="margin-bottom:0.5rem">
+                  <div id="fix-tracklist" class="tracklist"></div>
+                </div>
+                <div class="field-row">
+                  <label for="fix-title">Title</label>
+                  <input type="text" id="fix-title" />
+                </div>
+                <div class="field-row">
+                  <label for="fix-artist">Artist</label>
+                  <input type="text" id="fix-artist" />
+                </div>
+                <div class="field-row">
+                  <label for="fix-albumartist">Album Artist</label>
+                  <input type="text" id="fix-albumartist" />
+                </div>
+                <div class="field-row">
+                  <label for="fix-album">Album</label>
+                  <input type="text" id="fix-album" />
+                </div>
+                <div class="field-row inline-fields">
+                  <div class="field-row">
+                    <label for="fix-date">Year</label>
+                    <input type="text" id="fix-date" placeholder="2024" />
+                  </div>
+                  <div class="field-row">
+                    <label for="fix-genre">Genre</label>
+                    <input type="text" id="fix-genre" placeholder="Electronic / Dance" />
+                  </div>
+                </div>
+                <div class="field-row inline-fields">
+                  <div class="field-row">
+                    <label for="fix-label">Label</label>
+                    <input type="text" id="fix-label" />
+                  </div>
+                  <div class="field-row">
+                    <label for="fix-catno">Cat No.</label>
+                    <input type="text" id="fix-catno" />
+                  </div>
+                </div>
+                <div class="field-row">
+                  <label for="fix-comment">Comment</label>
+                  <textarea id="fix-comment" rows="2"></textarea>
+                </div>
+              </div>
+            </div>
+            <button id="fix-save-btn" class="btn btn-accent" disabled>Save Tags</button>
+            <div id="fix-result" class="result hidden"></div>
+          </div>
+        </div>
+      </section>
+
       <!-- History / Processing Log -->
       <section class="card" id="history-section">
         <h2 class="settings-toggle" id="history-toggle">
