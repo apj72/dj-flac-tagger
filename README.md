@@ -2,6 +2,8 @@
 
 A local web tool for DJs to create lossless digital copies of vinyl records and other audio sources. Record your vinyl through OBS with BlackHole, then use this tool to extract the FLAC audio, auto-tag it with metadata and artwork from Discogs, Bandcamp, or Apple Music, and have it ready for import into Rekordbox, Traktor, or any DJ software.
 
+Also includes a standalone **Fix Metadata** tool for editing tags and artwork on existing audio files (FLAC, MP3, M4A/AAC, OGG) — with automatic search to find the right metadata for you.
+
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -11,6 +13,10 @@ OBS Studio is primarily a video recording tool — it outputs `.mkv` video files
 
 ## What It Does
 
+The tool has two pages, accessible via tabs at the top:
+
+### Extract (main workflow)
+
 1. **Extracts audio** from MKV/MP4/MOV recordings — lossless stream copy when the source is already FLAC, otherwise converts to FLAC. The video track is discarded.
 2. **Analyses audio levels** — displays integrated LUFS, true peak, and mean volume with colour-coded meters so you can see at a glance if your recording levels are healthy
 3. **Normalises audio** (optional) — two-pass EBU R128 loudness normalisation to -14 LUFS, keeping the output as lossless FLAC. Auto-suggested when levels are too quiet, with an on/off toggle
@@ -18,6 +24,19 @@ OBS Studio is primarily a video recording tool — it outputs `.mkv` video files
 5. **Embeds cover artwork** directly into the FLAC file
 6. **Copies the tagged FLAC** to a configurable destination folder (e.g. your Rekordbox library)
 7. **Moves the source MKV to Bin** after extraction (optional, recoverable from macOS Trash)
+8. **Logs every extraction** to a processing log so metadata and artwork can be re-applied later if needed
+
+### Fix Metadata (standalone tag editor)
+
+A separate page for fixing tags on existing audio files — no extraction or audio processing involved.
+
+1. **Browse** any folder for audio files (FLAC, MP3, M4A/AAC, OGG, AIFF, and more)
+2. **Auto-searches** iTunes and Discogs when you select a file, using the existing tags or filename to find matching releases
+3. **Pick a result** to fetch full metadata and artwork, or paste a URL manually
+4. **Supports album/compilation URLs** — Apple Music and Discogs album links show a full tracklist so you can select the right track (useful for DJ mix compilations where each track has a different artist)
+5. **Save tags and artwork** directly to the file in the correct format for each file type
+
+This is particularly useful for fixing files that have been processed by other tools (e.g. Platinum Notes) which can strip metadata and artwork.
 
 ## Recording Setup
 
@@ -67,15 +86,24 @@ python app.py
 
 Open **http://localhost:5123** in your browser.
 
-### Workflow
+### Extract Workflow
 
 1. **Settings** — configure your source folder (where OBS saves recordings) and destination folder (where tagged FLACs should be copied, e.g. your Rekordbox library)
 2. **Select** an MKV file from the source folder — audio levels are automatically analysed and displayed with LUFS, peak, and mean meters
 3. **Review levels** — if the recording is too quiet, the normalisation toggle auto-enables. Override it if you prefer the original levels
 4. **Paste a URL** (Bandcamp, Discogs, or Apple Music) or type the track name, then hit **Fetch Metadata**
-5. **Pick a track** if the release has multiple tracks (Discogs EPs/albums)
+5. **Pick a track** if the release has multiple tracks (Discogs EPs/albums, Apple Music compilations)
 6. **Review/edit** metadata and artwork
 7. **Extract** — creates a tagged FLAC (with optional normalisation to -14 LUFS), copies it to your destination folder, and optionally trashes the source MKV
+
+### Fix Metadata Workflow
+
+1. Switch to the **Fix Metadata** tab
+2. **Browse** to a folder containing your audio files
+3. **Click a file** — the tool reads its current tags, then automatically searches iTunes and Discogs for matching releases
+4. **Pick a search result** — or paste a Bandcamp / Discogs / Apple Music URL manually if the search doesn't find what you need
+5. **Review/edit** the metadata fields and artwork preview
+6. **Save Tags & Artwork** — writes everything to the file
 
 ### Audio Level Analysis
 
@@ -97,9 +125,23 @@ If your recording is significantly below -14 LUFS, the normalisation toggle enab
 |--------|-------------|
 | **Discogs** (master or release URL) | Artist, album, year, genre, styles, label, cat no., artwork, full tracklist |
 | **Bandcamp** (track or album URL) | Artist, album, year, genre tags, artwork |
-| **Apple Music** (song URL) | Artist, album, year, genre, track number, high-res artwork |
+| **Apple Music** (song or album URL) | Artist, album, year, genre, track number, high-res artwork, full tracklist for albums/compilations with per-track artists |
 | **Any URL** | Title, artwork (via Open Graph tags) |
-| **Manual** | Type everything yourself |
+| **Auto-search** (Fix Metadata page) | Searches iTunes + Discogs automatically from file tags or filename |
+
+### Supported File Formats (Fix Metadata)
+
+| Format | Tags | Artwork |
+|--------|------|---------|
+| **FLAC** | Vorbis comments | Embedded pictures |
+| **MP3** | ID3v2 | APIC frames |
+| **M4A / AAC / MP4** | iTunes atoms | `covr` atom |
+| **OGG Vorbis** | Vorbis comments | metadata_block_picture |
+| **Others** | Generic mutagen fallback | — |
+
+### Processing Log
+
+Every extraction is saved to `processing_log.json` with full metadata, artwork URL, and settings. If tags or artwork are lost (e.g. after processing through Platinum Notes), you can re-apply everything from the log via the Processing Log section on the Extract page.
 
 ## Configuration
 
@@ -108,7 +150,7 @@ Settings are stored in `config.json` and can be edited via the UI or directly:
 ```json
 {
   "source_dir": "~/DJ-Mixes",
-  "destination_dir": "~/Documents/Rekordbox-music/FLACs"
+  "destination_dir": "~/Music/FLACs"
 }
 ```
 
@@ -116,13 +158,16 @@ Settings are stored in `config.json` and can be edited via the UI or directly:
 
 ```
 dj-flac-tagger/
-├── app.py              # Flask backend — extraction, scraping, tagging
+├── app.py              # Flask backend — extraction, scraping, tagging, search
 ├── config.json         # Persisted settings (source/destination folders)
+├── processing_log.json # Extraction history for re-tagging
 ├── requirements.txt    # Python dependencies
 ├── static/
-│   ├── index.html      # Single-page UI
-│   ├── style.css       # Dark theme styles
-│   └── app.js          # Frontend logic
+│   ├── index.html      # Extract page
+│   ├── app.js          # Extract page logic
+│   ├── fix.html        # Fix Metadata page
+│   ├── fix.js          # Fix Metadata page logic
+│   └── style.css       # Shared dark theme styles
 └── README.md
 ```
 
