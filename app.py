@@ -9,7 +9,14 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 from flask import Flask, jsonify, request
+import mutagen
 from mutagen.flac import FLAC, Picture
+from mutagen.mp3 import MP3
+from mutagen.mp4 import MP4, MP4Cover
+from mutagen.id3 import ID3, APIC, TIT2, TPE1, TPE2, TALB, TDRC, TCON, COMM, TPUB, TRCK, TXXX
+from mutagen.oggvorbis import OggVorbis
+
+AUDIO_EXTENSIONS = (".flac", ".mp3", ".m4a", ".mp4", ".aac", ".ogg", ".oga", ".wma", ".aiff", ".aif")
 
 app = Flask(__name__)
 
@@ -182,36 +189,145 @@ def trash_file(filepath):
     subprocess.run(["osascript", "-e", script], capture_output=True, text=True, check=True)
 
 
-def apply_metadata(flac_path, metadata, artwork_bytes=None, artwork_mime=None):
-    audio = FLAC(flac_path)
+def apply_metadata(filepath, metadata, artwork_bytes=None, artwork_mime=None):
+    ext = os.path.splitext(filepath)[1].lower()
 
-    tag_map = {
-        "title": "title",
-        "artist": "artist",
-        "albumartist": "albumartist",
-        "album": "album",
-        "date": "date",
-        "genre": "genre",
-        "comment": "comment",
-        "tracknumber": "tracknumber",
-        "label": "organization",
-        "catno": "catalognumber",
+    if ext == ".flac":
+        _apply_flac(filepath, metadata, artwork_bytes, artwork_mime)
+    elif ext == ".mp3":
+        _apply_mp3(filepath, metadata, artwork_bytes, artwork_mime)
+    elif ext in (".m4a", ".mp4", ".aac"):
+        _apply_mp4(filepath, metadata, artwork_bytes, artwork_mime)
+    elif ext in (".ogg", ".oga"):
+        _apply_vorbis(filepath, metadata, artwork_bytes, artwork_mime)
+    else:
+        _apply_generic(filepath, metadata, artwork_bytes, artwork_mime)
+
+
+def _apply_flac(filepath, metadata, artwork_bytes, artwork_mime):
+    audio = FLAC(filepath)
+    vorbis_map = {
+        "title": "title", "artist": "artist", "albumartist": "albumartist",
+        "album": "album", "date": "date", "genre": "genre", "comment": "comment",
+        "tracknumber": "tracknumber", "label": "organization", "catno": "catalognumber",
     }
-
-    for key, vorbis_key in tag_map.items():
+    for key, vorbis_key in vorbis_map.items():
         val = metadata.get(key)
         if val:
             audio[vorbis_key] = [val]
-
     if artwork_bytes:
         pic = Picture()
-        pic.type = 3  # front cover
+        pic.type = 3
         pic.mime = artwork_mime or "image/jpeg"
         pic.desc = "Cover"
         pic.data = artwork_bytes
         audio.clear_pictures()
         audio.add_picture(pic)
+    audio.save()
 
+
+def _apply_mp3(filepath, metadata, artwork_bytes, artwork_mime):
+    audio = MP3(filepath, ID3=ID3)
+    try:
+        audio.add_tags()
+    except mutagen.id3.error:
+        pass
+    t = audio.tags
+    id3_map = {
+        "title": TIT2, "artist": TPE1, "albumartist": TPE2,
+        "album": TALB, "genre": TCON,
+    }
+    for key, frame_cls in id3_map.items():
+        val = metadata.get(key)
+        if val:
+            t.delall(frame_cls.__name__)
+            t.add(frame_cls(encoding=3, text=[val]))
+    if metadata.get("date"):
+        t.delall("TDRC")
+        t.add(TDRC(encoding=3, text=[metadata["date"]]))
+    if metadata.get("tracknumber"):
+        t.delall("TRCK")
+        t.add(TRCK(encoding=3, text=[metadata["tracknumber"]]))
+    if metadata.get("comment"):
+        t.delall("COMM")
+        t.add(COMM(encoding=3, lang="eng", desc="", text=[metadata["comment"]]))
+    if metadata.get("label"):
+        t.delall("TPUB")
+        t.add(TPUB(encoding=3, text=[metadata["label"]]))
+    if metadata.get("catno"):
+        t.delall("TXXX:CATALOGNUMBER")
+        t.add(TXXX(encoding=3, desc="CATALOGNUMBER", text=[metadata["catno"]]))
+    if artwork_bytes:
+        t.delall("APIC")
+        t.add(APIC(encoding=3, mime=artwork_mime or "image/jpeg", type=3, desc="Cover", data=artwork_bytes))
+    audio.save(v2_version=3)
+
+
+def _apply_mp4(filepath, metadata, artwork_bytes, artwork_mime):
+    audio = MP4(filepath)
+    if audio.tags is None:
+        audio.add_tags()
+    mp4_map = {
+        "title": "\xa9nam", "artist": "\xa9ART", "albumartist": "aART",
+        "album": "\xa9alb", "date": "\xa9day", "genre": "\xa9gen",
+        "comment": "\xa9cmt",
+    }
+    for key, atom in mp4_map.items():
+        val = metadata.get(key)
+        if val:
+            audio.tags[atom] = [val]
+    if metadata.get("tracknumber"):
+        try:
+            tnum = int(metadata["tracknumber"])
+            audio.tags["trkn"] = [(tnum, 0)]
+        except ValueError:
+            pass
+    if artwork_bytes:
+        fmt = MP4Cover.FORMAT_JPEG
+        if artwork_mime and "png" in artwork_mime:
+            fmt = MP4Cover.FORMAT_PNG
+        audio.tags["covr"] = [MP4Cover(artwork_bytes, imageformat=fmt)]
+    audio.save()
+
+
+def _apply_vorbis(filepath, metadata, artwork_bytes, artwork_mime):
+    audio = OggVorbis(filepath)
+    vorbis_map = {
+        "title": "title", "artist": "artist", "albumartist": "albumartist",
+        "album": "album", "date": "date", "genre": "genre", "comment": "comment",
+        "tracknumber": "tracknumber", "label": "organization", "catno": "catalognumber",
+    }
+    for key, vorbis_key in vorbis_map.items():
+        val = metadata.get(key)
+        if val:
+            audio[vorbis_key] = [val]
+    if artwork_bytes:
+        import base64
+        pic = Picture()
+        pic.type = 3
+        pic.mime = artwork_mime or "image/jpeg"
+        pic.desc = "Cover"
+        pic.data = artwork_bytes
+        audio["metadata_block_picture"] = [base64.b64encode(pic.write()).decode("ascii")]
+    audio.save()
+
+
+def _apply_generic(filepath, metadata, artwork_bytes, artwork_mime):
+    """Fallback using mutagen.File for any other supported format."""
+    audio = mutagen.File(filepath, easy=True)
+    if audio is None:
+        raise ValueError(f"Unsupported file format: {filepath}")
+    if audio.tags is None:
+        audio.add_tags()
+    easy_map = {"title": "title", "artist": "artist", "albumartist": "albumartist",
+                "album": "album", "date": "date", "genre": "genre"}
+    for key, tag in easy_map.items():
+        val = metadata.get(key)
+        if val:
+            try:
+                audio[tag] = [val]
+            except (KeyError, mutagen.MutagenError):
+                pass
     audio.save()
 
 
@@ -884,8 +1000,8 @@ def retag_batch():
     return jsonify({"results": results})
 
 
-@app.route("/api/browse-flacs")
-def browse_flacs():
+@app.route("/api/browse-audio")
+def browse_audio():
     cfg = load_config()
     directory = request.args.get("dir", cfg["destination_dir"])
     directory = resolve(directory)
@@ -894,7 +1010,7 @@ def browse_flacs():
 
     files = []
     for f in sorted(Path(directory).iterdir()):
-        if f.suffix.lower() in (".flac",):
+        if f.suffix.lower() in AUDIO_EXTENSIONS:
             files.append({
                 "name": f.name,
                 "path": str(f),
@@ -903,41 +1019,129 @@ def browse_flacs():
     return jsonify({"directory": directory, "files": files})
 
 
+# Keep old endpoint as alias for backwards compatibility
+app.add_url_rule("/api/browse-flacs", endpoint="browse_flacs_compat", view_func=browse_audio)
+
+
 @app.route("/api/read-tags", methods=["POST"])
 def read_tags():
-    """Read existing FLAC metadata and report whether artwork is embedded."""
+    """Read metadata from any supported audio file."""
     data = request.get_json()
     filepath = data.get("filepath")
     if not filepath or not os.path.isfile(filepath):
         return jsonify({"error": "File not found"}), 404
 
+    ext = os.path.splitext(filepath)[1].lower()
+
     try:
-        audio = FLAC(filepath)
+        if ext == ".flac":
+            return jsonify(_read_flac_tags(filepath))
+        elif ext == ".mp3":
+            return jsonify(_read_mp3_tags(filepath))
+        elif ext in (".m4a", ".mp4", ".aac"):
+            return jsonify(_read_mp4_tags(filepath))
+        elif ext in (".ogg", ".oga"):
+            return jsonify(_read_vorbis_tags(filepath))
+        else:
+            return jsonify(_read_generic_tags(filepath))
     except Exception as e:
-        return jsonify({"error": f"Not a valid FLAC: {e}"}), 400
+        return jsonify({"error": f"Cannot read tags: {e}"}), 400
 
-    reverse_map = {
-        "title": "title",
-        "artist": "artist",
-        "albumartist": "albumartist",
-        "album": "album",
-        "date": "date",
-        "genre": "genre",
-        "comment": "comment",
-        "organization": "label",
-        "catalognumber": "catno",
-        "tracknumber": "tracknumber",
+
+def _read_flac_tags(filepath):
+    audio = FLAC(filepath)
+    vorbis_reverse = {
+        "title": "title", "artist": "artist", "albumartist": "albumartist",
+        "album": "album", "date": "date", "genre": "genre", "comment": "comment",
+        "organization": "label", "catalognumber": "catno", "tracknumber": "tracknumber",
     }
-
     meta = {}
-    for vorbis_key, field in reverse_map.items():
+    for vorbis_key, field in vorbis_reverse.items():
         vals = audio.get(vorbis_key, [])
         if vals:
             meta[field] = vals[0]
-
     meta["has_artwork"] = len(audio.pictures) > 0
+    meta["format"] = "FLAC"
+    return meta
 
-    return jsonify(meta)
+
+def _read_mp3_tags(filepath):
+    audio = MP3(filepath, ID3=ID3)
+    meta = {"format": "MP3"}
+    if audio.tags is None:
+        meta["has_artwork"] = False
+        return meta
+    t = audio.tags
+    frame_map = {
+        "TIT2": "title", "TPE1": "artist", "TPE2": "albumartist",
+        "TALB": "album", "TDRC": "date", "TCON": "genre", "TPUB": "label",
+        "TRCK": "tracknumber",
+    }
+    for frame_id, field in frame_map.items():
+        frame = t.getall(frame_id)
+        if frame:
+            meta[field] = str(frame[0])
+    comm = t.getall("COMM")
+    if comm:
+        meta["comment"] = str(comm[0])
+    catno = t.getall("TXXX:CATALOGNUMBER")
+    if catno:
+        meta["catno"] = str(catno[0])
+    meta["has_artwork"] = bool(t.getall("APIC"))
+    return meta
+
+
+def _read_mp4_tags(filepath):
+    audio = MP4(filepath)
+    meta = {"format": "AAC/M4A"}
+    if audio.tags is None:
+        meta["has_artwork"] = False
+        return meta
+    mp4_reverse = {
+        "\xa9nam": "title", "\xa9ART": "artist", "aART": "albumartist",
+        "\xa9alb": "album", "\xa9day": "date", "\xa9gen": "genre",
+        "\xa9cmt": "comment",
+    }
+    for atom, field in mp4_reverse.items():
+        vals = audio.tags.get(atom)
+        if vals:
+            meta[field] = str(vals[0])
+    trkn = audio.tags.get("trkn")
+    if trkn:
+        meta["tracknumber"] = str(trkn[0][0])
+    meta["has_artwork"] = bool(audio.tags.get("covr"))
+    return meta
+
+
+def _read_vorbis_tags(filepath):
+    audio = OggVorbis(filepath)
+    vorbis_reverse = {
+        "title": "title", "artist": "artist", "albumartist": "albumartist",
+        "album": "album", "date": "date", "genre": "genre", "comment": "comment",
+        "organization": "label", "catalognumber": "catno", "tracknumber": "tracknumber",
+    }
+    meta = {"format": "OGG"}
+    for vorbis_key, field in vorbis_reverse.items():
+        vals = audio.get(vorbis_key, [])
+        if vals:
+            meta[field] = vals[0]
+    meta["has_artwork"] = bool(audio.get("metadata_block_picture"))
+    return meta
+
+
+def _read_generic_tags(filepath):
+    audio = mutagen.File(filepath, easy=True)
+    if audio is None:
+        return {"error": "Unsupported format", "has_artwork": False}
+    meta = {"format": type(audio).__name__}
+    easy_map = {"title": "title", "artist": "artist", "albumartist": "albumartist",
+                "album": "album", "date": "date", "genre": "genre"}
+    for tag, field in easy_map.items():
+        vals = audio.get(tag, [])
+        if vals:
+            meta[field] = vals[0]
+    meta["has_artwork"] = False
+    return meta
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ async function browseFlacs() {
   const dir = $("#fix-dir").value.trim();
   if (!dir) return;
 
-  const resp = await fetch(`/api/browse-flacs?dir=${encodeURIComponent(dir)}`);
+  const resp = await fetch(`/api/browse-audio?dir=${encodeURIComponent(dir)}`);
   const data = await resp.json();
 
   if (data.error) {
@@ -27,7 +27,7 @@ async function browseFlacs() {
   $("#fix-dir").value = data.directory;
 
   if (data.files.length === 0) {
-    $("#fix-file-list").innerHTML = '<div class="status">No FLAC files found</div>';
+    $("#fix-file-list").innerHTML = '<div class="status">No audio files found</div>';
     return;
   }
 
@@ -77,7 +77,8 @@ async function selectFlacFile(el) {
   const artStatus = data.has_artwork
     ? '<span style="color:var(--primary)">Has artwork</span>'
     : '<span style="color:var(--danger)">No artwork</span>';
-  tags.innerHTML = `<span><strong>Current:</strong> ${data.title || "—"} — ${data.artist || "—"}</span><span>${artStatus}</span>`;
+  const fmt = data.format ? `<span><strong>Format:</strong> ${data.format}</span>` : "";
+  tags.innerHTML = `<span><strong>Current:</strong> ${data.title || "—"} — ${data.artist || "—"}</span>${fmt}<span>${artStatus}</span>`;
 
   $("#fix-title").value = data.title || "";
   $("#fix-artist").value = data.artist || "";
