@@ -53,6 +53,29 @@ header h1 {
   margin-top: 0.25rem;
 }
 
+.tab-nav {
+  display: flex;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-top: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.3rem;
+}
+
+.tab-link {
+  padding: 0.5rem 1.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s, color 0.15s;
+}
+.tab-link:hover { color: var(--text); background: var(--surface-hover); }
+.tab-link.active { color: #fff; background: var(--accent); }
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

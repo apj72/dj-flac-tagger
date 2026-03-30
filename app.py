@@ -592,6 +592,11 @@ def index():
     return app.send_static_file("index.html")
 
 
+@app.route("/fix")
+def fix_page():
+    return app.send_static_file("fix.html")
+
+
 @app.route("/api/settings", methods=["GET"])
 def get_settings():
     cfg = load_config()
