@@ -248,7 +248,7 @@ function showTracklist(tracklist, meta) {
       (t, i) =>
         `<div class="track-item" data-index="${i}">
           <span class="track-pos">${t.position}</span>
-          <span class="track-title">${t.title}</span>
+          <span class="track-title">${t.title}${t.artist ? ` <span class="track-artist">— ${t.artist}</span>` : ""}</span>
           <span class="track-dur">${t.duration}</span>
         </div>`
     )
@@ -267,7 +267,7 @@ function selectTrack(el, meta) {
   const track = currentTracklist[idx];
 
   $("#meta-title").value = track.title;
-  $("#meta-artist").value = meta.artist || "";
+  $("#meta-artist").value = track.artist || meta.artist || "";
   if (meta.albumartist) $("#meta-albumartist").value = meta.albumartist;
   if (meta.album) $("#meta-album").value = meta.album;
   if (meta.date) $("#meta-date").value = meta.date;
@@ -394,6 +394,7 @@ async function extractAndTag() {
     if (data.source_trashed) {
       browseFiles();
     }
+    if (!$("#history-body").classList.contains("hidden")) loadHistory();
   }
 
   btn.disabled = false;
@@ -428,5 +429,117 @@ $("#preview-art-btn").addEventListener("click", () => {
 $("#extract-btn").addEventListener("click", extractAndTag);
 $("#clear-btn").addEventListener("click", clearAllFields);
 
+// ---- History / Processing Log ----
+let logEntries = [];
+
+function toggleHistory() {
+  const body = $("#history-body");
+  const arrow = $("#history-arrow");
+  body.classList.toggle("hidden");
+  arrow.classList.toggle("open");
+  if (!body.classList.contains("hidden")) loadHistory();
+}
+
+async function loadHistory() {
+  const resp = await fetch("/api/log");
+  logEntries = await resp.json();
+  renderHistory();
+}
+
+function renderHistory() {
+  const list = $("#history-list");
+  if (!logEntries.length) {
+    list.innerHTML = '<div class="status">No processed tracks yet.</div>';
+    return;
+  }
+
+  list.innerHTML = logEntries
+    .slice()
+    .reverse()
+    .map((entry, ri) => {
+      const i = logEntries.length - 1 - ri;
+      const m = entry.metadata || {};
+      const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleDateString() : "";
+      return `<div class="history-item" data-index="${i}">
+        <label class="history-check"><input type="checkbox" data-idx="${i}" class="log-check" /></label>
+        <span class="history-title">${m.title || entry.filename || "Untitled"}</span>
+        <span class="history-artist">${m.artist || ""}</span>
+        <span class="history-date">${ts}</span>
+      </div>`;
+    })
+    .join("");
+
+  document.querySelectorAll(".log-check").forEach((cb) => {
+    cb.addEventListener("change", updateRetagButton);
+  });
+}
+
+function updateRetagButton() {
+  const checked = document.querySelectorAll(".log-check:checked");
+  $("#retag-selected-btn").disabled = checked.length === 0;
+}
+
+async function retagSelected() {
+  const indices = [...document.querySelectorAll(".log-check:checked")].map((cb) =>
+    parseInt(cb.dataset.idx)
+  );
+  if (!indices.length) return;
+  await doRetag(indices);
+}
+
+async function retagAll() {
+  await doRetag(null);
+}
+
+async function doRetag(entryIndices) {
+  const targetDir = $("#retag-dir").value.trim();
+  if (!targetDir) {
+    showRetagStatus("Enter a target folder first.", true);
+    return;
+  }
+
+  const btn = entryIndices ? $("#retag-selected-btn") : $("#retag-all-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Re-tagging...';
+
+  const body = { target_dir: targetDir };
+  if (entryIndices) body.entries = entryIndices;
+
+  const resp = await fetch("/api/retag-batch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const data = await resp.json();
+  btn.textContent = entryIndices ? "Re-tag Selected" : "Re-tag All in Folder";
+  btn.disabled = false;
+
+  if (data.error) {
+    showRetagStatus(data.error, true);
+    return;
+  }
+
+  const ok = data.results.filter((r) => r.status === "ok").length;
+  const skipped = data.results.filter((r) => r.status === "skipped").length;
+  const errors = data.results.filter((r) => r.status === "error").length;
+  showRetagStatus(`Done: ${ok} re-tagged, ${skipped} skipped, ${errors} errors.`, errors > 0);
+}
+
+function showRetagStatus(msg, isError) {
+  const el = $("#retag-status");
+  el.classList.remove("hidden");
+  el.className = isError ? "status error" : "status";
+  el.textContent = msg;
+  setTimeout(() => el.classList.add("hidden"), 5000);
+}
+
+$("#history-toggle").addEventListener("click", toggleHistory);
+$("#retag-selected-btn").addEventListener("click", retagSelected);
+$("#retag-all-btn").addEventListener("click", retagAll);
+
 // ---- Init ----
-loadSettings().then(() => browseFiles());
+loadSettings().then(() => {
+  browseFiles();
+  if ($("#cfg-dest").value) $("#retag-dir").value = $("#cfg-dest").value;
+});

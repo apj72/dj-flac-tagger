@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 import requests
@@ -37,6 +38,30 @@ def save_config(cfg):
 
 def resolve(path):
     return os.path.expanduser(path)
+
+
+LOG_PATH = os.path.join(os.path.dirname(__file__), "processing_log.json")
+
+
+def load_log():
+    try:
+        with open(LOG_PATH) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def save_log(entries):
+    with open(LOG_PATH, "w") as f:
+        json.dump(entries, f, indent=2)
+        f.write("\n")
+
+
+def log_extraction(entry):
+    entries = load_log()
+    entry["timestamp"] = datetime.now().isoformat()
+    entries.append(entry)
+    save_log(entries)
 
 
 # ---------------------------------------------------------------------------
@@ -261,13 +286,22 @@ def scrape_bandcamp(url):
     return meta
 
 
+def apple_music_hires_artwork(url):
+    """Convert any Apple Music artwork URL to 1200x1200."""
+    if not url:
+        return ""
+    return re.sub(r"/\d+x\d+[^/]*\.\w+$", "/1200x1200bb.jpg", url)
+
+
 def scrape_apple_music(url):
     resp = requests.get(url, headers=HEADERS, timeout=15)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "lxml")
 
     meta = {}
+    is_album = "/album/" in url
 
+    # --- LD+JSON (works for songs, partial for albums) ---
     ld_json = soup.find("script", type="application/ld+json")
     if ld_json:
         try:
@@ -281,24 +315,26 @@ def scrape_apple_music(url):
 
             audio = data.get("audio", {})
 
-            artists = audio.get("byArtist", [])
-            if artists:
-                meta["artist"] = " / ".join(a.get("name", "") for a in artists)
+            if audio.get("byArtist"):
+                meta["artist"] = " / ".join(
+                    a.get("name", "") for a in audio["byArtist"]
+                )
 
             album_info = audio.get("inAlbum", {})
             if album_info:
                 meta["album"] = album_info.get("name", "")
-                album_artists = album_info.get("byArtist", [])
-                if album_artists:
-                    meta["albumartist"] = " / ".join(a.get("name", "") for a in album_artists)
+                if album_info.get("byArtist"):
+                    meta["albumartist"] = " / ".join(
+                        a.get("name", "") for a in album_info["byArtist"]
+                    )
+                meta["artwork_url"] = apple_music_hires_artwork(
+                    album_info.get("image", "")
+                )
 
-                # High-res artwork: replace size suffix to get 1200x1200
-                album_img = album_info.get("image", "")
-                if album_img:
-                    meta["artwork_url"] = re.sub(r"/\d+x\d+\w*\.\w+$", "/1200x1200bb.jpg", album_img)
-
-            if not meta.get("artwork_url") and data.get("image"):
-                meta["artwork_url"] = re.sub(r"/\d+x\d+\w*\.\w+$", "/1200x1200bb.jpg", data["image"])
+            if not meta.get("artwork_url"):
+                meta["artwork_url"] = apple_music_hires_artwork(
+                    data.get("image", "")
+                )
 
             genres = audio.get("genre", [])
             if isinstance(genres, list):
@@ -309,7 +345,7 @@ def scrape_apple_music(url):
         except (json.JSONDecodeError, KeyError):
             pass
 
-    # Fallback to OG tags
+    # --- OG tag fallbacks ---
     if not meta.get("title"):
         og_title = soup.find("meta", property="og:title")
         if og_title:
@@ -321,15 +357,123 @@ def scrape_apple_music(url):
     if not meta.get("artwork_url"):
         og_image = soup.find("meta", property="og:image")
         if og_image:
-            meta["artwork_url"] = og_image.get("content", "")
+            meta["artwork_url"] = apple_music_hires_artwork(
+                og_image.get("content", "")
+            )
 
-    # Track number from music:album:track
-    track_meta = soup.find("meta", property="music:album:track")
-    if track_meta:
-        meta["tracknumber"] = track_meta.get("content", "")
+    if not meta.get("genre"):
+        og_desc = soup.find("meta", property="og:description")
+        if og_desc:
+            desc = og_desc.get("content", "")
+            meta["_description"] = desc
+
+    if not meta.get("date"):
+        rel = soup.find("meta", property="music:release_date")
+        if rel:
+            ym = re.search(r"(\d{4})", rel.get("content", ""))
+            if ym:
+                meta["date"] = ym.group(1)
+
+    # --- Extract artist name from og:title ("Album by Artist on Apple Music") ---
+    if not meta.get("artist"):
+        og_title = soup.find("meta", property="og:title")
+        if og_title:
+            parts = og_title.get("content", "").split(" by ")
+            if len(parts) >= 2:
+                artist_part = parts[-1].replace(" on Apple\xa0Music", "").replace(" on Apple Music", "").strip()
+                meta["artist"] = artist_part
+
+    # --- Album: build tracklist from music:song meta tags + iTunes API ---
+    if is_album:
+        content_tag = (
+            soup.find("meta", attrs={"name": "apple:content_id"})
+            or soup.find("meta", property="apple:content_id")
+        )
+        album_id = content_tag.get("content", "") if content_tag else ""
+        if not album_id:
+            m = re.search(r"/(\d+)(?:\?|$)", url)
+            if m:
+                album_id = m.group(1)
+
+        # Get album-level metadata from iTunes API
+        if album_id:
+            album_meta = _itunes_lookup_album(album_id)
+            if album_meta:
+                meta["albumartist"] = album_meta.get("artistName", "")
+                if not meta.get("artist"):
+                    meta["artist"] = meta["albumartist"]
+                if not meta.get("genre"):
+                    meta["genre"] = album_meta.get("primaryGenreName", "")
+                if not meta.get("artwork_url"):
+                    art = album_meta.get("artworkUrl100", "")
+                    meta["artwork_url"] = apple_music_hires_artwork(art)
+
+        song_tags = soup.find_all("meta", property="music:song")
+        song_ids = []
+        for tag in song_tags:
+            song_url = tag.get("content", "")
+            m = re.search(r"/(\d+)$", song_url)
+            if m:
+                song_ids.append(m.group(1))
+
+        if song_ids:
+            tracklist = _itunes_lookup_songs(song_ids)
+            if tracklist:
+                meta["tracklist"] = tracklist
+
+        meta["album"] = meta.get("title", "")
+
+    else:
+        # Single song — track number
+        track_meta = soup.find("meta", property="music:album:track")
+        if track_meta:
+            meta["tracknumber"] = track_meta.get("content", "")
 
     meta["source"] = "apple_music"
     return meta
+
+
+def _itunes_lookup_album(album_id):
+    """Fetch album metadata from the iTunes Search API."""
+    try:
+        resp = requests.get(
+            f"https://itunes.apple.com/lookup?id={album_id}&country=us",
+            timeout=10,
+        )
+        data = resp.json()
+        for r in data.get("results", []):
+            if r.get("wrapperType") == "collection":
+                return r
+    except Exception:
+        pass
+    return None
+
+
+def _itunes_lookup_songs(song_ids):
+    """Batch-lookup song titles/artists from the iTunes Search API."""
+    tracklist = []
+    # iTunes API accepts up to 200 comma-separated IDs
+    ids_str = ",".join(song_ids)
+    try:
+        resp = requests.get(
+            f"https://itunes.apple.com/lookup?id={ids_str}&country=us",
+            timeout=15,
+        )
+        data = resp.json()
+        for r in data.get("results", []):
+            if r.get("wrapperType") == "track":
+                dur_ms = r.get("trackTimeMillis", 0)
+                mins = dur_ms // 60000
+                secs = (dur_ms % 60000) // 1000
+                tracklist.append({
+                    "position": str(r.get("trackNumber", "")),
+                    "title": r.get("trackName", ""),
+                    "artist": r.get("artistName", ""),
+                    "duration": f"{mins}:{secs:02d}",
+                })
+    except Exception:
+        pass
+    return tracklist
 
 
 def parse_discogs_url(url):
@@ -629,6 +773,18 @@ def extract():
             source_trash_error = str(e)
 
     stat = os.stat(output_path)
+
+    log_extraction({
+        "filename": filename,
+        "source_file": filepath,
+        "output_path": output_path,
+        "copied_to": copied_to,
+        "metadata": metadata,
+        "artwork_url": artwork_url,
+        "normalised": normalise,
+        "source_codec": source_codec,
+    })
+
     result = {
         "output_path": output_path,
         "size_mb": round(stat.st_size / (1024 * 1024), 1),
@@ -645,6 +801,82 @@ def extract():
         result["source_trash_error"] = source_trash_error
 
     return jsonify(result)
+
+
+@app.route("/api/log")
+def get_log():
+    return jsonify(load_log())
+
+
+@app.route("/api/retag", methods=["POST"])
+def retag():
+    """Re-apply metadata and artwork to an existing FLAC from a log entry."""
+    data = request.get_json()
+    filepath = data.get("filepath")
+    metadata = data.get("metadata", {})
+    artwork_url = data.get("artwork_url", "")
+
+    if not filepath or not os.path.isfile(filepath):
+        return jsonify({"error": f"File not found: {filepath}"}), 404
+
+    artwork_bytes, artwork_mime = None, None
+    if artwork_url:
+        try:
+            artwork_bytes, artwork_mime = fetch_artwork(artwork_url)
+        except Exception as e:
+            return jsonify({"error": f"Artwork fetch failed: {e}"}), 500
+
+    try:
+        apply_metadata(filepath, metadata, artwork_bytes, artwork_mime)
+    except Exception as e:
+        return jsonify({"error": f"Tagging failed: {e}"}), 500
+
+    return jsonify({"status": "ok", "filepath": filepath})
+
+
+@app.route("/api/retag-batch", methods=["POST"])
+def retag_batch():
+    """Re-apply metadata+artwork to multiple files from the processing log."""
+    data = request.get_json()
+    target_dir = data.get("target_dir", "")
+    entry_indices = data.get("entries")  # list of log indices, or None for all
+
+    if not target_dir:
+        return jsonify({"error": "No target directory"}), 400
+    target_dir = resolve(target_dir)
+    if not os.path.isdir(target_dir):
+        return jsonify({"error": f"Directory not found: {target_dir}"}), 404
+
+    entries = load_log()
+    if entry_indices is not None:
+        entries = [entries[i] for i in entry_indices if i < len(entries)]
+
+    results = []
+    for entry in entries:
+        filename = entry.get("filename", "")
+        filepath = os.path.join(target_dir, filename)
+
+        if not os.path.isfile(filepath):
+            results.append({"filename": filename, "status": "skipped", "reason": "not found"})
+            continue
+
+        metadata = entry.get("metadata", {})
+        artwork_url = entry.get("artwork_url", "")
+
+        artwork_bytes, artwork_mime = None, None
+        if artwork_url:
+            try:
+                artwork_bytes, artwork_mime = fetch_artwork(artwork_url)
+            except Exception:
+                pass
+
+        try:
+            apply_metadata(filepath, metadata, artwork_bytes, artwork_mime)
+            results.append({"filename": filename, "status": "ok"})
+        except Exception as e:
+            results.append({"filename": filename, "status": "error", "reason": str(e)})
+
+    return jsonify({"results": results})
 
 
 if __name__ == "__main__":

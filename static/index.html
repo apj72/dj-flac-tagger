@@ -160,6 +160,25 @@
         <button id="extract-btn" class="btn btn-accent" disabled>Extract FLAC &amp; Apply Tags</button>
         <div id="result" class="result hidden"></div>
       </section>
+
+      <!-- History / Processing Log -->
+      <section class="card" id="history-section">
+        <h2 class="settings-toggle" id="history-toggle">
+          <span class="step-alt">&#128218;</span> Processing Log
+          <span class="toggle-arrow" id="history-arrow">&#9660;</span>
+        </h2>
+        <div id="history-body" class="settings-body hidden">
+          <p class="hint">Previously processed tracks. Select entries to re-apply metadata &amp; artwork.</p>
+          <div class="history-controls">
+            <button id="retag-selected-btn" class="btn btn-primary btn-sm" disabled>Re-tag Selected</button>
+            <button id="retag-all-btn" class="btn btn-secondary btn-sm">Re-tag All in Folder</button>
+            <label for="retag-dir" class="retag-label">Target folder:</label>
+            <input type="text" id="retag-dir" class="retag-dir-input" placeholder="~/Music/FLACs" />
+          </div>
+          <div id="history-list" class="history-list"></div>
+          <div id="retag-status" class="status hidden"></div>
+        </div>
+      </section>
     </main>
   </div>
 
