@@ -2,6 +2,7 @@ const $ = (sel) => document.querySelector(sel);
 
 let selectedFile = null;
 let currentTracklist = [];
+let currentLoudnormParams = null;
 
 // ---- Settings ----
 async function loadSettings() {
@@ -76,6 +77,7 @@ async function selectFile(el) {
   document.querySelectorAll(".file-item").forEach((e) => e.classList.remove("selected"));
   el.classList.add("selected");
   selectedFile = el.dataset.path;
+  currentLoudnormParams = null;
   updateExtractButton();
 
   const probe = $("#probe-info");
@@ -101,12 +103,90 @@ async function selectFile(el) {
     <span><strong>Channels:</strong> ${data.channels || "?"}</span>
     <span><strong>Duration:</strong> ${dur}</span>
   `;
+
+  runAnalysis(selectedFile);
 }
 
 function formatDuration(secs) {
   const m = Math.floor(secs / 60);
   const s = Math.floor(secs % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+// ---- Audio analysis ----
+async function runAnalysis(filepath) {
+  const panel = $("#analysis-panel");
+  panel.classList.remove("hidden");
+  panel.querySelector(".level-meters").classList.add("hidden");
+  $("#level-verdict").innerHTML = "";
+
+  const existingSpinner = panel.querySelector(".analysis-spinner");
+  if (existingSpinner) existingSpinner.remove();
+
+  const spinner = document.createElement("div");
+  spinner.className = "analysis-spinner";
+  spinner.innerHTML = '<span class="spinner"></span> Analysing audio levels...';
+  panel.querySelector(".analysis-header").after(spinner);
+
+  const resp = await fetch("/api/analyse", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filepath }),
+  });
+  const data = await resp.json();
+
+  spinner.remove();
+  panel.querySelector(".level-meters").classList.remove("hidden");
+
+  if (data.error) {
+    $("#level-verdict").innerHTML = `<span class="verdict-low">${data.error}</span>`;
+    return;
+  }
+
+  currentLoudnormParams = data.loudnorm_params;
+
+  const lufs = data.integrated_lufs;
+  const peak = data.true_peak;
+  const mean = data.mean_volume;
+
+  setMeter("meter-lufs", "val-lufs", lufs, -60, 0, `${lufs.toFixed(1)} LUFS`);
+  setMeter("meter-peak", "val-peak", peak, -60, 0, `${peak.toFixed(1)} dBTP`);
+  setMeter("meter-mean", "val-mean", mean != null ? mean : -60, -60, 0,
+    mean != null ? `${mean.toFixed(1)} dB` : "—");
+
+  const target = data.target_lufs;
+  const diff = lufs - target;
+  let verdict;
+
+  if (lufs <= -30) {
+    verdict = `<span class="verdict-low">Very quiet</span> — ${Math.abs(diff).toFixed(1)} dB below target (${target} LUFS). <strong>Normalisation recommended.</strong>`;
+    $("#normalise").checked = true;
+  } else if (lufs <= -20) {
+    verdict = `<span class="verdict-ok">Quiet</span> — ${Math.abs(diff).toFixed(1)} dB below target (${target} LUFS). Normalisation suggested.`;
+    $("#normalise").checked = true;
+  } else if (lufs <= -10) {
+    verdict = `<span class="verdict-good">Good level</span> — ${Math.abs(diff).toFixed(1)} dB from target (${target} LUFS).`;
+    $("#normalise").checked = false;
+  } else {
+    verdict = `<span class="verdict-good">Loud</span> — above target (${target} LUFS). No normalisation needed.`;
+    $("#normalise").checked = false;
+  }
+
+  $("#level-verdict").innerHTML = verdict;
+}
+
+function setMeter(meterId, valueId, value, min, max, label) {
+  const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+  const fill = $(`#${meterId}`);
+  fill.style.width = `${pct}%`;
+
+  fill.classList.remove("level-low", "level-mid", "level-good", "level-hot");
+  if (value <= -30) fill.classList.add("level-low");
+  else if (value <= -18) fill.classList.add("level-mid");
+  else if (value <= -1) fill.classList.add("level-good");
+  else fill.classList.add("level-hot");
+
+  $(`#${valueId}`).textContent = label;
 }
 
 // ---- Clear / Populate metadata fields ----
@@ -270,6 +350,7 @@ async function extractAndTag() {
 
   const artworkUrl = $("#artwork-url").value.trim();
   const deleteSource = $("#delete-source").checked;
+  const normalise = $("#normalise").checked;
 
   const resp = await fetch("/api/extract", {
     method: "POST",
@@ -279,6 +360,8 @@ async function extractAndTag() {
       metadata,
       artwork_url: artworkUrl,
       delete_source: deleteSource,
+      normalise,
+      loudnorm_params: normalise ? currentLoudnormParams : null,
     }),
   });
 
@@ -296,8 +379,9 @@ async function extractAndTag() {
     const lines = [
       `<strong>${data.title}.flac</strong> (${data.size_mb} MB)`,
       `Source codec: ${data.source_codec.toUpperCase()} &rarr; FLAC (lossless)`,
-      `Saved to: ${data.output_path}`,
     ];
+    if (data.normalised) lines.push(`Normalised to -14 LUFS (EBU R128)`);
+    lines.push(`Saved to: ${data.output_path}`);
     if (data.copied_to) lines.push(`Copied to: ${data.copied_to}`);
     if (data.copy_error) lines.push(`Copy failed: ${data.copy_error}`);
     if (data.source_trashed) lines.push(`Source MKV moved to Bin`);

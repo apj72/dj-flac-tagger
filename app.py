@@ -58,11 +58,85 @@ def run_ffprobe(filepath):
     return json.loads(result.stdout)
 
 
-def extract_flac(mkv_path, output_path):
+TARGET_LUFS = -14.0
+TARGET_TP = -1.0
+
+
+def analyse_loudness(filepath):
+    """Run ffmpeg loudnorm + volumedetect analysis on an audio/video file."""
+    result = subprocess.run(
+        [
+            "ffmpeg", "-hide_banner", "-i", filepath,
+            "-af", "loudnorm=print_format=json",
+            "-f", "null", "-",
+        ],
+        capture_output=True, text=True,
+    )
+    stderr = result.stderr
+
+    loudnorm = {}
+    json_start = stderr.rfind("{")
+    json_end = stderr.rfind("}") + 1
+    if json_start != -1 and json_end > json_start:
+        try:
+            loudnorm = json.loads(stderr[json_start:json_end])
+        except json.JSONDecodeError:
+            pass
+
+    vol_result = subprocess.run(
+        [
+            "ffmpeg", "-hide_banner", "-i", filepath,
+            "-af", "volumedetect",
+            "-f", "null", "-",
+        ],
+        capture_output=True, text=True,
+    )
+    vol_stderr = vol_result.stderr
+
+    mean_vol = None
+    max_vol = None
+    for line in vol_stderr.splitlines():
+        if "mean_volume" in line:
+            m = re.search(r"mean_volume:\s*([-\d.]+)", line)
+            if m:
+                mean_vol = float(m.group(1))
+        if "max_volume" in line:
+            m = re.search(r"max_volume:\s*([-\d.]+)", line)
+            if m:
+                max_vol = float(m.group(1))
+
+    return {
+        "integrated_lufs": float(loudnorm.get("input_i", 0)),
+        "true_peak": float(loudnorm.get("input_tp", 0)),
+        "lra": float(loudnorm.get("input_lra", 0)),
+        "threshold": float(loudnorm.get("input_thresh", 0)),
+        "mean_volume": mean_vol,
+        "max_volume": max_vol,
+        "target_lufs": TARGET_LUFS,
+        "target_tp": TARGET_TP,
+        "loudnorm_params": loudnorm,
+    }
+
+
+def extract_flac(mkv_path, output_path, normalise=False, loudnorm_params=None):
     info = run_ffprobe(mkv_path)
     codec = info["streams"][0]["codec_name"] if info.get("streams") else "unknown"
 
-    if codec == "flac":
+    if normalise and loudnorm_params:
+        # Two-pass EBU R128 normalisation — uses measured values from pass 1
+        af = (
+            f"loudnorm=I={TARGET_LUFS}:TP={TARGET_TP}:LRA=11"
+            f":measured_I={loudnorm_params.get('input_i', -24)}"
+            f":measured_TP={loudnorm_params.get('input_tp', -2)}"
+            f":measured_LRA={loudnorm_params.get('input_lra', 7)}"
+            f":measured_thresh={loudnorm_params.get('input_thresh', -34)}"
+            f":linear=true:print_format=json"
+        )
+        cmd = [
+            "ffmpeg", "-hide_banner", "-y", "-i", mkv_path,
+            "-vn", "-af", af, "-c:a", "flac", "-sample_fmt", "s16", output_path,
+        ]
+    elif codec == "flac":
         cmd = ["ffmpeg", "-hide_banner", "-y", "-i", mkv_path, "-vn", "-c:a", "copy", output_path]
     else:
         cmd = [
@@ -436,6 +510,20 @@ def probe():
     })
 
 
+@app.route("/api/analyse", methods=["POST"])
+def analyse():
+    data = request.get_json()
+    filepath = data.get("filepath")
+    if not filepath or not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 404
+
+    try:
+        result = analyse_loudness(filepath)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/fetch-metadata", methods=["POST"])
 def fetch_metadata():
     data = request.get_json()
@@ -497,8 +585,11 @@ def extract():
     if os.path.exists(output_path):
         return jsonify({"error": f"Output file already exists: {output_path}"}), 409
 
+    normalise = data.get("normalise", False)
+    loudnorm_params = data.get("loudnorm_params")
+
     try:
-        source_codec = extract_flac(filepath, output_path)
+        source_codec = extract_flac(filepath, output_path, normalise, loudnorm_params)
     except subprocess.CalledProcessError as e:
         return jsonify({"error": f"ffmpeg failed: {e.stderr}"}), 500
 
@@ -544,6 +635,7 @@ def extract():
         "source_codec": source_codec,
         "title": safe_title,
         "source_trashed": source_trashed,
+        "normalised": normalise,
     }
     if copied_to:
         result["copied_to"] = copied_to

@@ -43,6 +43,27 @@
         </div>
         <div id="file-list" class="file-list"></div>
         <div id="probe-info" class="probe-info hidden"></div>
+        <div id="analysis-panel" class="analysis-panel hidden">
+          <div class="analysis-header">Audio Levels</div>
+          <div class="level-meters">
+            <div class="meter-row">
+              <span class="meter-label">LUFS</span>
+              <div class="meter-track"><div class="meter-fill" id="meter-lufs"></div></div>
+              <span class="meter-value" id="val-lufs">—</span>
+            </div>
+            <div class="meter-row">
+              <span class="meter-label">Peak</span>
+              <div class="meter-track"><div class="meter-fill" id="meter-peak"></div></div>
+              <span class="meter-value" id="val-peak">—</span>
+            </div>
+            <div class="meter-row">
+              <span class="meter-label">Mean</span>
+              <div class="meter-track"><div class="meter-fill" id="meter-mean"></div></div>
+              <span class="meter-value" id="val-mean">—</span>
+            </div>
+          </div>
+          <div id="level-verdict" class="level-verdict"></div>
+        </div>
       </section>
 
       <!-- Step 2: Track info / URL -->
@@ -128,6 +149,10 @@
       <!-- Step 4: Extract -->
       <section class="card" id="extract-section">
         <h2><span class="step">4</span> Extract &amp; Tag</h2>
+        <label class="checkbox-row">
+          <input type="checkbox" id="normalise" />
+          <span>Normalise audio to -14 LUFS (EBU R128)</span>
+        </label>
         <label class="checkbox-row">
           <input type="checkbox" id="delete-source" checked />
           <span>Move source MKV to Bin after extraction</span>
