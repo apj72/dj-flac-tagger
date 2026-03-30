@@ -542,6 +542,55 @@ label {
 .history-artist { color: var(--text-muted); flex: 0.6; }
 .history-date { color: var(--text-muted); font-size: 0.8rem; min-width: 80px; text-align: right; }
 
+/* ---- Search results ---- */
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.search-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 0.85rem;
+}
+.search-item:hover { background: var(--surface-hover); }
+.search-item.selected { background: var(--accent); color: #fff; }
+
+.search-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface);
+}
+
+.search-info { flex: 1; min-width: 0; }
+.search-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-detail { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-item.selected .search-detail { color: rgba(255,255,255,0.7); }
+
+.search-source {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.search-source.src-apple { background: #fc3c44; color: #fff; }
+.search-source.src-discogs { background: #333; color: #fff; }
+
 @media (max-width: 640px) {
   .metadata-layout { flex-direction: column; }
   .artwork-panel { flex: none; }

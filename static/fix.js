@@ -93,17 +93,119 @@ async function selectFlacFile(el) {
   $("#fix-artwork-preview").innerHTML = data.has_artwork
     ? '<span style="color:var(--primary)">Artwork embedded</span>'
     : "<span>No artwork</span>";
+
+  autoSearch(data);
 }
 
-// ---- Fetch metadata ----
+// ---- Auto-search from file tags ----
+async function autoSearch(tags) {
+  const section = $("#fix-search-section");
+  const container = $("#fix-search-results");
+  const status = $("#fix-search-status");
+
+  const parts = [];
+  if (tags.title) parts.push(tags.title);
+  if (tags.artist) parts.push(tags.artist);
+
+  if (!parts.length) {
+    const name = selectedFile
+      ? selectedFile.split("/").pop().replace(/\.[^.]+$/, "").replace(/_PN$/, "").replace(/[_-]/g, " ").trim()
+      : "";
+    if (name) parts.push(name);
+  }
+
+  if (!parts.length) {
+    section.classList.add("hidden");
+    return;
+  }
+
+  section.classList.remove("hidden");
+  status.classList.remove("hidden");
+  status.innerHTML = '<span class="spinner"></span> Searching...';
+  container.innerHTML = "";
+
+  const q = parts.join(" ");
+  const resp = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+  const data = await resp.json();
+
+  status.classList.add("hidden");
+
+  if (!data.results || data.results.length === 0) {
+    container.innerHTML = '<div class="status">No results found. Try a URL below.</div>';
+    return;
+  }
+
+  container.innerHTML = data.results
+    .map((r, i) => {
+      const srcClass = r.source === "discogs" ? "src-discogs" : "src-apple";
+      const srcLabel = r.source === "discogs" ? "Discogs" : "Apple Music";
+      const thumb = r.artwork_thumb
+        ? `<img class="search-thumb" src="${r.artwork_thumb}" alt="" />`
+        : `<div class="search-thumb"></div>`;
+      const detail = [r.artist, r.album, r.year].filter(Boolean).join(" · ");
+      const label = r.label ? ` · ${r.label}` : "";
+      return `<div class="search-item" data-index="${i}">
+        ${thumb}
+        <div class="search-info">
+          <div class="search-title">${r.title}</div>
+          <div class="search-detail">${detail}${label}</div>
+        </div>
+        <span class="search-source ${srcClass}">${srcLabel}</span>
+      </div>`;
+    })
+    .join("");
+
+  container.querySelectorAll(".search-item").forEach((el) => {
+    el.addEventListener("click", () => pickSearchResult(el, data.results));
+  });
+}
+
+async function pickSearchResult(el, results) {
+  container = $("#fix-search-results");
+  container.querySelectorAll(".search-item").forEach((e) => e.classList.remove("selected"));
+  el.classList.add("selected");
+
+  const r = results[parseInt(el.dataset.index)];
+  if (!r.url) return;
+
+  const status = $("#fix-fetch-status");
+  status.classList.remove("hidden");
+  status.innerHTML = '<span class="spinner"></span> Fetching full metadata...';
+
+  const resp = await fetch("/api/fetch-metadata", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: r.url }),
+  });
+
+  const meta = await resp.json();
+  currentMeta = meta;
+  status.classList.add("hidden");
+
+  if (meta.tracklist && meta.tracklist.length > 1) {
+    currentTracklist = meta.tracklist;
+    showTracklist(meta);
+    populateFromMeta(meta);
+  } else {
+    $("#fix-tracklist-section").classList.add("hidden");
+    currentTracklist = [];
+    populateFromMeta(meta);
+  }
+
+  if (meta._warning) {
+    status.classList.remove("hidden");
+    status.textContent = meta._warning;
+  }
+}
+
+// ---- Fetch metadata from URL ----
 async function fetchMetadata() {
   const url = $("#fix-url").value.trim();
-  const trackName = $("#fix-track-name").value.trim();
   const status = $("#fix-fetch-status");
 
-  if (!url && !trackName) {
+  if (!url) {
     status.classList.remove("hidden");
-    status.textContent = "Enter a URL or track name first.";
+    status.textContent = "Enter a URL first.";
     return;
   }
 
@@ -113,7 +215,7 @@ async function fetchMetadata() {
   const resp = await fetch("/api/fetch-metadata", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, track_name: trackName }),
+    body: JSON.stringify({ url }),
   });
 
   const meta = await resp.json();
@@ -203,9 +305,9 @@ function clearAll() {
   $("#fix-catno").value = "";
   $("#fix-comment").value = "";
   $("#fix-url").value = "";
-  $("#fix-track-name").value = "";
   $("#fix-artwork-preview").innerHTML = "<span>No artwork</span>";
   $("#fix-tracklist-section").classList.add("hidden");
+  $("#fix-search-section").classList.add("hidden");
   $("#fix-fetch-status").classList.add("hidden");
   $("#fix-result").classList.add("hidden");
   artworkUrl = "";
@@ -267,7 +369,6 @@ $("#fix-browse-btn").addEventListener("click", browseFlacs);
 $("#fix-dir").addEventListener("keydown", (e) => { if (e.key === "Enter") browseFlacs(); });
 $("#fix-fetch-btn").addEventListener("click", fetchMetadata);
 $("#fix-url").addEventListener("keydown", (e) => { if (e.key === "Enter") fetchMetadata(); });
-$("#fix-track-name").addEventListener("keydown", (e) => { if (e.key === "Enter") fetchMetadata(); });
 $("#fix-clear-btn").addEventListener("click", clearAll);
 $("#fix-save-btn").addEventListener("click", saveTags);
 

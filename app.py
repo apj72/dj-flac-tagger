@@ -699,6 +699,62 @@ def fetch_artwork(url):
     return resp.content, content_type
 
 
+def search_itunes(query, limit=8):
+    """Search the iTunes/Apple Music catalogue."""
+    results = []
+    try:
+        resp = requests.get(
+            "https://itunes.apple.com/search",
+            params={"term": query, "entity": "song", "limit": limit, "country": "us"},
+            timeout=10,
+        )
+        data = resp.json()
+        for r in data.get("results", []):
+            art_url = r.get("artworkUrl100", "")
+            results.append({
+                "title": r.get("trackName", ""),
+                "artist": r.get("artistName", ""),
+                "album": r.get("collectionName", ""),
+                "year": str(r.get("releaseDate", ""))[:4],
+                "artwork_thumb": art_url,
+                "url": r.get("trackViewUrl", ""),
+                "source": "apple_music",
+            })
+    except Exception:
+        pass
+    return results
+
+
+def search_discogs(query, limit=5):
+    """Search the Discogs catalogue."""
+    results = []
+    try:
+        resp = requests.get(
+            "https://api.discogs.com/database/search",
+            params={"q": query, "type": "release", "per_page": limit},
+            headers=DISCOGS_HEADERS,
+            timeout=10,
+        )
+        data = resp.json()
+        for r in data.get("results", []):
+            labels = r.get("label", [])
+            uri = r.get("uri", "")
+            discogs_url = f"https://www.discogs.com{uri}" if uri else ""
+            results.append({
+                "title": r.get("title", ""),
+                "artist": "",
+                "album": r.get("title", ""),
+                "year": str(r.get("year", "")),
+                "artwork_thumb": r.get("thumb", ""),
+                "url": discogs_url,
+                "source": "discogs",
+                "label": labels[0] if labels else "",
+            })
+    except Exception:
+        pass
+    return results
+
+
 # ---------------------------------------------------------------------------
 # API routes
 # ---------------------------------------------------------------------------
@@ -711,6 +767,28 @@ def index():
 @app.route("/fix")
 def fix_page():
     return app.send_static_file("fix.html")
+
+
+@app.route("/api/search")
+def search():
+    """Search iTunes + Discogs for a track by query string."""
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify({"results": []})
+
+    itunes = search_itunes(q, limit=8)
+    discogs = search_discogs(q, limit=5)
+
+    # Interleave: iTunes results first, then Discogs, de-duped by rough title match
+    seen = set()
+    combined = []
+    for r in itunes + discogs:
+        key = (r["title"].lower().strip(), r.get("artist", "").lower().strip())
+        if key not in seen:
+            seen.add(key)
+            combined.append(r)
+
+    return jsonify({"results": combined})
 
 
 @app.route("/api/settings", methods=["GET"])
