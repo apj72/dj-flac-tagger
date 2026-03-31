@@ -204,6 +204,34 @@ def apply_metadata(filepath, metadata, artwork_bytes=None, artwork_mime=None):
         _apply_generic(filepath, metadata, artwork_bytes, artwork_mime)
 
 
+def _image_dimensions(data):
+    """Read width/height from JPEG or PNG binary data."""
+    import struct
+    if data[:8] == b'\x89PNG\r\n\x1a\n' and len(data) >= 24:
+        w, h = struct.unpack('>II', data[16:24])
+        return w, h
+    if data[:2] == b'\xff\xd8':
+        i = 2
+        while i < len(data) - 1:
+            if data[i] != 0xff:
+                break
+            marker = data[i + 1]
+            if marker in (0xc0, 0xc1, 0xc2):
+                if i + 9 < len(data):
+                    h, w = struct.unpack('>HH', data[i + 5:i + 9])
+                    return w, h
+                break
+            if marker in (0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8, 0xd9, 0x01):
+                i += 2
+                continue
+            if i + 3 < len(data):
+                seg_len = struct.unpack('>H', data[i + 2:i + 4])[0]
+                i += 2 + seg_len
+            else:
+                break
+    return 0, 0
+
+
 def _apply_flac(filepath, metadata, artwork_bytes, artwork_mime):
     audio = FLAC(filepath)
     vorbis_map = {
@@ -221,6 +249,7 @@ def _apply_flac(filepath, metadata, artwork_bytes, artwork_mime):
         pic.mime = artwork_mime or "image/jpeg"
         pic.desc = "Cover"
         pic.data = artwork_bytes
+        pic.width, pic.height = _image_dimensions(artwork_bytes)
         audio.clear_pictures()
         audio.add_picture(pic)
     audio.save()
@@ -308,6 +337,7 @@ def _apply_vorbis(filepath, metadata, artwork_bytes, artwork_mime):
         pic.mime = artwork_mime or "image/jpeg"
         pic.desc = "Cover"
         pic.data = artwork_bytes
+        pic.width, pic.height = _image_dimensions(artwork_bytes)
         audio["metadata_block_picture"] = [base64.b64encode(pic.write()).decode("ascii")]
     audio.save()
 
@@ -1121,6 +1151,38 @@ def extract():
 @app.route("/api/log")
 def get_log():
     return jsonify(load_log())
+
+
+@app.route("/api/fix-artwork", methods=["POST"])
+def fix_artwork():
+    """Re-embed existing artwork with correct dimensions."""
+    data = request.get_json()
+    filepath = data.get("filepath")
+    if not filepath or not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 404
+
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext != ".flac":
+        return jsonify({"error": "Only FLAC files supported for artwork fix"}), 400
+
+    try:
+        audio = FLAC(filepath)
+        if not audio.pictures:
+            return jsonify({"error": "No artwork to fix"}), 400
+
+        pic = audio.pictures[0]
+        w, h = _image_dimensions(pic.data)
+        if w == pic.width and h == pic.height and w > 0:
+            return jsonify({"status": "ok", "message": "Dimensions already correct", "width": w, "height": h})
+
+        pic.width = w
+        pic.height = h
+        audio.clear_pictures()
+        audio.add_picture(pic)
+        audio.save()
+        return jsonify({"status": "ok", "message": f"Fixed artwork dimensions to {w}x{h}", "width": w, "height": h})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/retag", methods=["POST"])

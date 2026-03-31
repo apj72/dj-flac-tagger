@@ -129,15 +129,52 @@ function renderArtwork(data) {
   const info = data.artwork_info || {};
   const rows = [];
   if (info.mime) rows.push(["Type", info.mime]);
-  if (info.width && info.height) rows.push(["Dimensions", `${info.width} × ${info.height}`]);
+  if (info.width && info.height) {
+    rows.push(["Dimensions", `${info.width} × ${info.height}`]);
+  } else {
+    rows.push(["Dimensions", `<span class="info-missing">0 × 0 — missing dimensions</span>`]);
+  }
   if (info.size_bytes) {
     const kb = (info.size_bytes / 1024).toFixed(1);
     rows.push(["Size", kb > 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`]);
   }
 
+  let fixBtn = "";
+  if ((!info.width || !info.height) && data.file_info?.extension === ".flac") {
+    fixBtn = `<div style="margin-top:0.75rem"><button id="fix-art-btn" class="btn btn-primary btn-sm">Fix Artwork Dimensions</button><span id="fix-art-status" class="settings-status hidden"></span></div>`;
+  }
+
   artInfo.innerHTML = rows
     .map(([k, v]) => `<div class="info-row"><span class="info-label">${k}</span><span class="info-value">${v}</span></div>`)
-    .join("");
+    .join("") + fixBtn;
+
+  const fixBtnEl = document.getElementById("fix-art-btn");
+  if (fixBtnEl) {
+    fixBtnEl.addEventListener("click", async () => {
+      fixBtnEl.disabled = true;
+      fixBtnEl.innerHTML = '<span class="spinner"></span> Fixing...';
+      const r = await fetch("/api/fix-artwork", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filepath: selectedFile }),
+      });
+      const result = await r.json();
+      const statusEl = document.getElementById("fix-art-status");
+      statusEl.classList.remove("hidden");
+      if (result.error) {
+        statusEl.textContent = result.error;
+        statusEl.style.color = "var(--danger)";
+      } else {
+        statusEl.textContent = result.message;
+        statusEl.style.color = "var(--success)";
+        // Refresh the display
+        const sel = $("#ins-file-list").querySelector(".file-item.selected");
+        if (sel) setTimeout(() => selectFile(sel), 500);
+      }
+      fixBtnEl.disabled = false;
+      fixBtnEl.textContent = "Fix Artwork Dimensions";
+    });
+  }
 
   const ts = Date.now();
   artPreview.innerHTML = `<img src="/api/embedded-artwork-img?path=${encodeURIComponent(selectedFile)}&t=${ts}" alt="Embedded artwork" onerror="this.parentElement.innerHTML='<span class=\\'status\\'>Failed to load artwork image</span>'" />`;
