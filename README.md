@@ -2,7 +2,7 @@
 
 A local web tool for DJs to create lossless digital copies of vinyl records and other audio sources. Record your vinyl through OBS with BlackHole, then use this tool to extract the FLAC audio, auto-tag it with metadata and artwork from Discogs, Bandcamp, or Apple Music, and have it ready for import into Rekordbox, Traktor, or any DJ software.
 
-Also includes a standalone **Fix Metadata** tool for editing tags and artwork on existing audio files (FLAC, MP3, M4A/AAC, OGG) — with automatic search to find the right metadata for you.
+Also includes a standalone **Fix Metadata** tool for editing tags and artwork on existing audio files (FLAC, MP3, M4A/AAC, OGG) — with automatic search to find the right metadata for you — and an **Inspect** tool for diagnosing metadata and artwork issues.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -13,7 +13,7 @@ OBS Studio is primarily a video recording tool — it outputs `.mkv` video files
 
 ## What It Does
 
-The tool has two pages, accessible via tabs at the top:
+The tool has three pages, accessible via tabs at the top:
 
 ### Extract (main workflow)
 
@@ -37,6 +37,15 @@ A separate page for fixing tags on existing audio files — no extraction or aud
 5. **Save tags and artwork** directly to the file in the correct format for each file type
 
 This is particularly useful for fixing files that have been processed by other tools (e.g. Platinum Notes) which can strip metadata and artwork.
+
+### Inspect (metadata viewer)
+
+A diagnostic page for checking exactly what metadata and artwork is embedded in a file.
+
+1. **Browse** any folder for audio files
+2. **Select a file** to see its full metadata — every tag field displayed in a clear table, with missing fields highlighted
+3. **Artwork details** — shows MIME type, dimensions, and file size of embedded artwork, plus a rendered preview
+4. **Fix artwork dimensions** — some tools (e.g. Platinum Notes) can strip the width/height from FLAC artwork metadata, which causes players like Rekordbox to not display the cover art even though the image data is intact. The Inspect page detects this and offers a one-click fix that reads the actual dimensions from the image and writes them back
 
 ## Recording Setup
 
@@ -101,9 +110,16 @@ Open **http://localhost:5123** in your browser.
 1. Switch to the **Fix Metadata** tab
 2. **Browse** to a folder containing your audio files
 3. **Click a file** — the tool reads its current tags, then automatically searches iTunes and Discogs for matching releases
-4. **Pick a search result** — or paste a Bandcamp / Discogs / Apple Music URL manually if the search doesn't find what you need
+4. **Pick a search result** — or paste a Bandcamp / Discogs / Apple Music / Spotify URL manually if the search doesn't find what you need
 5. **Review/edit** the metadata fields and artwork preview
 6. **Save Tags & Artwork** — writes everything to the file
+
+### Inspect Workflow
+
+1. Switch to the **Inspect** tab
+2. **Browse** to a folder and **click a file**
+3. Review the **file details**, **metadata table**, and **artwork info** (including dimensions and a preview)
+4. If artwork dimensions are 0×0, click **Fix Artwork Dimensions** to repair the FLAC picture metadata
 
 ### Audio Level Analysis
 
@@ -168,6 +184,8 @@ dj-flac-tagger/
 │   ├── app.js          # Extract page logic
 │   ├── fix.html        # Fix Metadata page
 │   ├── fix.js          # Fix Metadata page logic
+│   ├── inspect.html    # Inspect page
+│   ├── inspect.js      # Inspect page logic
 │   └── style.css       # Shared dark theme styles
 └── README.md
 ```
