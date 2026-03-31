@@ -91,8 +91,8 @@ Open **http://localhost:5123** in your browser.
 1. **Settings** — configure your source folder (where OBS saves recordings) and destination folder (where tagged FLACs should be copied, e.g. your Rekordbox library)
 2. **Select** an MKV file from the source folder — audio levels are automatically analysed and displayed with LUFS, peak, and mean meters
 3. **Review levels** — if the recording is too quiet, the normalisation toggle auto-enables. Override it if you prefer the original levels
-4. **Paste a URL** (Bandcamp, Discogs, or Apple Music) or type the track name, then hit **Fetch Metadata**
-5. **Pick a track** if the release has multiple tracks (Discogs EPs/albums, Apple Music compilations)
+4. **Paste a URL** (Bandcamp, Discogs, Apple Music, or Spotify) or type the track name, then hit **Fetch Metadata**
+5. **Pick a track** if the release has multiple tracks (Discogs EPs/albums, Apple Music/Spotify compilations)
 6. **Review/edit** metadata and artwork
 7. **Extract** — creates a tagged FLAC (with optional normalisation to -14 LUFS), copies it to your destination folder, and optionally trashes the source MKV
 
@@ -126,6 +126,7 @@ If your recording is significantly below -14 LUFS, the normalisation toggle enab
 | **Discogs** (master or release URL) | Artist, album, year, genre, styles, label, cat no., artwork, full tracklist |
 | **Bandcamp** (track or album URL) | Artist, album, year, genre tags, artwork |
 | **Apple Music** (song or album URL) | Artist, album, year, genre, track number, high-res artwork, full tracklist for albums/compilations with per-track artists |
+| **Spotify** (track or album URL) | Artist, album, year, track number, artwork, full tracklist for albums/compilations |
 | **Any URL** | Title, artwork (via Open Graph tags) |
 | **Auto-search** (Fix Metadata page) | Searches iTunes + Discogs automatically from file tags or filename |
 

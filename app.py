@@ -592,6 +592,120 @@ def _itunes_lookup_songs(song_ids):
     return tracklist
 
 
+SPOTIFY_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+}
+
+
+def scrape_spotify(url):
+    """Scrape metadata from a Spotify track or album URL."""
+    resp = requests.get(url, headers=SPOTIFY_HEADERS, timeout=15)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    meta = {}
+    is_album = "/album/" in url
+
+    # og:title — "Track Name" or "Album Name - Type by Artist | Spotify"
+    og_title = soup.find("meta", property="og:title")
+    if og_title:
+        raw_title = og_title.get("content", "")
+        # Album titles: "Album - compilation by Artist | Spotify"
+        # Track titles: "Track Name"
+        cleaned = raw_title.split(" | Spotify")[0].strip()
+        if is_album:
+            # "Anokha - Soundz... - Compilation by Various Artists"
+            by_split = cleaned.rsplit(" by ", 1)
+            if len(by_split) == 2:
+                album_part = by_split[0].strip()
+                # Remove trailing " - compilation", " - Album", etc.
+                album_part = re.sub(r"\s*-\s*(compilation|album|single|ep)\s*$", "", album_part, flags=re.I)
+                meta["album"] = album_part
+                meta["albumartist"] = by_split[1].strip()
+                meta["artist"] = meta["albumartist"]
+            else:
+                meta["album"] = cleaned
+        else:
+            meta["title"] = cleaned
+
+    # og:description — "Artist · Album · Song · Year"
+    og_desc = soup.find("meta", property="og:description")
+    if og_desc:
+        desc = og_desc.get("content", "")
+        parts = [p.strip() for p in desc.split("·")]
+        if not is_album and len(parts) >= 2:
+            meta["artist"] = parts[0]
+            meta["album"] = parts[1]
+
+    # og:image — high-res artwork
+    og_image = soup.find("meta", property="og:image")
+    if og_image:
+        meta["artwork_url"] = og_image.get("content", "")
+
+    def spot_meta(name):
+        return (soup.find("meta", property=name) or soup.find("meta", attrs={"name": name}))
+
+    rel = spot_meta("music:release_date")
+    if rel:
+        ym = re.search(r"(\d{4})", rel.get("content", ""))
+        if ym:
+            meta["date"] = ym.group(1)
+
+    mus_desc = spot_meta("music:musician_description")
+    if mus_desc and not is_album:
+        meta["artist"] = mus_desc.get("content", "")
+
+    track_tag = spot_meta("music:album:track")
+    if track_tag:
+        meta["tracknumber"] = track_tag.get("content", "")
+
+    # Album: build tracklist from music:song tags + oEmbed
+    if is_album:
+        song_tags = (
+            soup.find_all("meta", property="music:song")
+            or soup.find_all("meta", attrs={"name": "music:song"})
+        )
+        song_urls = []
+        for tag in song_tags:
+            song_url = tag.get("content", "")
+            if song_url and "/track/" in song_url:
+                song_urls.append(song_url)
+
+        if song_urls:
+            tracklist = _spotify_oembed_tracklist(song_urls)
+            if tracklist:
+                meta["tracklist"] = tracklist
+
+        if not meta.get("title"):
+            meta["title"] = meta.get("album", "")
+
+    meta["source"] = "spotify"
+    return meta
+
+
+def _spotify_oembed_tracklist(song_urls):
+    """Fetch track titles from Spotify oEmbed for a list of song URLs."""
+    tracklist = []
+    for i, url in enumerate(song_urls, 1):
+        try:
+            resp = requests.get(
+                "https://open.spotify.com/oembed",
+                params={"url": url},
+                timeout=8,
+            )
+            data = resp.json()
+            tracklist.append({
+                "position": str(i),
+                "title": data.get("title", f"Track {i}"),
+                "artist": "",
+                "duration": "",
+                "url": url,
+            })
+        except Exception:
+            tracklist.append({"position": str(i), "title": f"Track {i}", "artist": "", "duration": ""})
+    return tracklist
+
+
 def parse_discogs_url(url):
     m = re.search(r"discogs\.com/(master|release)/(\d+)", url)
     if m:
@@ -883,6 +997,8 @@ def fetch_metadata():
                 meta = fetch_discogs(url)
             elif "music.apple.com" in url:
                 meta = scrape_apple_music(url)
+            elif "spotify.com" in url or "spotify.link" in url:
+                meta = scrape_spotify(url)
             else:
                 meta = scrape_generic(url)
         except Exception as e:
