@@ -1338,5 +1338,126 @@ def _read_generic_tags(filepath):
     return meta
 
 
+@app.route("/inspect")
+def inspect_page():
+    return app.send_static_file("inspect.html")
+
+
+@app.route("/api/read-tags-full", methods=["POST"])
+def read_tags_full():
+    """Read all metadata from an audio file including artwork details."""
+    data = request.get_json()
+    filepath = data.get("filepath")
+    if not filepath or not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 404
+
+    ext = os.path.splitext(filepath)[1].lower()
+    stat = os.stat(filepath)
+
+    try:
+        if ext == ".flac":
+            meta = _read_flac_tags(filepath)
+            audio = FLAC(filepath)
+            if audio.pictures:
+                pic = audio.pictures[0]
+                meta["artwork_info"] = {
+                    "mime": pic.mime,
+                    "size_bytes": len(pic.data),
+                    "width": pic.width,
+                    "height": pic.height,
+                    "type": pic.type,
+                }
+        elif ext == ".mp3":
+            meta = _read_mp3_tags(filepath)
+            audio = MP3(filepath, ID3=ID3)
+            if audio.tags:
+                apics = audio.tags.getall("APIC")
+                if apics:
+                    pic = apics[0]
+                    meta["artwork_info"] = {
+                        "mime": pic.mime,
+                        "size_bytes": len(pic.data),
+                        "type": pic.type,
+                    }
+        elif ext in (".m4a", ".mp4", ".aac"):
+            meta = _read_mp4_tags(filepath)
+            audio = MP4(filepath)
+            if audio.tags and audio.tags.get("covr"):
+                covr = audio.tags["covr"][0]
+                fmt_name = "JPEG" if covr.imageformat == MP4Cover.FORMAT_JPEG else "PNG"
+                meta["artwork_info"] = {
+                    "mime": f"image/{'jpeg' if fmt_name == 'JPEG' else 'png'}",
+                    "size_bytes": len(bytes(covr)),
+                    "format": fmt_name,
+                }
+        elif ext in (".ogg", ".oga"):
+            meta = _read_vorbis_tags(filepath)
+        else:
+            meta = _read_generic_tags(filepath)
+    except Exception as e:
+        return jsonify({"error": f"Cannot read tags: {e}"}), 400
+
+    meta["file_info"] = {
+        "path": filepath,
+        "name": os.path.basename(filepath),
+        "size_mb": round(stat.st_size / (1024 * 1024), 1),
+        "extension": ext,
+    }
+
+    return jsonify(meta)
+
+
+@app.route("/api/embedded-artwork-img")
+def embedded_artwork_img():
+    """GET endpoint to serve embedded artwork (for img src)."""
+    filepath = request.args.get("path", "")
+    return _serve_embedded_artwork(filepath)
+
+
+@app.route("/api/embedded-artwork", methods=["POST"])
+def embedded_artwork():
+    """POST endpoint to serve embedded artwork."""
+    data = request.get_json()
+    filepath = data.get("filepath", "")
+    return _serve_embedded_artwork(filepath)
+
+
+def _serve_embedded_artwork(filepath):
+    if not filepath or not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 404
+
+    ext = os.path.splitext(filepath)[1].lower()
+
+    try:
+        if ext == ".flac":
+            audio = FLAC(filepath)
+            if audio.pictures:
+                pic = audio.pictures[0]
+                return app.response_class(pic.data, mimetype=pic.mime)
+        elif ext == ".mp3":
+            audio = MP3(filepath, ID3=ID3)
+            if audio.tags:
+                apics = audio.tags.getall("APIC")
+                if apics:
+                    return app.response_class(apics[0].data, mimetype=apics[0].mime)
+        elif ext in (".m4a", ".mp4", ".aac"):
+            audio = MP4(filepath)
+            if audio.tags and audio.tags.get("covr"):
+                covr = audio.tags["covr"][0]
+                mime = "image/jpeg" if covr.imageformat == MP4Cover.FORMAT_JPEG else "image/png"
+                return app.response_class(bytes(covr), mimetype=mime)
+        elif ext in (".ogg", ".oga"):
+            import base64
+            audio = OggVorbis(filepath)
+            pics = audio.get("metadata_block_picture", [])
+            if pics:
+                pic = Picture(base64.b64decode(pics[0]))
+                return app.response_class(pic.data, mimetype=pic.mime)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({"error": "No embedded artwork"}), 404
+
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5123, debug=True)

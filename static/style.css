@@ -591,6 +591,61 @@ label {
 .search-source.src-apple { background: #fc3c44; color: #fff; }
 .search-source.src-discogs { background: #333; color: #fff; }
 
+/* ---- Inspect page ---- */
+.info-row {
+  display: flex;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.info-row:last-child { border-bottom: none; }
+
+.info-label {
+  width: 110px;
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  padding-top: 0.1rem;
+}
+
+.info-value {
+  flex: 1;
+  color: var(--text);
+  word-break: break-all;
+}
+.info-value.info-missing { color: var(--text-muted); font-style: italic; }
+
+.inspect-no-art {
+  padding: 1rem;
+  background: var(--bg);
+  border: 1px dashed var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.inspect-empty {
+  padding: 1rem;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.inspect-art-preview {
+  margin-top: 0.75rem;
+}
+.inspect-art-preview img {
+  max-width: 300px;
+  max-height: 300px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
 @media (max-width: 640px) {
   .metadata-layout { flex-direction: column; }
   .artwork-panel { flex: none; }
