@@ -632,16 +632,30 @@ label {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 440px);
   gap: 1rem;
-  align-items: start;
+  align-items: stretch;
+}
+
+.inspect-row-meta-art > .card {
+  margin-bottom: 0;
 }
 
 .inspect-meta-panel {
   min-width: 0;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.inspect-meta-panel .inspect-meta-table {
+  flex: 1;
+  min-height: 0;
 }
 
 .inspect-art-aside {
   position: sticky;
   top: 1rem;
+  display: flex;
+  flex-direction: column;
 }
 
 @media (max-width: 900px) {
@@ -698,8 +712,14 @@ label {
 }
 
 .inspect-art-preview {
-  margin-top: 0.75rem;
+  margin-top: 0;
   text-align: center;
+  flex-shrink: 0;
+}
+
+.inspect-art-info {
+  margin-top: 0.75rem;
+  flex-shrink: 0;
 }
 .inspect-art-preview img {
   max-width: 100%;
