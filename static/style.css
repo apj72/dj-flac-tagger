@@ -33,6 +33,11 @@ body {
   padding: 2rem 1.5rem 4rem;
 }
 
+/* Inspect uses more horizontal space for metadata + artwork columns */
+.page-inspect .app {
+  max-width: min(1320px, calc(100vw - 2rem));
+}
+
 header {
   text-align: center;
   margin-bottom: 2rem;
@@ -617,16 +622,20 @@ label {
 
 /* ---- Inspect page ---- */
 .inspect-details-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Metadata and artwork side by side; file details block sits below */
+.inspect-row-meta-art {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 440px);
   gap: 1rem;
   align-items: start;
 }
 
-.inspect-main-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+.inspect-meta-panel {
   min-width: 0;
 }
 
@@ -636,7 +645,7 @@ label {
 }
 
 @media (max-width: 900px) {
-  .inspect-details-layout {
+  .inspect-row-meta-art {
     grid-template-columns: 1fr;
   }
   .inspect-art-aside {

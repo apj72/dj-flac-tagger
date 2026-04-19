@@ -6,7 +6,7 @@
   <title>Inspect File — DJ FLAC Tagger</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body class="page-inspect">
   <div class="app">
     <header>
       <h1>DJ FLAC Tagger</h1>
@@ -23,7 +23,7 @@
     <main>
       <!-- Browse -->
       <section class="card">
-        <h2><span class="step">1</span> Select Audio File</h2>
+        <h2>Select Audio File</h2>
         <div class="dir-bar">
           <input type="text" id="ins-dir" placeholder="~/Music/FLACs" />
           <button id="ins-browse-btn" class="btn btn-secondary">Browse</button>
@@ -32,26 +32,21 @@
       </section>
 
       <div id="ins-details-layout" class="inspect-details-layout hidden">
-        <div class="inspect-main-stack">
-          <!-- File info -->
-          <section class="card" id="ins-info-section">
-            <h2><span class="step">2</span> File Details</h2>
-            <div id="ins-file-info" class="inspect-file-info"></div>
-          </section>
-
-          <!-- Metadata -->
-          <section class="card" id="ins-meta-section">
-            <h2><span class="step">3</span> Metadata</h2>
+        <div class="inspect-row-meta-art">
+          <section class="card inspect-meta-panel" id="ins-meta-section">
+            <h2>Metadata</h2>
             <div id="ins-meta-table" class="inspect-meta-table"></div>
           </section>
+          <aside class="card inspect-art-aside" id="ins-art-section">
+            <h2>Artwork</h2>
+            <div id="ins-art-info" class="inspect-art-info"></div>
+            <div id="ins-art-preview" class="inspect-art-preview"></div>
+          </aside>
         </div>
-
-        <!-- Artwork (beside 2 + 3) -->
-        <aside class="card inspect-art-aside" id="ins-art-section">
-          <h2><span class="step">4</span> Artwork</h2>
-          <div id="ins-art-info" class="inspect-art-info"></div>
-          <div id="ins-art-preview" class="inspect-art-preview"></div>
-        </aside>
+        <section class="card" id="ins-info-section">
+          <h2>File Details</h2>
+          <div id="ins-file-info" class="inspect-file-info"></div>
+        </section>
       </div>
     </main>
   </div>
