@@ -47,9 +47,7 @@ async function selectFile(el) {
   el.classList.add("selected");
   selectedFile = el.dataset.path;
 
-  $("#ins-info-section").classList.remove("hidden");
-  $("#ins-meta-section").classList.remove("hidden");
-  $("#ins-art-section").classList.remove("hidden");
+  $("#ins-details-layout").classList.remove("hidden");
   $("#ins-file-info").innerHTML = '<span class="spinner"></span> Reading file...';
   $("#ins-meta-table").innerHTML = "";
   $("#ins-art-info").innerHTML = "";
