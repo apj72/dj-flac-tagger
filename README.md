@@ -7,6 +7,17 @@ Also includes **Fix Metadata** (tag editor), **Inspect** (metadata diagnostics),
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+## Version & branches
+
+| Branch | Purpose |
+|--------|---------|
+| **`master`** | Stable release; extract pipeline is FLAC-oriented as documented below. |
+| **`v2`** | Development: **system-wide configurable extract format** (e.g. FLAC, MP3 320 CBR, AAC in M4A). **Fix Metadata** and **Inspect** remain **format-agnostic** (whatever file you select). Work merges to `master` when ready. |
+
+### Platinum Notes and file format
+
+If you use **Extract → open in Platinum Notes → watch for processed output**, set Platinum Notes to **Match input format** (and choose an output location **other than** “Replace Original Files,” as Platinum Notes requires). Then the `*_PN` file stays the **same type** as the file this app wrote (e.g. both FLAC or both MP3), which matches a **single global extract format** in Settings once v2 is implemented. If PN is set to a **fixed** output type that does not match, automatic repair may look for the wrong filename.
+
 ## Why?
 
 OBS Studio is primarily a video recording tool — it outputs `.mkv` video files even when all you care about is the audio. If you configure OBS to use FLAC as the audio encoder, the lossless audio is trapped inside a large video container alongside an unnecessary video stream. This tool strips out the audio track, keeps it lossless, and produces a properly tagged FLAC with artwork — ready for your DJ library.
