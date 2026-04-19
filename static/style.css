@@ -616,6 +616,34 @@ label {
 .search-source.src-discogs { background: #333; color: #fff; }
 
 /* ---- Inspect page ---- */
+.inspect-details-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 1rem;
+  align-items: start;
+}
+
+.inspect-main-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.inspect-art-aside {
+  position: sticky;
+  top: 1rem;
+}
+
+@media (max-width: 900px) {
+  .inspect-details-layout {
+    grid-template-columns: 1fr;
+  }
+  .inspect-art-aside {
+    position: static;
+  }
+}
+
 .info-row {
   display: flex;
   padding: 0.45rem 0;
@@ -662,10 +690,14 @@ label {
 
 .inspect-art-preview {
   margin-top: 0.75rem;
+  text-align: center;
 }
 .inspect-art-preview img {
-  max-width: 300px;
-  max-height: 300px;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  max-height: min(52vh, 420px);
+  object-fit: contain;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }
