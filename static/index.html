@@ -15,33 +15,16 @@
         <a href="/" class="tab-link active">Extract</a>
         <a href="/fix" class="tab-link">Fix Metadata</a>
         <a href="/inspect" class="tab-link">Inspect</a>
+        <a href="/normalise" class="tab-link">Normalise</a>
+        <a href="/settings" class="tab-link">Settings</a>
       </nav>
     </header>
 
     <main>
-      <!-- Settings (collapsible) -->
-      <section class="card settings-card" id="settings-section">
-        <h2 class="settings-toggle" id="settings-toggle">
-          <span class="step-alt">&#9881;</span> Settings
-          <span class="toggle-arrow" id="toggle-arrow">&#9660;</span>
-        </h2>
-        <div id="settings-body" class="settings-body hidden">
-          <div class="field-row">
-            <label for="cfg-source">Source folder (OBS recordings)</label>
-            <input type="text" id="cfg-source" placeholder="~/DJ-Mixes" />
-          </div>
-          <div class="field-row">
-            <label for="cfg-dest">Destination folder (FLAC output copy)</label>
-            <input type="text" id="cfg-dest" placeholder="~/Documents/Rekordbox-music/FLACs" />
-          </div>
-          <button id="save-settings-btn" class="btn btn-primary btn-sm">Save Settings</button>
-          <span id="settings-status" class="settings-status hidden">Saved</span>
-        </div>
-      </section>
-
       <!-- Step 1: Source file -->
       <section class="card" id="source-section">
         <h2><span class="step">1</span> Source File</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:0.75rem">Folders and Platinum Notes options are on the <a href="/settings">Settings</a> tab.</p>
         <div class="dir-bar">
           <input type="text" id="dir-input" placeholder="~/DJ-Mixes" />
           <button id="browse-btn" class="btn btn-secondary">Browse</button>
@@ -156,11 +139,19 @@
         <h2><span class="step">4</span> Extract &amp; Tag</h2>
         <label class="checkbox-row">
           <input type="checkbox" id="normalise" />
-          <span>Normalise audio to -14 LUFS (EBU R128)</span>
+          <span>Normalise audio (EBU R128 — target LUFS from Settings)</span>
         </label>
         <label class="checkbox-row">
           <input type="checkbox" id="delete-source" checked />
           <span>Move source MKV to Bin after extraction</span>
+        </label>
+        <label class="checkbox-row">
+          <input type="checkbox" id="open-platinum-notes" />
+          <span>Open extracted FLAC in Platinum Notes (requires app name in Settings)</span>
+        </label>
+        <label class="checkbox-row">
+          <input type="checkbox" id="watch-pn-repair" />
+          <span>Watch for Platinum Notes output and re-apply tags &amp; artwork automatically (polls up to 3 min)</span>
         </label>
         <button id="extract-btn" class="btn btn-accent" disabled>Extract FLAC &amp; Apply Tags</button>
         <div id="result" class="result hidden"></div>
@@ -173,7 +164,7 @@
           <span class="toggle-arrow" id="history-arrow">&#9660;</span>
         </h2>
         <div id="history-body" class="settings-body hidden">
-          <p class="hint">Previously processed tracks. Select entries to re-apply metadata &amp; artwork.</p>
+          <p class="hint">Previously processed tracks. Each row stores the metadata source URL (when you pasted one) for re-fetching artwork. Select entries to re-apply to files in a folder.</p>
           <div class="history-controls">
             <button id="retag-selected-btn" class="btn btn-primary btn-sm" disabled>Re-tag Selected</button>
             <button id="retag-all-btn" class="btn btn-secondary btn-sm">Re-tag All in Folder</button>

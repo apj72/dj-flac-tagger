@@ -3,8 +3,11 @@ import os
 import re
 import shutil
 import subprocess
+import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -27,6 +30,14 @@ def load_config():
     defaults = {
         "source_dir": "~/DJ-Mixes",
         "destination_dir": "~/Documents/Rekordbox-music/FLACs",
+        # Exact app name as shown by macOS "open -a" (e.g. "Platinum Notes")
+        "platinum_notes_app": "",
+        # Platinum Notes default output: <stem>_PN.flac
+        "pn_output_suffix": "_PN",
+        # EBU R128 loudnorm targets (integrated LUFS, true-peak ceiling dBTP).
+        # Platinum Notes is often around -11.5 LUFS; streaming reference is -14.
+        "target_lufs": -14.0,
+        "target_true_peak": -1.0,
     }
     try:
         with open(CONFIG_PATH) as f:
@@ -45,6 +56,28 @@ def save_config(cfg):
 
 def resolve(path):
     return os.path.expanduser(path)
+
+
+def get_normalisation_targets():
+    """LUFS / dBTP targets from config (defaults -14 / -1). Positive LUFS values are treated as negative (e.g. 11.5 → -11.5)."""
+    cfg = load_config()
+    try:
+        lufs = float(cfg.get("target_lufs", -14.0))
+    except (TypeError, ValueError):
+        lufs = -14.0
+    if lufs > 0:
+        lufs = -abs(lufs)
+    lufs = max(-24.0, min(-3.0, lufs))
+
+    try:
+        tp = float(cfg.get("target_true_peak", -1.0))
+    except (TypeError, ValueError):
+        tp = -1.0
+    if tp > 0:
+        tp = -abs(tp)
+    tp = max(-3.0, min(0.0, tp))
+
+    return lufs, tp
 
 
 LOG_PATH = os.path.join(os.path.dirname(__file__), "processing_log.json")
@@ -69,6 +102,79 @@ def log_extraction(entry):
     entry["timestamp"] = datetime.now().isoformat()
     entries.append(entry)
     save_log(entries)
+    return len(entries) - 1
+
+
+SOURCE_URL_VORBIS = "DJFLACTAGGER_SOURCE_URL"
+SOURCE_URL_ID3_DESC = "DJFLACTAGGER_SOURCE_URL"
+
+
+def infer_metadata_source_type(url):
+    if not url:
+        return ""
+    u = url.lower()
+    if "bandcamp.com" in u:
+        return "bandcamp"
+    if "discogs.com" in u:
+        return "discogs"
+    if "music.apple.com" in u or "itunes.apple.com" in u:
+        return "apple_music"
+    if "spotify.com" in u or "spotify.link" in u:
+        return "spotify"
+    try:
+        host = urlparse(url).netloc.lower()
+        if host:
+            return host.split(":")[0]
+    except Exception:
+        pass
+    return "url"
+
+
+def find_log_entry_for_output_path(base_path, log_index=None):
+    """Match a processing-log entry to an extracted FLAC path (or explicit index)."""
+    entries = load_log()
+    if log_index is not None:
+        if 0 <= log_index < len(entries):
+            return entries[log_index], log_index
+        return None, None
+    if not base_path:
+        return None, None
+    base_norm = os.path.normpath(os.path.abspath(base_path))
+    for i in range(len(entries) - 1, -1, -1):
+        e = entries[i]
+        op = e.get("output_path") or e.get("target_path") or ""
+        if not op:
+            continue
+        try:
+            if os.path.normpath(os.path.abspath(op)) == base_norm:
+                return e, i
+        except OSError:
+            continue
+    return None, None
+
+
+def post_extract_open_app(app_name, file_path):
+    """Launch a GUI app with a file (e.g. Platinum Notes). No public CLI; this uses OS hooks."""
+    if not app_name or not file_path or not os.path.isfile(file_path):
+        return
+    try:
+        if sys.platform == "darwin":
+            subprocess.Popen(
+                ["open", "-n", "-a", app_name, file_path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        elif sys.platform == "win32":
+            os.startfile(file_path)  # noqa: S606 — opens default handler; PN may still be manual
+        else:
+            subprocess.Popen(["xdg-open", file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
+def pn_derivative_path(base_flac_path, suffix):
+    p = Path(base_flac_path)
+    return p.parent / f"{p.stem}{suffix}.flac"
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +186,8 @@ def run_ffprobe(filepath):
         [
             "ffprobe", "-v", "error",
             "-show_streams", "-select_streams", "a:0",
-            "-show_entries", "stream=codec_name,sample_rate,channels,duration",
+            "-show_entries",
+            "stream=codec_name,sample_rate,channels,duration,channel_layout,bits_per_raw_sample",
             "-show_entries", "format=duration",
             "-of", "json",
             filepath,
@@ -90,8 +197,33 @@ def run_ffprobe(filepath):
     return json.loads(result.stdout)
 
 
-TARGET_LUFS = -14.0
-TARGET_TP = -1.0
+def _loudnorm_tail_aformat_and_rate(input_path):
+    """Sample rate (int or None) and aformat=… string matching source layout (keeps 48 kHz vs accidental 192 kHz bloat)."""
+    info = run_ffprobe(input_path)
+    stream = info["streams"][0] if info.get("streams") else {}
+    sr = stream.get("sample_rate")
+    ch = stream.get("channels")
+    if not sr or ch is None:
+        return None, "sample_fmts=s16"
+    sr_i = int(float(sr))
+    ch_i = int(ch)
+    layout = stream.get("channel_layout")
+    if isinstance(layout, str):
+        layout = layout.strip()
+    else:
+        layout = ""
+    if layout.lower() in ("", "unknown"):
+        layout = "mono" if ch_i == 1 else "stereo" if ch_i == 2 else ""
+    parts = ["sample_fmts=s16", f"sample_rates={sr_i}"]
+    if layout:
+        parts.append(f"channel_layouts={layout}")
+    return sr_i, ":".join(parts)
+
+
+def _aformat_opts_preserve_stream(input_path):
+    """Backward-compatible: aformat options only (tests / callers)."""
+    _, opts = _loudnorm_tail_aformat_and_rate(input_path)
+    return opts
 
 
 def analyse_loudness(filepath):
@@ -137,6 +269,7 @@ def analyse_loudness(filepath):
             if m:
                 max_vol = float(m.group(1))
 
+    tl, ttp = get_normalisation_targets()
     return {
         "integrated_lufs": float(loudnorm.get("input_i", 0)),
         "true_peak": float(loudnorm.get("input_tp", 0)),
@@ -144,10 +277,94 @@ def analyse_loudness(filepath):
         "threshold": float(loudnorm.get("input_thresh", 0)),
         "mean_volume": mean_vol,
         "max_volume": max_vol,
-        "target_lufs": TARGET_LUFS,
-        "target_tp": TARGET_TP,
+        "target_lufs": tl,
+        "target_tp": ttp,
         "loudnorm_params": loudnorm,
     }
+
+
+def _ffmpeg_loudnorm_to_flac(input_path, output_path, loudnorm_params, target_lufs=None, target_tp=None):
+    """Two-pass EBU R128 loudnorm — measured_* from analyse_loudness (first pass)."""
+    if not loudnorm_params:
+        raise ValueError("loudnorm_params required")
+    if target_lufs is None or target_tp is None:
+        target_lufs, target_tp = get_normalisation_targets()
+    # loudnorm runs at high precision; pin s16 + source sample rate + channel layout so we don't upmix mono
+    # or resample unexpectedly. When the `flac` CLI is available, WAV pipe + `flac --best` matches typical
+    # encoder sizes better than libavcodec alone (often much smaller on music).
+    loudnorm = (
+        f"loudnorm=I={target_lufs}:TP={target_tp}:LRA=11"
+        f":measured_I={loudnorm_params.get('input_i', -24)}"
+        f":measured_TP={loudnorm_params.get('input_tp', -2)}"
+        f":measured_LRA={loudnorm_params.get('input_lra', 7)}"
+        f":measured_thresh={loudnorm_params.get('input_thresh', -34)}"
+        f":linear=true:print_format=json"
+    )
+    sr_i, aformat_opts = _loudnorm_tail_aformat_and_rate(input_path)
+    af = f"{loudnorm},aformat={aformat_opts}"
+    # Output -ar locks muxer/encoder rate; without it some builds end up at 192 kHz despite aformat.
+    ar_args = ["-ar", str(sr_i)] if sr_i is not None else []
+    flac_bin = shutil.which("flac")
+    if flac_bin:
+        fd, wav_path = tempfile.mkstemp(suffix=".wav")
+        os.close(fd)
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-hide_banner", "-y", "-i", input_path,
+                    "-map", "0:a:0", "-vn", "-af", af,
+                    *ar_args,
+                    "-f", "wav", wav_path,
+                ],
+                capture_output=True, text=True, check=True,
+            )
+            # --best plus exhaustive model / coeff search: slower encode, often shaves a few % vs --best alone.
+            subprocess.run(
+                [
+                    flac_bin, "-f", "--best", "-e", "-p",
+                    "-o", output_path, wav_path,
+                ],
+                capture_output=True, text=True, check=True,
+            )
+        finally:
+            try:
+                os.unlink(wav_path)
+            except OSError:
+                pass
+    else:
+        cmd = [
+            "ffmpeg", "-hide_banner", "-y", "-i", input_path,
+            "-map", "0:a:0", "-vn", "-af", af,
+            *ar_args,
+            "-c:a", "flac", "-compression_level", "12", "-sample_fmt", "s16", output_path,
+        ]
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+
+def _copy_flac_tags_and_pictures(src_path, dst_path):
+    """Re-apply all Vorbis comments and cover art from src onto dst (after audio rewrite)."""
+    src = FLAC(src_path)
+    dst = FLAC(dst_path)
+    for key in list(dst.keys()):
+        try:
+            del dst[key]
+        except KeyError:
+            pass
+    for key in src.keys():
+        dst[key] = src[key]
+    dst.clear_pictures()
+    for pic in src.pictures:
+        np = Picture()
+        np.type = pic.type
+        np.mime = pic.mime
+        np.desc = pic.desc
+        np.data = pic.data
+        w, h = pic.width, pic.height
+        if w <= 0 or h <= 0:
+            w, h = _image_dimensions(pic.data)
+        np.width, np.height = w, h
+        dst.add_picture(np)
+    dst.save()
 
 
 def extract_flac(mkv_path, output_path, normalise=False, loudnorm_params=None):
@@ -155,25 +372,14 @@ def extract_flac(mkv_path, output_path, normalise=False, loudnorm_params=None):
     codec = info["streams"][0]["codec_name"] if info.get("streams") else "unknown"
 
     if normalise and loudnorm_params:
-        # Two-pass EBU R128 normalisation — uses measured values from pass 1
-        af = (
-            f"loudnorm=I={TARGET_LUFS}:TP={TARGET_TP}:LRA=11"
-            f":measured_I={loudnorm_params.get('input_i', -24)}"
-            f":measured_TP={loudnorm_params.get('input_tp', -2)}"
-            f":measured_LRA={loudnorm_params.get('input_lra', 7)}"
-            f":measured_thresh={loudnorm_params.get('input_thresh', -34)}"
-            f":linear=true:print_format=json"
-        )
-        cmd = [
-            "ffmpeg", "-hide_banner", "-y", "-i", mkv_path,
-            "-vn", "-af", af, "-c:a", "flac", "-sample_fmt", "s16", output_path,
-        ]
-    elif codec == "flac":
+        _ffmpeg_loudnorm_to_flac(mkv_path, output_path, loudnorm_params)
+        return codec
+    if codec == "flac":
         cmd = ["ffmpeg", "-hide_banner", "-y", "-i", mkv_path, "-vn", "-c:a", "copy", output_path]
     else:
         cmd = [
             "ffmpeg", "-hide_banner", "-y", "-i", mkv_path,
-            "-vn", "-c:a", "flac", "-sample_fmt", "s16", output_path,
+            "-vn", "-c:a", "flac", "-compression_level", "12", "-sample_fmt", "s16", output_path,
         ]
 
     subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -243,6 +449,9 @@ def _apply_flac(filepath, metadata, artwork_bytes, artwork_mime):
         val = metadata.get(key)
         if val:
             audio[vorbis_key] = [val]
+    su = (metadata.get("source_url") or "").strip()
+    if su:
+        audio[SOURCE_URL_VORBIS] = [su]
     if artwork_bytes:
         pic = Picture()
         pic.type = 3
@@ -286,6 +495,10 @@ def _apply_mp3(filepath, metadata, artwork_bytes, artwork_mime):
     if metadata.get("catno"):
         t.delall("TXXX:CATALOGNUMBER")
         t.add(TXXX(encoding=3, desc="CATALOGNUMBER", text=[metadata["catno"]]))
+    su = (metadata.get("source_url") or "").strip()
+    if su:
+        t.delall(f"TXXX:{SOURCE_URL_ID3_DESC}")
+        t.add(TXXX(encoding=3, desc=SOURCE_URL_ID3_DESC, text=[su]))
     if artwork_bytes:
         t.delall("APIC")
         t.add(APIC(encoding=3, mime=artwork_mime or "image/jpeg", type=3, desc="Cover", data=artwork_bytes))
@@ -330,6 +543,9 @@ def _apply_vorbis(filepath, metadata, artwork_bytes, artwork_mime):
         val = metadata.get(key)
         if val:
             audio[vorbis_key] = [val]
+    su = (metadata.get("source_url") or "").strip()
+    if su:
+        audio[SOURCE_URL_VORBIS] = [su]
     if artwork_bytes:
         import base64
         pic = Picture()
@@ -913,6 +1129,16 @@ def fix_page():
     return app.send_static_file("fix.html")
 
 
+@app.route("/normalise")
+def normalise_page():
+    return app.send_static_file("normalise.html")
+
+
+@app.route("/settings")
+def settings_page():
+    return app.send_static_file("settings.html")
+
+
 @app.route("/api/search")
 def search():
     """Search iTunes + Discogs for a track by query string."""
@@ -952,6 +1178,20 @@ def update_settings():
         cfg["source_dir"] = data["source_dir"]
     if "destination_dir" in data:
         cfg["destination_dir"] = data["destination_dir"]
+    if "platinum_notes_app" in data:
+        cfg["platinum_notes_app"] = (data["platinum_notes_app"] or "").strip()
+    if "pn_output_suffix" in data:
+        cfg["pn_output_suffix"] = (data["pn_output_suffix"] or "_PN").strip() or "_PN"
+    if "target_lufs" in data and data["target_lufs"] is not None and data["target_lufs"] != "":
+        try:
+            cfg["target_lufs"] = float(data["target_lufs"])
+        except (TypeError, ValueError):
+            pass
+    if "target_true_peak" in data and data["target_true_peak"] is not None and data["target_true_peak"] != "":
+        try:
+            cfg["target_true_peak"] = float(data["target_true_peak"])
+        except (TypeError, ValueError):
+            pass
 
     save_config(cfg)
 
@@ -1011,6 +1251,57 @@ def analyse():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/normalise-flac", methods=["POST"])
+def normalise_flac_route():
+    """EBU R128 loudnorm to configured LUFS target; copies tags and artwork to the new file."""
+    data = request.get_json()
+    filepath = data.get("filepath")
+    loudnorm_params = data.get("loudnorm_params")
+    output_suffix = (data.get("output_suffix") or "_LUFS14").strip() or "_LUFS14"
+    if not output_suffix.startswith("_"):
+        output_suffix = "_" + output_suffix
+
+    if not filepath or not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 404
+    if Path(filepath).suffix.lower() != ".flac":
+        return jsonify({"error": "Only FLAC files are supported"}), 400
+    if not loudnorm_params or not isinstance(loudnorm_params, dict):
+        return jsonify({"error": "Run level analysis first (loudnorm_params missing)"}), 400
+
+    parent = Path(filepath).parent
+    stem = Path(filepath).stem
+    out_path = str(parent / f"{stem}{output_suffix}.flac")
+
+    if os.path.normpath(os.path.abspath(out_path)) == os.path.normpath(os.path.abspath(filepath)):
+        return jsonify({"error": "Output path cannot be the same as input"}), 400
+    if os.path.exists(out_path):
+        return jsonify({"error": f"Output already exists: {out_path}"}), 409
+
+    try:
+        _ffmpeg_loudnorm_to_flac(filepath, out_path, loudnorm_params)
+        _copy_flac_tags_and_pictures(filepath, out_path)
+    except subprocess.CalledProcessError as e:
+        if os.path.isfile(out_path):
+            try:
+                os.remove(out_path)
+            except OSError:
+                pass
+        return jsonify({"error": f"ffmpeg failed: {e.stderr}"}), 500
+    except Exception as e:
+        if os.path.isfile(out_path):
+            try:
+                os.remove(out_path)
+            except OSError:
+                pass
+        return jsonify({"error": str(e)}), 500
+
+    stat = os.stat(out_path)
+    return jsonify({
+        "output_path": out_path,
+        "size_mb": round(stat.st_size / (1024 * 1024), 1),
+    })
+
+
 @app.route("/api/fetch-metadata", methods=["POST"])
 def fetch_metadata():
     data = request.get_json()
@@ -1060,6 +1351,7 @@ def extract():
     filepath = data.get("filepath")
     metadata = data.get("metadata", {})
     artwork_url = data.get("artwork_url", "")
+    metadata_source_url = (data.get("metadata_source_url") or "").strip()
 
     if not filepath or not os.path.isfile(filepath):
         return jsonify({"error": "Source file not found"}), 404
@@ -1089,7 +1381,11 @@ def extract():
         except Exception:
             pass
 
-    apply_metadata(output_path, metadata, artwork_bytes, artwork_mime)
+    meta_for_file = dict(metadata)
+    if metadata_source_url:
+        meta_for_file["source_url"] = metadata_source_url
+
+    apply_metadata(output_path, meta_for_file, artwork_bytes, artwork_mime)
 
     # Copy to destination folder
     dest_dir = resolve(cfg["destination_dir"])
@@ -1119,16 +1415,31 @@ def extract():
 
     stat = os.stat(output_path)
 
-    log_extraction({
+    suffix = cfg.get("pn_output_suffix", "_PN")
+    expected_pn_path = str(pn_derivative_path(output_path, suffix))
+
+    tgt_lufs, tgt_tp = get_normalisation_targets()
+    log_index = log_extraction({
+        "kind": "extract",
         "filename": filename,
         "source_file": filepath,
         "output_path": output_path,
         "copied_to": copied_to,
         "metadata": metadata,
         "artwork_url": artwork_url,
+        "metadata_source_url": metadata_source_url,
+        "metadata_source_type": infer_metadata_source_type(metadata_source_url),
         "normalised": normalise,
+        "normalise_target_lufs": tgt_lufs if normalise else None,
+        "normalise_target_tp": tgt_tp if normalise else None,
         "source_codec": source_codec,
+        "pn_output_suffix": suffix,
     })
+
+    open_pn = bool(data.get("open_platinum_notes"))
+    pn_app = (cfg.get("platinum_notes_app") or "").strip()
+    if open_pn and pn_app:
+        post_extract_open_app(pn_app, output_path)
 
     result = {
         "output_path": output_path,
@@ -1137,7 +1448,12 @@ def extract():
         "title": safe_title,
         "source_trashed": source_trashed,
         "normalised": normalise,
+        "log_index": log_index,
+        "expected_pn_flac_path": expected_pn_path,
     }
+    if normalise:
+        result["target_lufs"] = tgt_lufs
+        result["target_tp"] = tgt_tp
     if copied_to:
         result["copied_to"] = copied_to
     if copy_error:
@@ -1146,6 +1462,98 @@ def extract():
         result["source_trash_error"] = source_trash_error
 
     return jsonify(result)
+
+
+@app.route("/api/poll-pn-derivative", methods=["POST"])
+def poll_pn_derivative():
+    """Return whether <stem><pn_suffix>.flac exists beside the freshly extracted base FLAC."""
+    data = request.get_json() or {}
+    cfg = load_config()
+    base_flac_path = data.get("base_flac_path")
+    suffix = (data.get("pn_output_suffix") or cfg.get("pn_output_suffix") or "_PN").strip()
+    if not base_flac_path:
+        return jsonify({"error": "base_flac_path required"}), 400
+    if not os.path.isfile(base_flac_path):
+        return jsonify({"error": "Base FLAC not found", "ready": False}), 404
+
+    pn_path = str(pn_derivative_path(base_flac_path, suffix))
+    ready = os.path.isfile(pn_path)
+    if ready:
+        try:
+            if os.path.getmtime(pn_path) < os.path.getmtime(base_flac_path):
+                ready = False
+        except OSError:
+            ready = False
+
+    return jsonify({"ready": ready, "pn_flac_path": pn_path, "pn_output_suffix": suffix})
+
+
+@app.route("/api/repair-pn-derivative", methods=["POST"])
+def repair_pn_derivative():
+    """Re-apply metadata and artwork from the processing log onto a Platinum Notes output FLAC."""
+    data = request.get_json() or {}
+    cfg = load_config()
+    base_flac_path = data.get("base_flac_path")
+    pn_flac_path = data.get("pn_flac_path")
+    log_index = data.get("log_index")
+    suffix = (data.get("pn_output_suffix") or cfg.get("pn_output_suffix") or "_PN").strip()
+
+    if not base_flac_path:
+        return jsonify({"error": "base_flac_path required"}), 400
+    if not os.path.isfile(base_flac_path):
+        return jsonify({"error": f"Base FLAC not found: {base_flac_path}"}), 404
+
+    entry, idx = find_log_entry_for_output_path(base_flac_path, log_index)
+    if not entry:
+        return jsonify({
+            "error": "No processing log entry matches this extract. Expand Processing Log and use a row from the same run, or re-fetch metadata manually.",
+        }), 404
+
+    pn_path = pn_flac_path or str(pn_derivative_path(base_flac_path, suffix))
+    if not os.path.isfile(pn_path):
+        return jsonify({
+            "error": f"File not found: {pn_path}",
+            "pn_flac_path": pn_path,
+            "waiting": True,
+        }), 404
+
+    metadata = dict(entry.get("metadata") or {})
+    artwork_url = entry.get("artwork_url", "")
+    msu = (entry.get("metadata_source_url") or "").strip()
+    if msu:
+        metadata["source_url"] = msu
+
+    artwork_bytes, artwork_mime = None, None
+    if artwork_url:
+        try:
+            artwork_bytes, artwork_mime = fetch_artwork(artwork_url)
+        except Exception as e:
+            return jsonify({"error": f"Artwork fetch failed: {e}"}), 500
+
+    try:
+        apply_metadata(pn_path, metadata, artwork_bytes, artwork_mime)
+    except Exception as e:
+        return jsonify({"error": f"Tagging failed: {e}"}), 500
+
+    copied_pn = None
+    copy_err = None
+    copied_orig = entry.get("copied_to")
+    if copied_orig:
+        dest_pn = os.path.join(os.path.dirname(copied_orig), os.path.basename(pn_path))
+        try:
+            os.makedirs(os.path.dirname(copied_orig), exist_ok=True)
+            shutil.copy2(pn_path, dest_pn)
+            copied_pn = dest_pn
+        except Exception as e:
+            copy_err = str(e)
+
+    return jsonify({
+        "status": "ok",
+        "pn_flac_path": pn_path,
+        "log_index": idx,
+        "copied_pn_to_destination": copied_pn,
+        "copy_error": copy_err,
+    })
 
 
 @app.route("/api/log")
@@ -1190,11 +1598,17 @@ def retag():
     """Re-apply metadata and artwork to an existing FLAC from a log entry."""
     data = request.get_json()
     filepath = data.get("filepath")
-    metadata = data.get("metadata", {})
+    metadata = dict(data.get("metadata") or {})
     artwork_url = data.get("artwork_url", "")
+    metadata_source_url = (data.get("metadata_source_url") or "").strip()
+    record_in_log = data.get("record_in_log", True)
 
     if not filepath or not os.path.isfile(filepath):
         return jsonify({"error": f"File not found: {filepath}"}), 404
+
+    meta_for_file = dict(metadata)
+    if metadata_source_url:
+        meta_for_file["source_url"] = metadata_source_url
 
     artwork_bytes, artwork_mime = None, None
     if artwork_url:
@@ -1204,9 +1618,21 @@ def retag():
             return jsonify({"error": f"Artwork fetch failed: {e}"}), 500
 
     try:
-        apply_metadata(filepath, metadata, artwork_bytes, artwork_mime)
+        apply_metadata(filepath, meta_for_file, artwork_bytes, artwork_mime)
     except Exception as e:
         return jsonify({"error": f"Tagging failed: {e}"}), 500
+
+    if record_in_log and (metadata_source_url or artwork_url):
+        log_extraction({
+            "kind": "fix",
+            "filename": os.path.basename(filepath),
+            "output_path": filepath,
+            "target_path": filepath,
+            "metadata": metadata,
+            "artwork_url": artwork_url,
+            "metadata_source_url": metadata_source_url,
+            "metadata_source_type": infer_metadata_source_type(metadata_source_url),
+        })
 
     return jsonify({"status": "ok", "filepath": filepath})
 
@@ -1237,7 +1663,10 @@ def retag_batch():
             results.append({"filename": filename, "status": "skipped", "reason": "not found"})
             continue
 
-        metadata = entry.get("metadata", {})
+        metadata = dict(entry.get("metadata") or {})
+        msu = (entry.get("metadata_source_url") or "").strip()
+        if msu:
+            metadata["source_url"] = msu
         artwork_url = entry.get("artwork_url", "")
 
         artwork_bytes, artwork_mime = None, None
@@ -1316,6 +1745,9 @@ def _read_flac_tags(filepath):
         vals = audio.get(vorbis_key, [])
         if vals:
             meta[field] = vals[0]
+    src = audio.get(SOURCE_URL_VORBIS, [])
+    if src:
+        meta["source_url"] = src[0]
     meta["has_artwork"] = len(audio.pictures) > 0
     meta["format"] = "FLAC"
     return meta
@@ -1343,6 +1775,10 @@ def _read_mp3_tags(filepath):
     catno = t.getall("TXXX:CATALOGNUMBER")
     if catno:
         meta["catno"] = str(catno[0])
+    for frame in t.getall("TXXX"):
+        if getattr(frame, "desc", "") == SOURCE_URL_ID3_DESC and frame.text:
+            meta["source_url"] = str(frame.text[0])
+            break
     meta["has_artwork"] = bool(t.getall("APIC"))
     return meta
 
@@ -1381,6 +1817,9 @@ def _read_vorbis_tags(filepath):
         vals = audio.get(vorbis_key, [])
         if vals:
             meta[field] = vals[0]
+    src = audio.get(SOURCE_URL_VORBIS, [])
+    if src:
+        meta["source_url"] = src[0]
     meta["has_artwork"] = bool(audio.get("metadata_block_picture"))
     return meta
 

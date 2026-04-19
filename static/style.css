@@ -339,6 +339,10 @@ label {
 .level-verdict .verdict-low { color: #e74c3c; }
 .level-verdict .verdict-ok { color: #f39c12; }
 .level-verdict .verdict-good { color: var(--primary); }
+.level-verdict .verdict-danger {
+  color: #ff6b6b;
+  font-weight: 600;
+}
 
 .analysis-spinner {
   display: flex;
@@ -538,9 +542,29 @@ label {
 .history-check { flex-shrink: 0; }
 .history-check input { accent-color: var(--accent); width: 14px; height: 14px; }
 
-.history-title { flex: 1; font-weight: 500; }
-.history-artist { color: var(--text-muted); flex: 0.6; }
-.history-date { color: var(--text-muted); font-size: 0.8rem; min-width: 80px; text-align: right; }
+.history-title { flex: 1; font-weight: 500; min-width: 0; }
+.history-artist { color: var(--text-muted); flex: 0.55; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-kind {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  min-width: 1.75rem;
+  flex-shrink: 0;
+}
+.history-src-col {
+  flex: 0 0 4.5rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-src {
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+.history-src.muted { color: var(--text-muted); }
+.history-date { color: var(--text-muted); font-size: 0.8rem; min-width: 72px; text-align: right; flex-shrink: 0; }
 
 /* ---- Search results ---- */
 .search-results {

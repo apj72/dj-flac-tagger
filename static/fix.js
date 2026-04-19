@@ -89,6 +89,7 @@ async function selectFlacFile(el) {
   $("#fix-label").value = data.label || "";
   $("#fix-catno").value = data.catno || "";
   $("#fix-comment").value = data.comment || "";
+  $("#fix-url").value = data.source_url || "";
 
   $("#fix-artwork-preview").innerHTML = data.has_artwork
     ? '<span style="color:var(--primary)">Artwork embedded</span>'
@@ -337,10 +338,17 @@ async function saveTags() {
     catno: $("#fix-catno").value.trim(),
   };
 
+  const metadata_source_url = $("#fix-url").value.trim();
+
   const resp = await fetch("/api/retag", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ filepath: selectedFile, metadata, artwork_url: artworkUrl }),
+    body: JSON.stringify({
+      filepath: selectedFile,
+      metadata,
+      artwork_url: artworkUrl,
+      metadata_source_url,
+    }),
   });
 
   const data = await resp.json();

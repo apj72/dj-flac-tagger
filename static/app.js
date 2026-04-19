@@ -4,39 +4,13 @@ let selectedFile = null;
 let currentTracklist = [];
 let currentLoudnormParams = null;
 
-// ---- Settings ----
-async function loadSettings() {
+// ---- Load paths from Settings (configured on /settings tab) ----
+async function loadExtractPrefs() {
   const resp = await fetch("/api/settings");
   const cfg = await resp.json();
-  $("#cfg-source").value = cfg.source_dir || "";
-  $("#cfg-dest").value = cfg.destination_dir || "";
   $("#dir-input").value = cfg.source_dir_resolved || "";
-}
-
-async function saveSettings() {
-  const resp = await fetch("/api/settings", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      source_dir: $("#cfg-source").value.trim(),
-      destination_dir: $("#cfg-dest").value.trim(),
-    }),
-  });
-  const cfg = await resp.json();
-  $("#dir-input").value = cfg.source_dir_resolved || "";
-
-  const status = $("#settings-status");
-  status.classList.remove("hidden");
-  setTimeout(() => status.classList.add("hidden"), 2000);
-
-  browseFiles();
-}
-
-function toggleSettings() {
-  const body = $("#settings-body");
-  const arrow = $("#toggle-arrow");
-  body.classList.toggle("hidden");
-  arrow.classList.toggle("open");
+  const dest = (cfg.destination_dir || "").trim();
+  if (dest) $("#retag-dir").value = dest;
 }
 
 // ---- Browse files ----
@@ -349,6 +323,7 @@ async function extractAndTag() {
   };
 
   const artworkUrl = $("#artwork-url").value.trim();
+  const metadata_source_url = $("#track-url").value.trim();
   const deleteSource = $("#delete-source").checked;
   const normalise = $("#normalise").checked;
 
@@ -359,9 +334,11 @@ async function extractAndTag() {
       filepath: selectedFile,
       metadata,
       artwork_url: artworkUrl,
+      metadata_source_url,
       delete_source: deleteSource,
       normalise,
       loudnorm_params: normalise ? currentLoudnormParams : null,
+      open_platinum_notes: $("#open-platinum-notes").checked,
     }),
   });
 
@@ -380,7 +357,11 @@ async function extractAndTag() {
       `<strong>${data.title}.flac</strong> (${data.size_mb} MB)`,
       `Source codec: ${data.source_codec.toUpperCase()} &rarr; FLAC (lossless)`,
     ];
-    if (data.normalised) lines.push(`Normalised to -14 LUFS (EBU R128)`);
+    if (data.normalised) {
+      const lu = data.target_lufs != null ? data.target_lufs : "";
+      const tp = data.target_tp != null ? data.target_tp : "";
+      lines.push(`Normalised to ${lu} LUFS, ${tp} dBTP peak (EBU R128)`);
+    }
     lines.push(`Saved to: ${data.output_path}`);
     if (data.copied_to) lines.push(`Copied to: ${data.copied_to}`);
     if (data.copy_error) lines.push(`Copy failed: ${data.copy_error}`);
@@ -391,6 +372,13 @@ async function extractAndTag() {
       <div class="result-title">Done!</div>
       <div class="result-detail">${lines.join("<br>")}</div>
     `;
+    if ($("#watch-pn-repair").checked && data.output_path && data.log_index != null) {
+      result.querySelector(".result-detail").insertAdjacentHTML(
+        "beforeend",
+        '<div id="pn-watch-msg" class="hint" style="margin-top:0.75rem">Waiting for Platinum Notes output…</div>'
+      );
+      pollAndRepairPn(data.output_path, data.log_index);
+    }
     if (data.source_trashed) {
       browseFiles();
     }
@@ -406,9 +394,6 @@ function updateExtractButton() {
 }
 
 // ---- Event listeners ----
-$("#settings-toggle").addEventListener("click", toggleSettings);
-$("#save-settings-btn").addEventListener("click", saveSettings);
-
 $("#browse-btn").addEventListener("click", browseFiles);
 $("#dir-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") browseFiles();
@@ -460,10 +445,19 @@ function renderHistory() {
       const i = logEntries.length - 1 - ri;
       const m = entry.metadata || {};
       const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleDateString() : "";
+      const kind = entry.kind === "fix" ? "fix" : "ext";
+      const src =
+        entry.metadata_source_url && entry.metadata_source_type
+          ? `<span class="history-src" title="${entry.metadata_source_url.replace(/"/g, "&quot;")}">${entry.metadata_source_type}</span>`
+          : entry.metadata_source_url
+            ? `<span class="history-src" title="${entry.metadata_source_url.replace(/"/g, "&quot;")}">link</span>`
+            : `<span class="history-src muted">—</span>`;
       return `<div class="history-item" data-index="${i}">
         <label class="history-check"><input type="checkbox" data-idx="${i}" class="log-check" /></label>
+        <span class="history-kind">${kind}</span>
         <span class="history-title">${m.title || entry.filename || "Untitled"}</span>
         <span class="history-artist">${m.artist || ""}</span>
+        <span class="history-src-col">${src}</span>
         <span class="history-date">${ts}</span>
       </div>`;
     })
@@ -538,8 +532,55 @@ $("#history-toggle").addEventListener("click", toggleHistory);
 $("#retag-selected-btn").addEventListener("click", retagSelected);
 $("#retag-all-btn").addEventListener("click", retagAll);
 
+async function pollAndRepairPn(baseFlacPath, logIndex) {
+  const watchEl = $("#pn-watch-msg");
+  const end = Date.now() + 180000;
+  const cfgResp = await fetch("/api/settings");
+  const cfg = await cfgResp.json();
+  const suffix = ((cfg.pn_output_suffix || "_PN") + "").trim() || "_PN";
+
+  while (Date.now() < end) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const resp = await fetch("/api/poll-pn-derivative", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ base_flac_path: baseFlacPath, pn_output_suffix: suffix }),
+    });
+    const d = await resp.json();
+    if (d.error && d.ready === undefined) {
+      if (watchEl) watchEl.textContent = `Could not watch for PN file: ${d.error}`;
+      return;
+    }
+    if (d.ready) {
+      if (watchEl) watchEl.textContent = "Found PN output — applying tags and artwork…";
+      const rep = await fetch("/api/repair-pn-derivative", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          base_flac_path: baseFlacPath,
+          pn_flac_path: d.pn_flac_path,
+          log_index: logIndex,
+          pn_output_suffix: suffix,
+        }),
+      });
+      const fix = await rep.json();
+      if (fix.error) {
+        if (watchEl) watchEl.textContent = `Repair failed: ${fix.error}`;
+        return;
+      }
+      const parts = [`Re-tagged: ${fix.pn_flac_path}`];
+      if (fix.copied_pn_to_destination) parts.push(`Copied to: ${fix.copied_pn_to_destination}`);
+      if (fix.copy_error) parts.push(`Copy note: ${fix.copy_error}`);
+      if (watchEl) watchEl.innerHTML = parts.join("<br>");
+      if (!$("#history-body").classList.contains("hidden")) loadHistory();
+      return;
+    }
+  }
+  if (watchEl) {
+    watchEl.textContent =
+      "Timed out waiting for Platinum Notes. When the _PN file exists, use Processing Log to re-tag that file, or run Repair from the API.";
+  }
+}
+
 // ---- Init ----
-loadSettings().then(() => {
-  browseFiles();
-  if ($("#cfg-dest").value) $("#retag-dir").value = $("#cfg-dest").value;
-});
+loadExtractPrefs().then(() => browseFiles());

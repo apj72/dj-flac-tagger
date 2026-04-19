@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Normalise FLAC — DJ FLAC Tagger</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>DJ FLAC Tagger</h1>
+      <p class="subtitle">Extract &middot; Tag &middot; Embed Artwork</p>
+      <nav class="tab-nav">
+        <a href="/" class="tab-link">Extract</a>
+        <a href="/fix" class="tab-link">Fix Metadata</a>
+        <a href="/inspect" class="tab-link">Inspect</a>
+        <a href="/normalise" class="tab-link active">Normalise</a>
+        <a href="/settings" class="tab-link">Settings</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2><span class="step">1</span> Select FLAC</h2>
+        <p class="hint">Two-pass EBU R128 to <strong id="norm-target-label">your Settings target</strong>. Tags and artwork are copied to the new file. Audio is <strong>16-bit</strong>, same sample rate and channel layout as the source. Normalised masters often produce <strong>larger FLACs</strong> than the original (same rate/bit-depth) because the waveform is harder for FLAC to compress — that is normal and still lossless. With Xiph <code>flac</code> installed (<code>brew install flac</code>), encoding uses <code>flac --best -e -p</code> (slower, tighter). Otherwise FFmpeg’s FLAC encoder is used. Output: <code>filename_suffix.flac</code> in the same folder.</p>
+        <div class="dir-bar">
+          <input type="text" id="norm-dir" placeholder="~/Music/FLACs" />
+          <button id="norm-browse-btn" class="btn btn-secondary">Browse</button>
+        </div>
+        <div id="norm-file-list" class="file-list"></div>
+        <div id="norm-probe-info" class="probe-info hidden"></div>
+        <div id="norm-analysis-panel" class="analysis-panel hidden">
+          <div class="analysis-header">Audio Levels</div>
+          <div class="level-meters">
+            <div class="meter-row">
+              <span class="meter-label">LUFS</span>
+              <div class="meter-track"><div class="meter-fill" id="norm-meter-lufs"></div></div>
+              <span class="meter-value" id="norm-val-lufs">—</span>
+            </div>
+            <div class="meter-row">
+              <span class="meter-label">Peak</span>
+              <div class="meter-track"><div class="meter-fill" id="norm-meter-peak"></div></div>
+              <span class="meter-value" id="norm-val-peak">—</span>
+            </div>
+            <div class="meter-row">
+              <span class="meter-label">Mean</span>
+              <div class="meter-track"><div class="meter-fill" id="norm-meter-mean"></div></div>
+              <span class="meter-value" id="norm-val-mean">—</span>
+            </div>
+          </div>
+          <div id="norm-level-verdict" class="level-verdict"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2><span class="step">2</span> Normalise</h2>
+        <div class="field-row">
+          <label for="norm-suffix">Output filename suffix (before .flac)</label>
+          <input type="text" id="norm-suffix" value="_LUFS14" placeholder="_LUFS14" />
+        </div>
+        <button id="norm-run-btn" class="btn btn-accent" disabled>Normalise (EBU R128)</button>
+        <div id="norm-result" class="result hidden"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/normalise.js"></script>
+</body>
+</html>

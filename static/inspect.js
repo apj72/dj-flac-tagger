@@ -98,6 +98,7 @@ function renderMetadata(data) {
     ["Label", data.label],
     ["Cat No.", data.catno],
     ["Comment", data.comment],
+    ["Saved metadata URL", data.source_url],
   ];
 
   const hasAny = fields.some(([, v]) => v);

@@ -2,75 +2,81 @@
 
 A local web tool for DJs to create lossless digital copies of vinyl records and other audio sources. Record your vinyl through OBS with BlackHole, then use this tool to extract the FLAC audio, auto-tag it with metadata and artwork from Discogs, Bandcamp, or Apple Music, and have it ready for import into Rekordbox, Traktor, or any DJ software.
 
-Also includes a standalone **Fix Metadata** tool for editing tags and artwork on existing audio files (FLAC, MP3, M4A/AAC, OGG) — with automatic search to find the right metadata for you — and an **Inspect** tool for diagnosing metadata and artwork issues.
+Also includes **Fix Metadata** (tag editor), **Inspect** (metadata diagnostics), **Normalise** (standalone EBU R128 loudness on existing FLACs), and a dedicated **Settings** tab.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Why?
 
-OBS Studio is primarily a video recording tool — it outputs `.mkv` video files even when all you care about is the audio. If you configure OBS to use FLAC as the audio encoder, the lossless audio is trapped inside a large video container alongside an unnecessary video stream. This tool solves that by stripping out just the audio track, keeping it bit-for-bit lossless, and producing a properly tagged FLAC file with artwork — ready to drop straight into your DJ library.
+OBS Studio is primarily a video recording tool — it outputs `.mkv` video files even when all you care about is the audio. If you configure OBS to use FLAC as the audio encoder, the lossless audio is trapped inside a large video container alongside an unnecessary video stream. This tool strips out the audio track, keeps it lossless, and produces a properly tagged FLAC with artwork — ready for your DJ library.
 
 ## What It Does
 
-The tool has three pages, accessible via tabs at the top:
+Five pages, via tabs at the top:
 
 ### Extract (main workflow)
 
-1. **Extracts audio** from MKV/MP4/MOV recordings — lossless stream copy when the source is already FLAC, otherwise converts to FLAC. The video track is discarded.
-2. **Analyses audio levels** — displays integrated LUFS, true peak, and mean volume with colour-coded meters so you can see at a glance if your recording levels are healthy
-3. **Normalises audio** (optional) — two-pass EBU R128 loudness normalisation to -14 LUFS, keeping the output as lossless FLAC. Auto-suggested when levels are too quiet, with an on/off toggle
-4. **Fetches metadata** from Bandcamp, Discogs, Apple Music, or any URL — title, artist, album, year, genre, label, catalogue number
-5. **Embeds cover artwork** directly into the FLAC file
-6. **Copies the tagged FLAC** to a configurable destination folder (e.g. your Rekordbox library)
-7. **Moves the source MKV to Bin** after extraction (optional, recoverable from macOS Trash)
-8. **Logs every extraction** to a processing log so metadata and artwork can be re-applied later if needed
+1. **Extracts audio** from MKV/MP4/MOV — lossless copy when the source is already FLAC, otherwise converts to FLAC (16-bit). Video is discarded.
+2. **Analyses audio levels** — integrated LUFS, true peak, mean volume with colour-coded meters.
+3. **Normalises audio** (optional) — two-pass **EBU R128** `loudnorm` to the **LUFS target in Settings** (default **-14**; use **-11.5** to align with tools like Platinum Notes). Toggle on/off per extract.
+4. **Fetches metadata** from Bandcamp, Discogs, Apple Music, Spotify, or generic URLs.
+5. **Embeds artwork** and **stores the metadata source URL** in the file (`DJFLACTAGGER_SOURCE_URL` Vorbis comment / MP3 TXXX) and in the **processing log** for later re-fetch.
+6. **Copies** the tagged FLAC to your **destination** folder.
+7. **Moves the source MKV to Bin** (optional, macOS Finder).
+8. **Platinum Notes (optional)** — in Settings, set the **exact app name** (e.g. `Platinum Notes 10`). On Extract you can **open the FLAC in Platinum Notes** and **watch for the `*_PN.flac` output**; when it appears, tags and artwork are **re-applied** from the same log entry (and the PN file is **copied next to your library copy** when a destination copy exists).
 
-### Fix Metadata (standalone tag editor)
+Paths, loudness targets, and Platinum Notes options live on the **Settings** tab.
 
-A separate page for fixing tags on existing audio files — no extraction or audio processing involved.
+### Fix Metadata
 
-1. **Browse** any folder for audio files (FLAC, MP3, M4A/AAC, OGG, AIFF, and more)
-2. **Auto-searches** iTunes and Discogs when you select a file, using the existing tags or filename to find matching releases
-3. **Pick a result** to fetch full metadata and artwork, or paste a URL manually
-4. **Supports album/compilation URLs** — Apple Music and Discogs album links show a full tracklist so you can select the right track (useful for DJ mix compilations where each track has a different artist)
-5. **Save tags and artwork** directly to the file in the correct format for each file type
+Browse audio files, auto-search iTunes + Discogs, fetch from URLs, edit fields, **save tags and artwork**. The **URL field** is saved into the file and into the **processing log** (when you used a URL or artwork URL) so you can trace the source. **Saved metadata URL** appears on **Inspect** for FLAC/OGG/MP3 where supported.
 
-This is particularly useful for fixing files that have been processed by other tools (e.g. Platinum Notes) which can strip metadata and artwork.
+### Inspect
 
-### Inspect (metadata viewer)
+Full tag table, artwork preview, **Fix artwork dimensions** for FLAC (Rekordbox-friendly). Shows **Saved metadata URL** when present.
 
-A diagnostic page for checking exactly what metadata and artwork is embedded in a file.
+### Normalise
 
-1. **Browse** any folder for audio files
-2. **Select a file** to see its full metadata — every tag field displayed in a clear table, with missing fields highlighted
-3. **Artwork details** — shows MIME type, dimensions, and file size of embedded artwork, plus a rendered preview
-4. **Fix artwork dimensions** — some tools (e.g. Platinum Notes) can strip the width/height from FLAC artwork metadata, which causes players like Rekordbox to not display the cover art even though the image data is intact. The Inspect page detects this and offers a one-click fix that reads the actual dimensions from the image and writes them back
+Pick a **FLAC**, analyse levels, then **normalise** to your **Settings** LUFS target. Writes **`{stem}{suffix}.flac`** (default suffix `_LUFS14`) beside the original. **Tags and artwork are copied** from the source. Encoding:
+
+- Prefers the Xiph **`flac`** CLI when installed (`brew install flac`): **`flac --best -e -p`** (slower, tighter compression).
+- Otherwise uses FFmpeg’s FLAC encoder (`-compression_level 12`).
+
+**Sample rate and channel layout** are taken from the source (and **`-ar`** is set) so outputs stay e.g. **48 kHz**, not accidentally upsampled. **Normalised files are often larger than the original FLAC** at the same rate/bit-depth: the waveform is harder for FLAC to compress — that is normal and still lossless.
+
+### Settings
+
+- **Source / destination** folders  
+- **Platinum Notes** app name and **`_PN` output suffix**  
+- **Loudness target (LUFS)** and **true peak (dBTP)** — e.g. **-11.5** / **-1** to match Platinum Notes; **-14** / **-1** for streaming-style reference. You may enter **11.5** (positive); it is treated as **-11.5 LUFS**.
 
 ## Recording Setup
 
-This tool is designed around a recording workflow using:
-
-- **[BlackHole](https://existential.audio/blackhole/)** — a virtual audio driver for macOS that routes system audio (e.g. from a DJ controller or browser) into OBS as a capture source. Use the 16-channel version.
-- **[OBS Studio](https://obsproject.com/)** — open-source screen/audio recorder. Configure it to record with **FLAC audio** for lossless quality. OBS outputs `.mkv` video files — this tool extracts the lossless audio from those files.
+- **[BlackHole](https://existential.audio/blackhole/)** — virtual audio on macOS (16-channel version).
+- **[OBS Studio](https://obsproject.com/)** — record with **FLAC** audio, **MKV** container.
 
 ### Recommended OBS Settings
 
-1. **Settings > Output > Output Mode**: Advanced
-2. **Recording tab > Audio Encoder**: FFmpeg FLAC 16-bit
-3. **Recording tab > Recording Format**: MKV
-4. **Settings > Audio > Sample Rate**: 48 kHz
-
-This captures your audio losslessly. The video track is discarded during extraction.
+1. **Settings > Output > Output Mode**: Advanced  
+2. **Recording > Audio Encoder**: FFmpeg FLAC 16-bit  
+3. **Recording > Recording Format**: MKV  
+4. **Settings > Audio > Sample Rate**: 48 kHz  
 
 ## Requirements
 
-- **macOS** (uses Finder for trash functionality)
+- **macOS** (Finder trash integration for “move MKV to Bin”)
 - **Python 3.10+**
-- **ffmpeg** and **ffprobe** — install via Homebrew:
+- **ffmpeg** and **ffprobe**:
 
 ```bash
 brew install ffmpeg
+```
+
+**Optional (recommended for Normalise / smaller FLAC re-encodes):**
+
+```bash
+brew install flac
 ```
 
 ## Setup
@@ -84,109 +90,110 @@ pip install -r requirements.txt
 cp config.json.example config.json
 ```
 
-Edit `config.json` with your own folder paths, or configure them in the UI.
+Edit `config.json` or use the **Settings** tab in the UI.
 
 ## Usage
+
+### Start / stop (background)
+
+```bash
+./start.sh    # logs to server.log, PID in .dj-flac-tagger.pid
+./stop.sh
+```
+
+### Foreground
 
 ```bash
 source venv/bin/activate
 python app.py
 ```
 
-Open **http://localhost:5123** in your browser.
+Open **http://127.0.0.1:5123** (or `http://localhost:5123`).
 
-### Extract Workflow
+### Extract workflow (summary)
 
-1. **Settings** — configure your source folder (where OBS saves recordings) and destination folder (where tagged FLACs should be copied, e.g. your Rekordbox library)
-2. **Select** an MKV file from the source folder — audio levels are automatically analysed and displayed with LUFS, peak, and mean meters
-3. **Review levels** — if the recording is too quiet, the normalisation toggle auto-enables. Override it if you prefer the original levels
-4. **Paste a URL** (Bandcamp, Discogs, Apple Music, or Spotify) or type the track name, then hit **Fetch Metadata**
-5. **Pick a track** if the release has multiple tracks (Discogs EPs/albums, Apple Music/Spotify compilations)
-6. **Review/edit** metadata and artwork
-7. **Extract** — creates a tagged FLAC (with optional normalisation to -14 LUFS), copies it to your destination folder, and optionally trashes the source MKV
+1. **Settings** — folders, LUFS target, Platinum Notes name/suffix.  
+2. **Extract** — browse recordings, select MKV, review meters, fetch metadata (paste **Track URL** to log the source).  
+3. Optionally **normalise**, **open in Platinum Notes**, **watch for PN output** to auto re-tag.  
+4. **Extract** — tagged FLAC, optional copy and trash source.
 
-### Fix Metadata Workflow
+### Processing log
 
-1. Switch to the **Fix Metadata** tab
-2. **Browse** to a folder containing your audio files
-3. **Click a file** — the tool reads its current tags, then automatically searches iTunes and Discogs for matching releases
-4. **Pick a search result** — or paste a Bandcamp / Discogs / Apple Music / Spotify URL manually if the search doesn't find what you need
-5. **Review/edit** the metadata fields and artwork preview
-6. **Save Tags & Artwork** — writes everything to the file
+Entries include **`metadata_source_url`**, **`metadata_source_type`**, **`kind`** (`extract` vs `fix`), and normalisation targets when used. Use **Re-tag** to apply log entries to files in a folder (e.g. after Platinum Notes renamed the file).
 
-### Inspect Workflow
+## Audio / loudness notes
 
-1. Switch to the **Inspect** tab
-2. **Browse** to a folder and **click a file**
-3. Review the **file details**, **metadata table**, and **artwork info** (including dimensions and a preview)
-4. If artwork dimensions are 0×0, click **Fix Artwork Dimensions** to repair the FLAC picture metadata
+| Meter | Meaning | Typical healthy range |
+|-------|---------|------------------------|
+| **LUFS** | Integrated loudness | about -16 to -12 |
+| **Peak** | True peak (dBTP) | about -3 to -1 |
 
-### Audio Level Analysis
+Normalisation uses **two-pass EBU R128** with your configured **I** and **TP** targets.
 
-When you select a source file, the tool runs an ffmpeg loudness analysis and displays:
-
-| Meter | What it measures | Ideal range |
-|-------|-----------------|-------------|
-| **LUFS** | Integrated loudness (perceived volume) | -16 to -12 |
-| **Peak** | True peak level (dBTP) | -3 to -1 |
-| **Mean** | Average volume (dB) | -18 to -12 |
-
-If your recording is significantly below -14 LUFS, the normalisation toggle enables automatically. Normalisation uses **two-pass EBU R128 loudnorm** — the broadcast industry standard — targeting -14 LUFS with a -1 dBTP ceiling. The output remains lossless FLAC.
-
-**Recording tip:** Set your OBS input levels so peaks occasionally touch the bottom of the red zone on the VU meter (around -10 dB). This typically produces recordings around -14 to -12 LUFS — ideal levels that won't need normalisation.
-
-### Metadata Sources
+## Metadata sources
 
 | Source | What you get |
-|--------|-------------|
-| **Discogs** (master or release URL) | Artist, album, year, genre, styles, label, cat no., artwork, full tracklist |
-| **Bandcamp** (track or album URL) | Artist, album, year, genre tags, artwork |
-| **Apple Music** (song or album URL) | Artist, album, year, genre, track number, high-res artwork, full tracklist for albums/compilations with per-track artists |
-| **Spotify** (track or album URL) | Artist, album, year, track number, artwork, full tracklist for albums/compilations |
-| **Any URL** | Title, artwork (via Open Graph tags) |
-| **Auto-search** (Fix Metadata page) | Searches iTunes + Discogs automatically from file tags or filename |
+|--------|----------------|
+| **Discogs** | Full release metadata, artwork, tracklist |
+| **Bandcamp** | Track/album metadata, artwork |
+| **Apple Music** | Metadata, artwork, album tracklists |
+| **Spotify** | Metadata, artwork, album tracklists |
+| **Any URL** | Open Graph title/image where available |
+| **Fix page auto-search** | iTunes + Discogs |
 
-### Supported File Formats (Fix Metadata)
+## Supported formats (Fix / Inspect / Normalise)
 
 | Format | Tags | Artwork |
 |--------|------|---------|
-| **FLAC** | Vorbis comments | Embedded pictures |
-| **MP3** | ID3v2 | APIC frames |
-| **M4A / AAC / MP4** | iTunes atoms | `covr` atom |
-| **OGG Vorbis** | Vorbis comments | metadata_block_picture |
-| **Others** | Generic mutagen fallback | — |
+| **FLAC** | Vorbis comments | Pictures |
+| **MP3** | ID3v2 | APIC |
+| **M4A / AAC / MP4** | iTunes atoms | `covr` |
+| **OGG** | Vorbis comments | `metadata_block_picture` |
 
-### Processing Log
+**Normalise** is **FLAC-only**.
 
-Every extraction is saved to `processing_log.json` with full metadata, artwork URL, and settings. If tags or artwork are lost (e.g. after processing through Platinum Notes), you can re-apply everything from the log via the Processing Log section on the Extract page.
+## Configuration (`config.json`)
 
-## Configuration
-
-Settings are stored in `config.json` and can be edited via the UI or directly:
+Example (see `config.json.example`):
 
 ```json
 {
   "source_dir": "~/DJ-Mixes",
-  "destination_dir": "~/Music/FLACs"
+  "destination_dir": "~/Music/FLACs",
+  "platinum_notes_app": "Platinum Notes 10",
+  "pn_output_suffix": "_PN",
+  "target_lufs": -11.5,
+  "target_true_peak": -1.0
 }
 ```
 
-## Project Structure
+## Development / tests
+
+```bash
+source venv/bin/activate
+pip install -r requirements-dev.txt
+pytest tests/ -v
+```
+
+## Project structure
 
 ```
 dj-flac-tagger/
-├── app.py              # Flask backend — extraction, scraping, tagging, search
-├── config.json         # Persisted settings (source/destination folders)
-├── processing_log.json # Extraction history for re-tagging
-├── requirements.txt    # Python dependencies
+├── app.py                 # Flask API — ffmpeg, scrapers, mutagen
+├── config.json            # Local settings (not in repo)
+├── config.json.example
+├── processing_log.json    # Local log (not in repo)
+├── requirements.txt
+├── requirements-dev.txt   # pytest
+├── start.sh / stop.sh     # Background server helpers
+├── tests/                 # pytest
 ├── static/
-│   ├── index.html      # Extract page
-│   ├── app.js          # Extract page logic
-│   ├── fix.html        # Fix Metadata page
-│   ├── fix.js          # Fix Metadata page logic
-│   ├── inspect.html    # Inspect page
-│   ├── inspect.js      # Inspect page logic
-│   └── style.css       # Shared dark theme styles
+│   ├── index.html / app.js       # Extract
+│   ├── fix.html / fix.js         # Fix Metadata
+│   ├── inspect.html / inspect.js # Inspect
+│   ├── normalise.html / normalise.js
+│   ├── settings.html / settings.js
+│   └── style.css
 └── README.md
 ```
 

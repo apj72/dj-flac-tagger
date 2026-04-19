@@ -4,3 +4,5 @@ __pycache__/
 .DS_Store
 config.json
 processing_log.json
+.dj-flac-tagger.pid
+server.log

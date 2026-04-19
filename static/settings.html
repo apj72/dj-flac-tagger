@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — DJ FLAC Tagger</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>DJ FLAC Tagger</h1>
+      <p class="subtitle">Extract &middot; Tag &middot; Embed Artwork</p>
+      <nav class="tab-nav">
+        <a href="/" class="tab-link">Extract</a>
+        <a href="/fix" class="tab-link">Fix Metadata</a>
+        <a href="/inspect" class="tab-link">Inspect</a>
+        <a href="/normalise" class="tab-link">Normalise</a>
+        <a href="/settings" class="tab-link active">Settings</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2><span class="step-alt">&#9881;</span> Settings</h2>
+        <p class="hint">Paths and loudness targets apply across Extract, Fix, Inspect, and Normalise. Save after changes.</p>
+
+        <div class="field-row">
+          <label for="cfg-source">Source folder (OBS recordings)</label>
+          <input type="text" id="cfg-source" placeholder="~/DJ-Mixes" />
+        </div>
+        <div class="field-row">
+          <label for="cfg-dest">Destination folder (FLAC output copy)</label>
+          <input type="text" id="cfg-dest" placeholder="~/Documents/Rekordbox-music/FLACs" />
+        </div>
+        <div class="field-row">
+          <label for="cfg-pn-app">Platinum Notes — app name (macOS “Open after extract”)</label>
+          <input type="text" id="cfg-pn-app" placeholder="Platinum Notes" />
+          <p class="hint" style="margin-top:0.35rem">Exact name as in <code>/Applications</code>. No official CLI; this runs <code>open -a</code> with your FLAC.</p>
+        </div>
+        <div class="field-row">
+          <label for="cfg-pn-suffix">Platinum Notes output suffix</label>
+          <input type="text" id="cfg-pn-suffix" placeholder="_PN" />
+          <p class="hint" style="margin-top:0.35rem">Default output is <code>Trackname_PN.flac</code> beside the original FLAC.</p>
+        </div>
+        <div class="field-row inline-fields">
+          <div class="field-row">
+            <label for="cfg-target-lufs">Loudness target (LUFS)</label>
+            <input type="text" id="cfg-target-lufs" inputmode="decimal" placeholder="-14 or -11.5" />
+          </div>
+          <div class="field-row">
+            <label for="cfg-target-tp">True peak ceiling (dBTP)</label>
+            <input type="text" id="cfg-target-tp" inputmode="decimal" placeholder="-1" />
+          </div>
+        </div>
+        <p class="hint" style="margin-top:0.35rem">EBU R128 loudnorm uses these for Extract and the Normalise tab. Platinum Notes is often around <strong>-11.5 LUFS</strong>; streaming reference is <strong>-14</strong>. Enter <code>-11.5</code> or <code>11.5</code> (magnitude is treated as LUFS).</p>
+
+        <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
+        <span id="settings-status" class="settings-status hidden">Saved</span>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/settings.js"></script>
+</body>
+</html>
