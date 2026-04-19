@@ -18,6 +18,13 @@ def test_pn_derivative_path(app_module):
     assert p.name == "My Track_PN.flac"
     p2 = app_module.pn_derivative_path("/a/b/c.flac", "_norm")
     assert p2.name == "c_norm.flac"
+    p3 = app_module.pn_derivative_path("/a/b/track.mp3", "_PN")
+    assert p3.name == "track_PN.mp3"
+
+
+def test_resolve_extract_profile_key(app_module):
+    assert app_module.resolve_extract_profile_key({"extract_profile": "mp3_320"}) == "mp3_320"
+    assert app_module.resolve_extract_profile_key({"extract_profile": "bogus"}) == "flac"
 
 
 def test_find_log_entry_for_output_path(app_module, tmp_path):

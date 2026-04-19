@@ -25,6 +25,7 @@ def app_module(monkeypatch, tmp_path):
                 "pn_output_suffix": "_PN",
                 "target_lufs": -14.0,
                 "target_true_peak": -1.0,
+                "extract_profile": "flac",
             }
         ),
         encoding="utf-8",

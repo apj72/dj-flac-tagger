@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import re
@@ -21,6 +22,42 @@ from mutagen.oggvorbis import OggVorbis
 
 AUDIO_EXTENSIONS = (".flac", ".mp3", ".m4a", ".mp4", ".aac", ".ogg", ".oga", ".wma", ".aiff", ".aif")
 
+# System-wide extract / normalise output format (see Settings: extract_profile).
+EXTRACT_PROFILES = {
+    "flac": {
+        "label": "FLAC (lossless)",
+        "ext": ".flac",
+        "lossless": True,
+        "ffmpeg_encode": ["-c:a", "flac", "-compression_level", "12", "-sample_fmt", "s16"],
+    },
+    "mp3_320": {
+        "label": "MP3 320 kbps CBR",
+        "ext": ".mp3",
+        "lossless": False,
+        "ffmpeg_encode": ["-c:a", "libmp3lame", "-b:a", "320k"],
+    },
+    "aac_256": {
+        "label": "AAC 256 kbps (M4A)",
+        "ext": ".m4a",
+        "lossless": False,
+        "ffmpeg_encode": ["-c:a", "aac", "-b:a", "256k"],
+    },
+}
+
+
+def resolve_extract_profile_key(cfg=None):
+    if cfg is None:
+        cfg = load_config()
+    k = (cfg.get("extract_profile") or "flac").strip().lower()
+    if k in EXTRACT_PROFILES:
+        return k
+    return "flac"
+
+
+def extract_profile_options():
+    return [{"key": key, "label": val["label"]} for key, val in EXTRACT_PROFILES.items()]
+
+
 app = Flask(__name__)
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
@@ -38,6 +75,8 @@ def load_config():
         # Platinum Notes is often around -11.5 LUFS; streaming reference is -14.
         "target_lufs": -14.0,
         "target_true_peak": -1.0,
+        # extract_profile: flac | mp3_320 | aac_256
+        "extract_profile": "flac",
     }
     try:
         with open(CONFIG_PATH) as f:
@@ -172,9 +211,10 @@ def post_extract_open_app(app_name, file_path):
         pass
 
 
-def pn_derivative_path(base_flac_path, suffix):
-    p = Path(base_flac_path)
-    return p.parent / f"{p.stem}{suffix}.flac"
+def pn_derivative_path(base_audio_path, suffix):
+    """Platinum Notes-style sibling: <stem><suffix>.<same ext as base>."""
+    p = Path(base_audio_path)
+    return p.parent / f"{p.stem}{suffix}{p.suffix}"
 
 
 # ---------------------------------------------------------------------------
@@ -283,15 +323,13 @@ def analyse_loudness(filepath):
     }
 
 
-def _ffmpeg_loudnorm_to_flac(input_path, output_path, loudnorm_params, target_lufs=None, target_tp=None):
-    """Two-pass EBU R128 loudnorm — measured_* from analyse_loudness (first pass)."""
+def _ffmpeg_loudnorm_encode(input_path, output_path, loudnorm_params, profile_key, target_lufs=None, target_tp=None):
+    """Two-pass EBU R128 loudnorm — measured_* from analyse_loudness (first pass); encode per extract profile."""
     if not loudnorm_params:
         raise ValueError("loudnorm_params required")
+    prof = EXTRACT_PROFILES.get(profile_key) or EXTRACT_PROFILES["flac"]
     if target_lufs is None or target_tp is None:
         target_lufs, target_tp = get_normalisation_targets()
-    # loudnorm runs at high precision; pin s16 + source sample rate + channel layout so we don't upmix mono
-    # or resample unexpectedly. When the `flac` CLI is available, WAV pipe + `flac --best` matches typical
-    # encoder sizes better than libavcodec alone (often much smaller on music).
     loudnorm = (
         f"loudnorm=I={target_lufs}:TP={target_tp}:LRA=11"
         f":measured_I={loudnorm_params.get('input_i', -24)}"
@@ -302,10 +340,10 @@ def _ffmpeg_loudnorm_to_flac(input_path, output_path, loudnorm_params, target_lu
     )
     sr_i, aformat_opts = _loudnorm_tail_aformat_and_rate(input_path)
     af = f"{loudnorm},aformat={aformat_opts}"
-    # Output -ar locks muxer/encoder rate; without it some builds end up at 192 kHz despite aformat.
     ar_args = ["-ar", str(sr_i)] if sr_i is not None else []
+    out_suffix = Path(output_path).suffix.lower()
     flac_bin = shutil.which("flac")
-    if flac_bin:
+    if prof.get("lossless") and out_suffix == ".flac" and flac_bin:
         fd, wav_path = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
         try:
@@ -318,7 +356,6 @@ def _ffmpeg_loudnorm_to_flac(input_path, output_path, loudnorm_params, target_lu
                 ],
                 capture_output=True, text=True, check=True,
             )
-            # --best plus exhaustive model / coeff search: slower encode, often shaves a few % vs --best alone.
             subprocess.run(
                 [
                     flac_bin, "-f", "--best", "-e", "-p",
@@ -336,52 +373,87 @@ def _ffmpeg_loudnorm_to_flac(input_path, output_path, loudnorm_params, target_lu
             "ffmpeg", "-hide_banner", "-y", "-i", input_path,
             "-map", "0:a:0", "-vn", "-af", af,
             *ar_args,
-            "-c:a", "flac", "-compression_level", "12", "-sample_fmt", "s16", output_path,
+            *prof["ffmpeg_encode"],
+            output_path,
         ]
         subprocess.run(cmd, capture_output=True, text=True, check=True)
 
 
-def _copy_flac_tags_and_pictures(src_path, dst_path):
-    """Re-apply all Vorbis comments and cover art from src onto dst (after audio rewrite)."""
-    src = FLAC(src_path)
-    dst = FLAC(dst_path)
-    for key in list(dst.keys()):
-        try:
-            del dst[key]
-        except KeyError:
-            pass
-    for key in src.keys():
-        dst[key] = src[key]
-    dst.clear_pictures()
-    for pic in src.pictures:
-        np = Picture()
-        np.type = pic.type
-        np.mime = pic.mime
-        np.desc = pic.desc
-        np.data = pic.data
-        w, h = pic.width, pic.height
-        if w <= 0 or h <= 0:
-            w, h = _image_dimensions(pic.data)
-        np.width, np.height = w, h
-        dst.add_picture(np)
-    dst.save()
+def read_embedded_artwork(filepath):
+    """Return (bytes, mime) for first embedded cover, or (None, None)."""
+    ext = Path(filepath).suffix.lower()
+    try:
+        if ext == ".flac":
+            audio = FLAC(filepath)
+            if audio.pictures:
+                pic = audio.pictures[0]
+                return pic.data, pic.mime or "image/jpeg"
+        elif ext == ".mp3":
+            audio = MP3(filepath, ID3=ID3)
+            if audio.tags:
+                apics = audio.tags.getall("APIC")
+                if apics:
+                    a = apics[0]
+                    return a.data, a.mime or "image/jpeg"
+        elif ext in (".m4a", ".mp4", ".aac"):
+            audio = MP4(filepath)
+            if audio.tags and audio.tags.get("covr"):
+                covr = audio.tags["covr"][0]
+                mime = "image/jpeg" if covr.imageformat == MP4Cover.FORMAT_JPEG else "image/png"
+                return bytes(covr), mime
+        elif ext in (".ogg", ".oga"):
+            audio = OggVorbis(filepath)
+            pics = audio.get("metadata_block_picture")
+            if pics:
+                pic = Picture()
+                pic.load(base64.b64decode(pics[0]))
+                return pic.data, pic.mime or "image/jpeg"
+    except Exception:
+        pass
+    return None, None
 
 
-def extract_flac(mkv_path, output_path, normalise=False, loudnorm_params=None):
-    info = run_ffprobe(mkv_path)
+def _metadata_dict_for_copy(src_path):
+    """Fields suitable for apply_metadata after transcoding."""
+    ext = Path(src_path).suffix.lower()
+    if ext == ".flac":
+        meta = _read_flac_tags(src_path)
+    elif ext == ".mp3":
+        meta = _read_mp3_tags(src_path)
+    elif ext in (".m4a", ".mp4", ".aac"):
+        meta = _read_mp4_tags(src_path)
+    elif ext in (".ogg", ".oga"):
+        meta = _read_vorbis_tags(src_path)
+    else:
+        meta = _read_generic_tags(src_path)
+    skip = {"format", "has_artwork", "error", "artwork_info"}
+    return {k: v for k, v in meta.items() if k not in skip and v}
+
+
+def _copy_audio_tags_and_art(src_path, dst_path):
+    """Re-apply tags and embedded artwork from src onto dst (any supported apply_metadata type)."""
+    meta = _metadata_dict_for_copy(src_path)
+    art_bytes, art_mime = read_embedded_artwork(src_path)
+    apply_metadata(dst_path, meta, art_bytes, art_mime)
+
+
+def extract_audio(src_path, output_path, profile_key, normalise=False, loudnorm_params=None):
+    prof = EXTRACT_PROFILES.get(profile_key) or EXTRACT_PROFILES["flac"]
+    info = run_ffprobe(src_path)
     codec = info["streams"][0]["codec_name"] if info.get("streams") else "unknown"
 
     if normalise and loudnorm_params:
-        _ffmpeg_loudnorm_to_flac(mkv_path, output_path, loudnorm_params)
+        _ffmpeg_loudnorm_encode(src_path, output_path, loudnorm_params, profile_key)
         return codec
-    if codec == "flac":
-        cmd = ["ffmpeg", "-hide_banner", "-y", "-i", mkv_path, "-vn", "-c:a", "copy", output_path]
+    if prof["ext"] == ".flac" and codec == "flac":
+        cmd = ["ffmpeg", "-hide_banner", "-y", "-i", src_path, "-vn", "-c:a", "copy", output_path]
     else:
         cmd = [
-            "ffmpeg", "-hide_banner", "-y", "-i", mkv_path,
-            "-vn", "-c:a", "flac", "-compression_level", "12", "-sample_fmt", "s16", output_path,
+            "ffmpeg", "-hide_banner", "-y", "-i", src_path,
+            "-vn", "-map", "0:a:0",
+            *prof["ffmpeg_encode"],
+            output_path,
         ]
-
     subprocess.run(cmd, capture_output=True, text=True, check=True)
     return codec
 
@@ -1163,7 +1235,9 @@ def search():
 
 @app.route("/api/settings", methods=["GET"])
 def get_settings():
-    cfg = load_config()
+    cfg = dict(load_config())
+    cfg["extract_profile"] = resolve_extract_profile_key(cfg)
+    cfg["extract_profiles"] = extract_profile_options()
     cfg["source_dir_resolved"] = resolve(cfg["source_dir"])
     cfg["destination_dir_resolved"] = resolve(cfg["destination_dir"])
     return jsonify(cfg)
@@ -1192,9 +1266,16 @@ def update_settings():
             cfg["target_true_peak"] = float(data["target_true_peak"])
         except (TypeError, ValueError):
             pass
+    if "extract_profile" in data:
+        pk = (data["extract_profile"] or "flac").strip().lower()
+        if pk in EXTRACT_PROFILES:
+            cfg["extract_profile"] = pk
 
     save_config(cfg)
 
+    cfg = dict(load_config())
+    cfg["extract_profile"] = resolve_extract_profile_key(cfg)
+    cfg["extract_profiles"] = extract_profile_options()
     cfg["source_dir_resolved"] = resolve(cfg["source_dir"])
     cfg["destination_dir_resolved"] = resolve(cfg["destination_dir"])
     return jsonify(cfg)
@@ -1251,9 +1332,10 @@ def analyse():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/normalise", methods=["POST"])
 @app.route("/api/normalise-flac", methods=["POST"])
-def normalise_flac_route():
-    """EBU R128 loudnorm to configured LUFS target; copies tags and artwork to the new file."""
+def normalise_audio_route():
+    """EBU R128 loudnorm to configured LUFS; encodes to Settings extract profile; copies tags and artwork."""
     data = request.get_json()
     filepath = data.get("filepath")
     loudnorm_params = data.get("loudnorm_params")
@@ -1263,14 +1345,18 @@ def normalise_flac_route():
 
     if not filepath or not os.path.isfile(filepath):
         return jsonify({"error": "File not found"}), 404
-    if Path(filepath).suffix.lower() != ".flac":
-        return jsonify({"error": "Only FLAC files are supported"}), 400
+    ext_in = Path(filepath).suffix.lower()
+    if ext_in not in AUDIO_EXTENSIONS:
+        return jsonify({"error": "Unsupported audio file type for normalise"}), 400
     if not loudnorm_params or not isinstance(loudnorm_params, dict):
         return jsonify({"error": "Run level analysis first (loudnorm_params missing)"}), 400
 
+    cfg = load_config()
+    profile_key = resolve_extract_profile_key(cfg)
+    prof = EXTRACT_PROFILES[profile_key]
     parent = Path(filepath).parent
     stem = Path(filepath).stem
-    out_path = str(parent / f"{stem}{output_suffix}.flac")
+    out_path = str(parent / f"{stem}{output_suffix}{prof['ext']}")
 
     if os.path.normpath(os.path.abspath(out_path)) == os.path.normpath(os.path.abspath(filepath)):
         return jsonify({"error": "Output path cannot be the same as input"}), 400
@@ -1278,8 +1364,8 @@ def normalise_flac_route():
         return jsonify({"error": f"Output already exists: {out_path}"}), 409
 
     try:
-        _ffmpeg_loudnorm_to_flac(filepath, out_path, loudnorm_params)
-        _copy_flac_tags_and_pictures(filepath, out_path)
+        _ffmpeg_loudnorm_encode(filepath, out_path, loudnorm_params, profile_key)
+        _copy_audio_tags_and_art(filepath, out_path)
     except subprocess.CalledProcessError as e:
         if os.path.isfile(out_path):
             try:
@@ -1299,6 +1385,8 @@ def normalise_flac_route():
     return jsonify({
         "output_path": out_path,
         "size_mb": round(stat.st_size / (1024 * 1024), 1),
+        "extract_profile": profile_key,
+        "extract_profile_label": prof["label"],
     })
 
 
@@ -1356,9 +1444,12 @@ def extract():
     if not filepath or not os.path.isfile(filepath):
         return jsonify({"error": "Source file not found"}), 404
 
+    profile_key = resolve_extract_profile_key(cfg)
+    prof = EXTRACT_PROFILES[profile_key]
+
     title = metadata.get("title", Path(filepath).stem)
     safe_title = re.sub(r'[<>:"/\\|?*]', '', title).strip()
-    filename = f"{safe_title}.flac"
+    filename = f"{safe_title}{prof['ext']}"
 
     output_dir = os.path.dirname(filepath)
     output_path = os.path.join(output_dir, filename)
@@ -1370,7 +1461,7 @@ def extract():
     loudnorm_params = data.get("loudnorm_params")
 
     try:
-        source_codec = extract_flac(filepath, output_path, normalise, loudnorm_params)
+        source_codec = extract_audio(filepath, output_path, profile_key, normalise, loudnorm_params)
     except subprocess.CalledProcessError as e:
         return jsonify({"error": f"ffmpeg failed: {e.stderr}"}), 500
 
@@ -1422,6 +1513,7 @@ def extract():
     log_index = log_extraction({
         "kind": "extract",
         "filename": filename,
+        "extract_profile": profile_key,
         "source_file": filepath,
         "output_path": output_path,
         "copied_to": copied_to,
@@ -1443,12 +1535,17 @@ def extract():
 
     result = {
         "output_path": output_path,
+        "filename": filename,
         "size_mb": round(stat.st_size / (1024 * 1024), 1),
         "source_codec": source_codec,
         "title": safe_title,
+        "extract_profile": profile_key,
+        "extract_profile_label": prof["label"],
+        "is_lossless_output": prof["lossless"],
         "source_trashed": source_trashed,
         "normalised": normalise,
         "log_index": log_index,
+        "expected_pn_path": expected_pn_path,
         "expected_pn_flac_path": expected_pn_path,
     }
     if normalise:
@@ -1466,7 +1563,7 @@ def extract():
 
 @app.route("/api/poll-pn-derivative", methods=["POST"])
 def poll_pn_derivative():
-    """Return whether <stem><pn_suffix>.flac exists beside the freshly extracted base FLAC."""
+    """Return whether <stem><pn_suffix>.<ext> exists beside the freshly extracted base file."""
     data = request.get_json() or {}
     cfg = load_config()
     base_flac_path = data.get("base_flac_path")
@@ -1474,7 +1571,7 @@ def poll_pn_derivative():
     if not base_flac_path:
         return jsonify({"error": "base_flac_path required"}), 400
     if not os.path.isfile(base_flac_path):
-        return jsonify({"error": "Base FLAC not found", "ready": False}), 404
+        return jsonify({"error": "Base audio file not found", "ready": False}), 404
 
     pn_path = str(pn_derivative_path(base_flac_path, suffix))
     ready = os.path.isfile(pn_path)
@@ -1485,12 +1582,17 @@ def poll_pn_derivative():
         except OSError:
             ready = False
 
-    return jsonify({"ready": ready, "pn_flac_path": pn_path, "pn_output_suffix": suffix})
+    return jsonify({
+        "ready": ready,
+        "pn_path": pn_path,
+        "pn_flac_path": pn_path,
+        "pn_output_suffix": suffix,
+    })
 
 
 @app.route("/api/repair-pn-derivative", methods=["POST"])
 def repair_pn_derivative():
-    """Re-apply metadata and artwork from the processing log onto a Platinum Notes output FLAC."""
+    """Re-apply metadata and artwork from the processing log onto a Platinum Notes output file."""
     data = request.get_json() or {}
     cfg = load_config()
     base_flac_path = data.get("base_flac_path")
@@ -1501,7 +1603,7 @@ def repair_pn_derivative():
     if not base_flac_path:
         return jsonify({"error": "base_flac_path required"}), 400
     if not os.path.isfile(base_flac_path):
-        return jsonify({"error": f"Base FLAC not found: {base_flac_path}"}), 404
+        return jsonify({"error": f"Base audio file not found: {base_flac_path}"}), 404
 
     entry, idx = find_log_entry_for_output_path(base_flac_path, log_index)
     if not entry:
@@ -1549,6 +1651,7 @@ def repair_pn_derivative():
 
     return jsonify({
         "status": "ok",
+        "pn_path": pn_path,
         "pn_flac_path": pn_path,
         "log_index": idx,
         "copied_pn_to_destination": copied_pn,

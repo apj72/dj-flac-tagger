@@ -353,9 +353,12 @@ async function extractAndTag() {
     `;
   } else {
     result.className = "result";
+    const outName = data.filename || `${data.title}.flac`;
+    const fmtLabel = data.extract_profile_label || "FLAC (lossless)";
+    const lossHint = data.is_lossless_output ? "lossless" : "lossy";
     const lines = [
-      `<strong>${data.title}.flac</strong> (${data.size_mb} MB)`,
-      `Source codec: ${data.source_codec.toUpperCase()} &rarr; FLAC (lossless)`,
+      `<strong>${outName}</strong> (${data.size_mb} MB)`,
+      `Source codec: ${data.source_codec.toUpperCase()} &rarr; ${fmtLabel} (${lossHint})`,
     ];
     if (data.normalised) {
       const lu = data.target_lufs != null ? data.target_lufs : "";
@@ -386,7 +389,7 @@ async function extractAndTag() {
   }
 
   btn.disabled = false;
-  btn.textContent = "Extract FLAC & Apply Tags";
+  btn.textContent = "Extract & Apply Tags";
 }
 
 function updateExtractButton() {
@@ -558,7 +561,7 @@ async function pollAndRepairPn(baseFlacPath, logIndex) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           base_flac_path: baseFlacPath,
-          pn_flac_path: d.pn_flac_path,
+          pn_flac_path: d.pn_path || d.pn_flac_path,
           log_index: logIndex,
           pn_output_suffix: suffix,
         }),
@@ -568,7 +571,7 @@ async function pollAndRepairPn(baseFlacPath, logIndex) {
         if (watchEl) watchEl.textContent = `Repair failed: ${fix.error}`;
         return;
       }
-      const parts = [`Re-tagged: ${fix.pn_flac_path}`];
+      const parts = [`Re-tagged: ${fix.pn_path || fix.pn_flac_path}`];
       if (fix.copied_pn_to_destination) parts.push(`Copied to: ${fix.copied_pn_to_destination}`);
       if (fix.copy_error) parts.push(`Copy note: ${fix.copy_error}`);
       if (watchEl) watchEl.innerHTML = parts.join("<br>");

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Normalise FLAC — DJ FLAC Tagger</title>
+  <title>Normalise — DJ FLAC Tagger</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -22,8 +22,8 @@
 
     <main>
       <section class="card">
-        <h2><span class="step">1</span> Select FLAC</h2>
-        <p class="hint">Two-pass EBU R128 to <strong id="norm-target-label">your Settings target</strong>. Tags and artwork are copied to the new file. Audio is <strong>16-bit</strong>, same sample rate and channel layout as the source. Normalised masters often produce <strong>larger FLACs</strong> than the original (same rate/bit-depth) because the waveform is harder for FLAC to compress — that is normal and still lossless. With Xiph <code>flac</code> installed (<code>brew install flac</code>), encoding uses <code>flac --best -e -p</code> (slower, tighter). Otherwise FFmpeg’s FLAC encoder is used. Output: <code>filename_suffix.flac</code> in the same folder.</p>
+        <h2><span class="step">1</span> Select audio</h2>
+        <p class="hint">Two-pass EBU R128 to <strong id="norm-target-label">your Settings target</strong>. Tags and artwork are copied to the new file. Output format and extension come from <strong id="norm-format-hint">Settings → extract format</strong> (default FLAC). For <strong>FLAC</strong>: audio is <strong>16-bit</strong> at the source sample rate and layout; normalised files are often larger than the original because the waveform is harder to compress — that is normal. With Xiph <code>flac</code> installed, FLAC encoding uses <code>flac --best -e -p</code>. For <strong>MP3 / AAC</strong>, FFmpeg encodes after loudnorm. Output: <code>filename_suffix</code> plus the configured extension, in the same folder.</p>
         <div class="dir-bar">
           <input type="text" id="norm-dir" placeholder="~/Music/FLACs" />
           <button id="norm-browse-btn" class="btn btn-secondary">Browse</button>
@@ -56,7 +56,7 @@
       <section class="card">
         <h2><span class="step">2</span> Normalise</h2>
         <div class="field-row">
-          <label for="norm-suffix">Output filename suffix (before .flac)</label>
+          <label for="norm-suffix">Output filename suffix (before the file extension)</label>
           <input type="text" id="norm-suffix" value="_LUFS14" placeholder="_LUFS14" />
         </div>
         <button id="norm-run-btn" class="btn btn-accent" disabled>Normalise (EBU R128)</button>

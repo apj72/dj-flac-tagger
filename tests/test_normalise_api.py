@@ -95,14 +95,70 @@ def test_normalise_flac_copies_tags(client, app_module, flac_src, monkeypatch, t
     assert len(dst.pictures) == 1
 
 
-def test_normalise_flac_requires_flac(client, app_module, tmp_path):
-    mp3 = tmp_path / "x.mp3"
-    mp3.write_bytes(b"id3")
+def test_normalise_rejects_non_audio(client, app_module, tmp_path):
+    junk = tmp_path / "x.txt"
+    junk.write_text("nope")
     resp = client.post(
-        "/api/normalise-flac",
-        json={"filepath": str(mp3), "loudnorm_params": {"input_i": -20}},
+        "/api/normalise",
+        json={"filepath": str(junk), "loudnorm_params": {"input_i": -20}},
     )
     assert resp.status_code == 400
+
+
+def test_normalise_accepts_mp3_source(client, app_module, flac_src, tmp_path, monkeypatch):
+    """Non-FLC input is allowed; output follows extract profile (default FLAC)."""
+    mp3 = tmp_path / "source.mp3"
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=f=440:d=0.05",
+                "-c:a",
+                "libmp3lame",
+                str(mp3),
+            ],
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pytest.skip("ffmpeg not available")
+
+    loudnorm_params = {
+        "input_i": -20.0,
+        "input_tp": -1.0,
+        "input_lra": 5.0,
+        "input_thresh": -30.0,
+    }
+    real_run = subprocess.run
+
+    def fake_run(cmd, **kwargs):
+        if cmd and cmd[0] == "ffmpeg":
+            out = cmd[-1]
+            # Stub encoder output must be a valid FLAC for mutagen in _copy_audio_tags_and_art.
+            shutil.copy(str(flac_src), out)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    out_path = tmp_path / "source_LUFS14.flac"
+    resp = client.post(
+        "/api/normalise",
+        json={
+            "filepath": str(mp3),
+            "loudnorm_params": loudnorm_params,
+            "output_suffix": "_LUFS14",
+        },
+    )
+    assert resp.status_code == 200, resp.get_json()
+    data = resp.get_json()
+    assert data["output_path"] == str(out_path)
+    assert Path(data["output_path"]).is_file()
 
 
 def test_normalise_flac_requires_params(client, app_module, flac_src):

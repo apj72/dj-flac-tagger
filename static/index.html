@@ -24,7 +24,7 @@
       <!-- Step 1: Source file -->
       <section class="card" id="source-section">
         <h2><span class="step">1</span> Source File</h2>
-        <p class="hint" style="margin-top:0;margin-bottom:0.75rem">Folders and Platinum Notes options are on the <a href="/settings">Settings</a> tab.</p>
+        <p class="hint" style="margin-top:0;margin-bottom:0.75rem">Folders, extract format (FLAC / MP3 / AAC), and Platinum Notes options are on the <a href="/settings">Settings</a> tab.</p>
         <div class="dir-bar">
           <input type="text" id="dir-input" placeholder="~/DJ-Mixes" />
           <button id="browse-btn" class="btn btn-secondary">Browse</button>
@@ -137,6 +137,7 @@
       <!-- Step 4: Extract -->
       <section class="card" id="extract-section">
         <h2><span class="step">4</span> Extract &amp; Tag</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:0.75rem">Output format is the one chosen in <a href="/settings">Settings</a> (default FLAC). Platinum Notes should use <strong>Match input format</strong> so the <code>_PN</code> file matches that extension.</p>
         <label class="checkbox-row">
           <input type="checkbox" id="normalise" />
           <span>Normalise audio (EBU R128 — target LUFS from Settings)</span>
@@ -147,13 +148,13 @@
         </label>
         <label class="checkbox-row">
           <input type="checkbox" id="open-platinum-notes" />
-          <span>Open extracted FLAC in Platinum Notes (requires app name in Settings)</span>
+          <span>Open extracted file in Platinum Notes (requires app name in Settings)</span>
         </label>
         <label class="checkbox-row">
           <input type="checkbox" id="watch-pn-repair" />
           <span>Watch for Platinum Notes output and re-apply tags &amp; artwork automatically (polls up to 3 min)</span>
         </label>
-        <button id="extract-btn" class="btn btn-accent" disabled>Extract FLAC &amp; Apply Tags</button>
+        <button id="extract-btn" class="btn btn-accent" disabled>Extract &amp; Apply Tags</button>
         <div id="result" class="result hidden"></div>
       </section>
 

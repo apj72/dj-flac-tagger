@@ -8,6 +8,10 @@ function updateNormTargetLabels(cfg) {
   const tp = cfg.target_true_peak != null ? cfg.target_true_peak : -1;
   const el = $("#norm-target-label");
   if (el) el.textContent = `${lu} LUFS (${tp} dBTP peak)`;
+  const fmt = $("#norm-format-hint");
+  if (fmt && cfg.extract_profile_label) {
+    fmt.textContent = cfg.extract_profile_label;
+  }
   const btn = $("#norm-run-btn");
   if (btn) btn.textContent = `Normalise to ${lu} LUFS`;
 }
@@ -33,13 +37,13 @@ async function browseFlacs() {
 
   $("#norm-dir").value = data.directory;
 
-  const flacs = data.files.filter((f) => f.name.toLowerCase().endsWith(".flac"));
-  if (flacs.length === 0) {
-    $("#norm-file-list").innerHTML = '<div class="status">No FLAC files in this folder</div>';
+  const audio = data.files || [];
+  if (audio.length === 0) {
+    $("#norm-file-list").innerHTML = '<div class="status">No supported audio files in this folder</div>';
     return;
   }
 
-  $("#norm-file-list").innerHTML = flacs
+  $("#norm-file-list").innerHTML = audio
     .map(
       (f) =>
         `<div class="file-item" data-path="${f.path}">
@@ -190,7 +194,7 @@ async function runNormalise() {
   let suffix = $("#norm-suffix").value.trim() || "_LUFS14";
   if (!suffix.startsWith("_")) suffix = "_" + suffix;
 
-  const resp = await fetch("/api/normalise-flac", {
+  const resp = await fetch("/api/normalise", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -213,7 +217,7 @@ async function runNormalise() {
       <div class="result-detail">
         <strong>${data.size_mb} MB</strong><br>
         Wrote: ${data.output_path}<br>
-        <span class="hint">Metadata and artwork were copied from the source file.</span>
+        <span class="hint">Metadata and artwork were copied from the source file. Format: ${data.extract_profile_label || "from Settings"}.</span>
       </div>
     `;
     browseFlacs();

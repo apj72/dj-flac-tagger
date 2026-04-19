@@ -23,25 +23,30 @@
     <main>
       <section class="card">
         <h2><span class="step-alt">&#9881;</span> Settings</h2>
-        <p class="hint">Paths and loudness targets apply across Extract, Fix, Inspect, and Normalise. Save after changes.</p>
+        <p class="hint">Paths, extract format, and loudness targets apply across Extract, Fix, Inspect, and Normalise. Save after changes.</p>
 
+        <div class="field-row">
+          <label for="cfg-extract-profile">Extract &amp; normalise output format</label>
+          <select id="cfg-extract-profile"></select>
+          <p class="hint" style="margin-top:0.35rem">System-wide choice: extracted audio from video and the Normalise tab use this format. Metadata and Inspect stay format-agnostic.</p>
+        </div>
         <div class="field-row">
           <label for="cfg-source">Source folder (OBS recordings)</label>
           <input type="text" id="cfg-source" placeholder="~/DJ-Mixes" />
         </div>
         <div class="field-row">
-          <label for="cfg-dest">Destination folder (FLAC output copy)</label>
+          <label for="cfg-dest">Destination folder (copy of extracted audio)</label>
           <input type="text" id="cfg-dest" placeholder="~/Documents/Rekordbox-music/FLACs" />
         </div>
         <div class="field-row">
           <label for="cfg-pn-app">Platinum Notes — app name (macOS “Open after extract”)</label>
           <input type="text" id="cfg-pn-app" placeholder="Platinum Notes" />
-          <p class="hint" style="margin-top:0.35rem">Exact name as in <code>/Applications</code>. No official CLI; this runs <code>open -a</code> with your FLAC.</p>
+          <p class="hint" style="margin-top:0.35rem">Exact name as in <code>/Applications</code>. No official CLI; this runs <code>open -a</code> with your extracted file.</p>
         </div>
         <div class="field-row">
           <label for="cfg-pn-suffix">Platinum Notes output suffix</label>
           <input type="text" id="cfg-pn-suffix" placeholder="_PN" />
-          <p class="hint" style="margin-top:0.35rem">Default output is <code>Trackname_PN.flac</code> beside the original FLAC.</p>
+          <p class="hint" style="margin-top:0.35rem">Default output is <code>Trackname_PN</code> plus the same extension as the file you opened (use <strong>Match input format</strong> in Platinum Notes).</p>
         </div>
         <div class="field-row inline-fields">
           <div class="field-row">
