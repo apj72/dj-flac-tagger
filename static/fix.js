@@ -5,14 +5,14 @@ let currentTracklist = [];
 let currentMeta = {};
 let artworkUrl = "";
 
-// ---- Browse FLACs ----
+// ---- Browse audio files ----
 async function loadSettings() {
   const resp = await fetch("/api/settings");
   const cfg = await resp.json();
   $("#fix-dir").value = cfg.destination_dir || "";
 }
 
-async function browseFlacs() {
+async function browseAudio() {
   const dir = $("#fix-dir").value.trim();
   if (!dir) return;
 
@@ -373,12 +373,12 @@ async function saveTags() {
 }
 
 // ---- Event listeners ----
-$("#fix-browse-btn").addEventListener("click", browseFlacs);
-$("#fix-dir").addEventListener("keydown", (e) => { if (e.key === "Enter") browseFlacs(); });
+$("#fix-browse-btn").addEventListener("click", browseAudio);
+$("#fix-dir").addEventListener("keydown", (e) => { if (e.key === "Enter") browseAudio(); });
 $("#fix-fetch-btn").addEventListener("click", fetchMetadata);
 $("#fix-url").addEventListener("keydown", (e) => { if (e.key === "Enter") fetchMetadata(); });
 $("#fix-clear-btn").addEventListener("click", clearAll);
 $("#fix-save-btn").addEventListener("click", saveTags);
 
 // ---- Init ----
-loadSettings().then(() => browseFlacs());
+loadSettings().then(() => browseAudio());

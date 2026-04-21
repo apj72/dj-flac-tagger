@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start DJ FLAC Tagger in the background. Logs append to server.log in this directory.
+# Start DJ MetaManager in the background. Logs append to server.log in this directory.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -20,9 +20,9 @@ source venv/bin/activate
 
 export PYTHONUNBUFFERED=1
 nohup python app.py >>"$ROOT/server.log" 2>&1 &
-echo $! >"$ROOT/.dj-flac-tagger.pid"
+echo $! >"$ROOT/.dj-meta-manager.pid"
 
-echo "DJ FLAC Tagger started (PID $!)."
+echo "DJ MetaManager started (PID $!)."
 echo "  Log file: $ROOT/server.log"
 echo "  Open:     http://127.0.0.1:5123"
 echo "Stop with: $ROOT/stop.sh"

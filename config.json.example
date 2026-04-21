@@ -1,6 +1,6 @@
 {
   "source_dir": "~/DJ-Mixes",
-  "destination_dir": "~/Music/FLACs",
+  "destination_dir": "~/Music/DJ-library",
   "extract_profile": "flac",
   "platinum_notes_app": "Platinum Notes 10",
   "pn_output_suffix": "_PN",

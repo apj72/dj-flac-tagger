@@ -1,8 +1,8 @@
-# DJ FLAC Tagger
+# DJ MetaManager
 
-A local web tool for DJs to create lossless digital copies of vinyl records and other audio sources. Record your vinyl through OBS with BlackHole, then use this tool to extract the FLAC audio, auto-tag it with metadata and artwork from Discogs, Bandcamp, or Apple Music, and have it ready for import into Rekordbox, Traktor, or any DJ software.
+A local web tool for DJs to turn recordings into a clean, tagged library in **multiple audio formats**. Record vinyl or other sources through OBS with BlackHole, then extract audio from video containers, auto-tag with metadata and artwork from Discogs, Bandcamp, Apple Music, or Spotify, and export to **FLAC (lossless)**, **MP3**, or **AAC (M4A)** — whatever you choose in Settings — ready for Rekordbox, Traktor, or any DJ software.
 
-Also includes **Fix Metadata** (tag editor), **Inspect** (metadata diagnostics), **Normalise** (standalone EBU R128 loudness on existing FLACs), and a dedicated **Settings** tab.
+**Fix Metadata** and **Inspect** work across **FLAC, MP3, M4A/AAC, OGG**, and more for browsing and editing. **Normalise** applies **EBU R128** loudness to existing files and re-encodes using the same **system-wide format** as Extract. A **Settings** tab controls paths, output format, and loudness targets.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -11,16 +11,16 @@ Also includes **Fix Metadata** (tag editor), **Inspect** (metadata diagnostics),
 
 | Branch | Purpose |
 |--------|---------|
-| **`master`** | Stable release; extract pipeline is FLAC-oriented as documented below. |
-| **`v2`** | Development: **system-wide configurable extract format** (e.g. FLAC, MP3 320 CBR, AAC in M4A). **Fix Metadata** and **Inspect** remain **format-agnostic** (whatever file you select). Work merges to `master` when ready. |
+| **`master`** | Stable release; multi-format extract, tag, and normalise as documented below. |
+| **`v2`** | Active development; new features land here first, then merge to `master` when ready. |
 
 ### Platinum Notes and file format
 
-If you use **Extract → open in Platinum Notes → watch for processed output**, set Platinum Notes to **Match input format** (and choose an output location **other than** “Replace Original Files,” as Platinum Notes requires). Then the `*_PN` file stays the **same type** as the file this app wrote (e.g. both FLAC or both MP3), which matches a **single global extract format** in Settings once v2 is implemented. If PN is set to a **fixed** output type that does not match, automatic repair may look for the wrong filename.
+If you use **Extract → open in Platinum Notes → watch for processed output**, set Platinum Notes to **Match input format** (and choose an output location **other than** “Replace Original Files,” as Platinum Notes requires). Then the `*_PN` file keeps the **same extension** as the file this app wrote (e.g. both `.flac` or both `.mp3`), matching your **extract format** in Settings. If PN uses a **fixed** output type that does not match, automatic repair may look for the wrong filename.
 
 ## Why?
 
-OBS Studio is primarily a video recording tool — it outputs `.mkv` video files even when all you care about is the audio. If you configure OBS to use FLAC as the audio encoder, the lossless audio is trapped inside a large video container alongside an unnecessary video stream. This tool strips out the audio track, keeps it lossless, and produces a properly tagged FLAC with artwork — ready for your DJ library.
+OBS Studio is primarily a video recorder — it often outputs `.mkv` files even when you only care about audio. If you use a **lossless encoder (e.g. FLAC)** in OBS, that audio sits inside a large container with an unnecessary video stream. This tool strips the audio, optionally normalises it, tags it, embeds artwork, and writes a **library-ready file** in your chosen format. You can also start from **lossy** source codecs and encode to MP3 or AAC when that fits your workflow.
 
 ## What It Does
 
@@ -28,55 +28,56 @@ Five pages, via tabs at the top:
 
 ### Extract (main workflow)
 
-1. **Extracts audio** from MKV/MP4/MOV — lossless copy when the source is already FLAC, otherwise converts to FLAC (16-bit). Video is discarded.
+1. **Extracts audio** from MKV/MP4/MOV — output codec and container follow **Settings → extract format** (FLAC 16-bit, MP3 320 CBR, or AAC in M4A). When the source stream already matches the target, ffmpeg copies or transcodes as appropriate; video is discarded.
 2. **Analyses audio levels** — integrated LUFS, true peak, mean volume with colour-coded meters.
 3. **Normalises audio** (optional) — two-pass **EBU R128** `loudnorm` to the **LUFS target in Settings** (default **-14**; use **-11.5** to align with tools like Platinum Notes). Toggle on/off per extract.
 4. **Fetches metadata** from Bandcamp, Discogs, Apple Music, Spotify, or generic URLs.
-5. **Embeds artwork** and **stores the metadata source URL** in the file (`DJFLACTAGGER_SOURCE_URL` Vorbis comment / MP3 TXXX) and in the **processing log** for later re-fetch.
-6. **Copies** the tagged FLAC to your **destination** folder.
-7. **Moves the source MKV to Bin** (optional, macOS Finder).
-8. **Platinum Notes (optional)** — in Settings, set the **exact app name** (e.g. `Platinum Notes 10`). On Extract you can **open the FLAC in Platinum Notes** and **watch for the `*_PN.flac` output**; when it appears, tags and artwork are **re-applied** from the same log entry (and the PN file is **copied next to your library copy** when a destination copy exists).
+5. **Embeds artwork** and **stores the metadata source URL** in the file (`DJMETAMANAGER_SOURCE_URL` Vorbis comment / MP3 TXXX; older files may still use `DJFLACTAGGER_SOURCE_URL`, which is read for compatibility) and in the **processing log** for later re-fetch.
+6. **Copies** the tagged file to your **destination** folder.
+7. **Moves the source recording to Bin** (optional, macOS Finder).
+8. **Platinum Notes (optional)** — in Settings, set the **exact app name** (e.g. `Platinum Notes 10`). On Extract you can **open the extracted file in Platinum Notes** and **watch for the `*_PN` output** (same base name and extension family); when it appears, tags and artwork are **re-applied** from the same log entry (and the PN file is **copied next to your library copy** when a destination copy exists).
 
 Paths, loudness targets, and Platinum Notes options live on the **Settings** tab.
 
 ### Fix Metadata
 
-Browse audio files, auto-search iTunes + Discogs, fetch from URLs, edit fields, **save tags and artwork**. The **URL field** is saved into the file and into the **processing log** (when you used a URL or artwork URL) so you can trace the source. **Saved metadata URL** appears on **Inspect** for FLAC/OGG/MP3 where supported.
+Browse audio files (multiple formats), auto-search iTunes + Discogs, fetch from URLs, edit fields, **save tags and artwork**. The **URL field** is saved into the file and into the **processing log** (when you used a URL or artwork URL) so you can trace the source. **Saved metadata URL** appears on **Inspect** for FLAC/OGG/MP3 where supported.
 
 ### Inspect
 
-Full tag table, artwork preview, **Fix artwork dimensions** for FLAC (Rekordbox-friendly). Shows **Saved metadata URL** when present.
+Full tag table, artwork preview, **Fix artwork dimensions** for **FLAC** (Rekordbox-friendly; other formats unchanged here). Shows **Saved metadata URL** when present.
 
 ### Normalise
 
-Pick a **FLAC**, analyse levels, then **normalise** to your **Settings** LUFS target. Writes **`{stem}{suffix}.flac`** (default suffix `_LUFS14`) beside the original. **Tags and artwork are copied** from the source. Encoding:
+Pick a **supported audio file**, analyse levels, then **normalise** to your **Settings** LUFS target. Output uses **the same extract format as Settings** (FLAC, MP3, or AAC/M4A): **`{stem}{suffix}{extension}`** (default suffix `_LUFS14`). **Tags and artwork are copied** from the source.
 
-- Prefers the Xiph **`flac`** CLI when installed (`brew install flac`): **`flac --best -e -p`** (slower, tighter compression).
-- Otherwise uses FFmpeg’s FLAC encoder (`-compression_level 12`).
+- **FLAC:** Prefers the Xiph **`flac`** CLI when installed (`brew install flac`): **`flac --best -e -p`**. Otherwise FFmpeg’s FLAC encoder (`-compression_level 12`). **16-bit** at the source sample rate/layout. Normalised files are often **larger** than the original at the same rate/bit-depth because the waveform is harder to compress — that is normal and still lossless.
+- **MP3 / AAC:** Encoded with FFmpeg after loudnorm (lossy).
 
-**Sample rate and channel layout** are taken from the source (and **`-ar`** is set) so outputs stay e.g. **48 kHz**, not accidentally upsampled. **Normalised files are often larger than the original FLAC** at the same rate/bit-depth: the waveform is harder for FLAC to compress — that is normal and still lossless.
+**Sample rate and channel layout** follow the source where applicable so outputs stay e.g. **48 kHz**, not accidentally upsampled.
 
 ### Settings
 
 - **Source / destination** folders  
+- **Extract format** — global default for **Extract** output and **Normalise** re-encode  
 - **Platinum Notes** app name and **`_PN` output suffix**  
 - **Loudness target (LUFS)** and **true peak (dBTP)** — e.g. **-11.5** / **-1** to match Platinum Notes; **-14** / **-1** for streaming-style reference. You may enter **11.5** (positive); it is treated as **-11.5 LUFS**.
 
 ## Recording Setup
 
 - **[BlackHole](https://existential.audio/blackhole/)** — virtual audio on macOS (16-channel version).
-- **[OBS Studio](https://obsproject.com/)** — record with **FLAC** audio, **MKV** container.
+- **[OBS Studio](https://obsproject.com/)** — e.g. **FLAC** (or another) audio in an **MKV** container.
 
-### Recommended OBS Settings
+### Recommended OBS Settings (lossless capture)
 
 1. **Settings > Output > Output Mode**: Advanced  
-2. **Recording > Audio Encoder**: FFmpeg FLAC 16-bit  
+2. **Recording > Audio Encoder**: FFmpeg FLAC 16-bit (or your preferred encoder)  
 3. **Recording > Recording Format**: MKV  
 4. **Settings > Audio > Sample Rate**: 48 kHz  
 
 ## Requirements
 
-- **macOS** (Finder trash integration for “move MKV to Bin”)
+- **macOS** (Finder trash integration for “move recording to Bin”)
 - **Python 3.10+**
 - **ffmpeg** and **ffprobe**:
 
@@ -84,7 +85,7 @@ Pick a **FLAC**, analyse levels, then **normalise** to your **Settings** LUFS ta
 brew install ffmpeg
 ```
 
-**Optional (recommended for Normalise / smaller FLAC re-encodes):**
+**Optional (recommended for Normalise when output is FLAC — smaller files with the FLAC CLI):**
 
 ```bash
 brew install flac
@@ -93,8 +94,8 @@ brew install flac
 ## Setup
 
 ```bash
-git clone https://github.com/apj72/dj-flac-tagger.git
-cd dj-flac-tagger
+git clone https://github.com/apj72/dj-meta-manager.git
+cd dj-meta-manager
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -108,7 +109,7 @@ Edit `config.json` or use the **Settings** tab in the UI.
 ### Start / stop (background)
 
 ```bash
-./start.sh    # logs to server.log, PID in .dj-flac-tagger.pid
+./start.sh    # logs to server.log, PID in .dj-meta-manager.pid
 ./stop.sh
 ```
 
@@ -123,14 +124,14 @@ Open **http://127.0.0.1:5123** (or `http://localhost:5123`).
 
 ### Extract workflow (summary)
 
-1. **Settings** — folders, LUFS target, Platinum Notes name/suffix.  
-2. **Extract** — browse recordings, select MKV, review meters, fetch metadata (paste **Track URL** to log the source).  
+1. **Settings** — folders, extract format, LUFS target, Platinum Notes name/suffix.  
+2. **Extract** — browse recordings, select a video file, review meters, fetch metadata (paste **Track URL** to log the source).  
 3. Optionally **normalise**, **open in Platinum Notes**, **watch for PN output** to auto re-tag.  
-4. **Extract** — tagged FLAC, optional copy and trash source.
+4. **Extract** — tagged audio file in your chosen format, optional copy and trash source.
 
 ### Processing log
 
-Entries include **`metadata_source_url`**, **`metadata_source_type`**, **`kind`** (`extract` vs `fix`), and normalisation targets when used. Use **Re-tag** to apply log entries to files in a folder (e.g. after Platinum Notes renamed the file).
+Entries include **`metadata_source_url`**, **`metadata_source_type`**, **`kind`** (`extract` vs `fix`), **`extract_profile`**, and normalisation targets when used. Use **Re-tag** to apply log entries to files in a folder (e.g. after Platinum Notes renamed the file).
 
 ## Audio / loudness notes
 
@@ -152,16 +153,14 @@ Normalisation uses **two-pass EBU R128** with your configured **I** and **TP** t
 | **Any URL** | Open Graph title/image where available |
 | **Fix page auto-search** | iTunes + Discogs |
 
-## Supported formats (Fix / Inspect / Normalise)
+## Supported formats
 
-| Format | Tags | Artwork |
-|--------|------|---------|
-| **FLAC** | Vorbis comments | Pictures |
-| **MP3** | ID3v2 | APIC |
-| **M4A / AAC / MP4** | iTunes atoms | `covr` |
-| **OGG** | Vorbis comments | `metadata_block_picture` |
+| Role | Formats |
+|------|---------|
+| **Extract** (from video) & **Normalise** (re-encode) | **FLAC**, **MP3**, **AAC (M4A)** — selected under **Settings → extract format** |
+| **Fix** & **Inspect** (tags / artwork) | **FLAC** — Vorbis comments, pictures · **MP3** — ID3v2, APIC · **M4A / AAC / MP4** — iTunes atoms, `covr` · **OGG** — Vorbis comments, `metadata_block_picture` |
 
-**Normalise** is **FLAC-only**.
+**Inspect: Fix artwork dimensions** applies to **FLAC** only (other formats skip this).
 
 ## Configuration (`config.json`)
 
@@ -170,7 +169,8 @@ Example (see `config.json.example`):
 ```json
 {
   "source_dir": "~/DJ-Mixes",
-  "destination_dir": "~/Music/FLACs",
+  "destination_dir": "~/Music/DJ-library",
+  "extract_profile": "flac",
   "platinum_notes_app": "Platinum Notes 10",
   "pn_output_suffix": "_PN",
   "target_lufs": -11.5,
@@ -189,7 +189,7 @@ pytest tests/ -v
 ## Project structure
 
 ```
-dj-flac-tagger/
+dj-meta-manager/
 ├── app.py                 # Flask API — ffmpeg, scrapers, mutagen
 ├── config.json            # Local settings (not in repo)
 ├── config.json.example

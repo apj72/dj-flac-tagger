@@ -66,10 +66,10 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
 def load_config():
     defaults = {
         "source_dir": "~/DJ-Mixes",
-        "destination_dir": "~/Documents/Rekordbox-music/FLACs",
+        "destination_dir": "~/Music/DJ-library",
         # Exact app name as shown by macOS "open -a" (e.g. "Platinum Notes")
         "platinum_notes_app": "",
-        # Platinum Notes default output: <stem>_PN.flac
+        # Platinum Notes default output: <stem>_PN.<ext> (same extension family as input)
         "pn_output_suffix": "_PN",
         # EBU R128 loudnorm targets (integrated LUFS, true-peak ceiling dBTP).
         # Platinum Notes is often around -11.5 LUFS; streaming reference is -14.
@@ -144,8 +144,18 @@ def log_extraction(entry):
     return len(entries) - 1
 
 
-SOURCE_URL_VORBIS = "DJFLACTAGGER_SOURCE_URL"
-SOURCE_URL_ID3_DESC = "DJFLACTAGGER_SOURCE_URL"
+SOURCE_URL_VORBIS = "DJMETAMANAGER_SOURCE_URL"
+SOURCE_URL_VORBIS_LEGACY = "DJFLACTAGGER_SOURCE_URL"
+SOURCE_URL_ID3_DESC = "DJMETAMANAGER_SOURCE_URL"
+SOURCE_URL_ID3_DESC_LEGACY = "DJFLACTAGGER_SOURCE_URL"
+
+
+def _source_url_from_vorbis(audio):
+    for key in (SOURCE_URL_VORBIS, SOURCE_URL_VORBIS_LEGACY):
+        vals = audio.get(key, [])
+        if vals:
+            return vals[0]
+    return None
 
 
 def infer_metadata_source_type(url):
@@ -170,7 +180,7 @@ def infer_metadata_source_type(url):
 
 
 def find_log_entry_for_output_path(base_path, log_index=None):
-    """Match a processing-log entry to an extracted FLAC path (or explicit index)."""
+    """Match a processing-log entry to an extracted audio path (or explicit index)."""
     entries = load_log()
     if log_index is not None:
         if 0 <= log_index < len(entries):
@@ -524,6 +534,8 @@ def _apply_flac(filepath, metadata, artwork_bytes, artwork_mime):
     su = (metadata.get("source_url") or "").strip()
     if su:
         audio[SOURCE_URL_VORBIS] = [su]
+        if SOURCE_URL_VORBIS_LEGACY in audio:
+            del audio[SOURCE_URL_VORBIS_LEGACY]
     if artwork_bytes:
         pic = Picture()
         pic.type = 3
@@ -570,6 +582,7 @@ def _apply_mp3(filepath, metadata, artwork_bytes, artwork_mime):
     su = (metadata.get("source_url") or "").strip()
     if su:
         t.delall(f"TXXX:{SOURCE_URL_ID3_DESC}")
+        t.delall(f"TXXX:{SOURCE_URL_ID3_DESC_LEGACY}")
         t.add(TXXX(encoding=3, desc=SOURCE_URL_ID3_DESC, text=[su]))
     if artwork_bytes:
         t.delall("APIC")
@@ -618,6 +631,8 @@ def _apply_vorbis(filepath, metadata, artwork_bytes, artwork_mime):
     su = (metadata.get("source_url") or "").strip()
     if su:
         audio[SOURCE_URL_VORBIS] = [su]
+        if SOURCE_URL_VORBIS_LEGACY in audio:
+            del audio[SOURCE_URL_VORBIS_LEGACY]
     if artwork_bytes:
         import base64
         pic = Picture()
@@ -658,7 +673,7 @@ HEADERS = {
                   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-DISCOGS_HEADERS = {"User-Agent": "DJFlacTagger/1.0 +https://github.com/dj-flac-tagger"}
+DISCOGS_HEADERS = {"User-Agent": "DJMetaManager/1.0 +https://github.com/apj72/dj-meta-manager"}
 
 
 def scrape_bandcamp(url):
@@ -1698,7 +1713,7 @@ def fix_artwork():
 
 @app.route("/api/retag", methods=["POST"])
 def retag():
-    """Re-apply metadata and artwork to an existing FLAC from a log entry."""
+    """Re-apply metadata and artwork to an existing audio file from a log entry."""
     data = request.get_json()
     filepath = data.get("filepath")
     metadata = dict(data.get("metadata") or {})
@@ -1848,9 +1863,9 @@ def _read_flac_tags(filepath):
         vals = audio.get(vorbis_key, [])
         if vals:
             meta[field] = vals[0]
-    src = audio.get(SOURCE_URL_VORBIS, [])
-    if src:
-        meta["source_url"] = src[0]
+    su = _source_url_from_vorbis(audio)
+    if su:
+        meta["source_url"] = su
     meta["has_artwork"] = len(audio.pictures) > 0
     meta["format"] = "FLAC"
     return meta
@@ -1878,10 +1893,17 @@ def _read_mp3_tags(filepath):
     catno = t.getall("TXXX:CATALOGNUMBER")
     if catno:
         meta["catno"] = str(catno[0])
+    su_new = su_legacy = None
     for frame in t.getall("TXXX"):
-        if getattr(frame, "desc", "") == SOURCE_URL_ID3_DESC and frame.text:
-            meta["source_url"] = str(frame.text[0])
-            break
+        desc = getattr(frame, "desc", "")
+        if desc == SOURCE_URL_ID3_DESC and frame.text:
+            su_new = str(frame.text[0])
+        elif desc == SOURCE_URL_ID3_DESC_LEGACY and frame.text:
+            su_legacy = str(frame.text[0])
+    if su_new is not None:
+        meta["source_url"] = su_new
+    elif su_legacy is not None:
+        meta["source_url"] = su_legacy
     meta["has_artwork"] = bool(t.getall("APIC"))
     return meta
 
@@ -1920,9 +1942,9 @@ def _read_vorbis_tags(filepath):
         vals = audio.get(vorbis_key, [])
         if vals:
             meta[field] = vals[0]
-    src = audio.get(SOURCE_URL_VORBIS, [])
-    if src:
-        meta["source_url"] = src[0]
+    su = _source_url_from_vorbis(audio)
+    if su:
+        meta["source_url"] = su
     meta["has_artwork"] = bool(audio.get("metadata_block_picture"))
     return meta
 

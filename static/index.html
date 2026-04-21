@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DJ FLAC Tagger</title>
+  <title>DJ MetaManager</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <div class="app">
     <header>
-      <h1>DJ FLAC Tagger</h1>
-      <p class="subtitle">Extract &middot; Tag &middot; Embed Artwork</p>
+      <h1>DJ MetaManager</h1>
+      <p class="subtitle">Multi-format audio &middot; Tag &middot; Artwork</p>
       <nav class="tab-nav">
         <a href="/" class="tab-link active">Extract</a>
         <a href="/fix" class="tab-link">Fix Metadata</a>
@@ -24,7 +24,7 @@
       <!-- Step 1: Source file -->
       <section class="card" id="source-section">
         <h2><span class="step">1</span> Source File</h2>
-        <p class="hint" style="margin-top:0;margin-bottom:0.75rem">Folders, extract format (FLAC / MP3 / AAC), and Platinum Notes options are on the <a href="/settings">Settings</a> tab.</p>
+        <p class="hint" style="margin-top:0;margin-bottom:0.75rem">Folders, <strong>extract format</strong> (FLAC, MP3, or AAC/M4A), and Platinum Notes options are on the <a href="/settings">Settings</a> tab.</p>
         <div class="dir-bar">
           <input type="text" id="dir-input" placeholder="~/DJ-Mixes" />
           <button id="browse-btn" class="btn btn-secondary">Browse</button>
@@ -137,14 +137,14 @@
       <!-- Step 4: Extract -->
       <section class="card" id="extract-section">
         <h2><span class="step">4</span> Extract &amp; Tag</h2>
-        <p class="hint" style="margin-top:0;margin-bottom:0.75rem">Output format is the one chosen in <a href="/settings">Settings</a> (default FLAC). Platinum Notes should use <strong>Match input format</strong> so the <code>_PN</code> file matches that extension.</p>
+        <p class="hint" style="margin-top:0;margin-bottom:0.75rem">Output format is whatever you set under <a href="/settings">Settings → extract format</a> (default lossless FLAC). Platinum Notes should use <strong>Match input format</strong> so the <code>_PN</code> file matches that extension.</p>
         <label class="checkbox-row">
           <input type="checkbox" id="normalise" />
           <span>Normalise audio (EBU R128 — target LUFS from Settings)</span>
         </label>
         <label class="checkbox-row">
           <input type="checkbox" id="delete-source" checked />
-          <span>Move source MKV to Bin after extraction</span>
+          <span>Move source video file to Bin after extraction</span>
         </label>
         <label class="checkbox-row">
           <input type="checkbox" id="open-platinum-notes" />
@@ -170,7 +170,7 @@
             <button id="retag-selected-btn" class="btn btn-primary btn-sm" disabled>Re-tag Selected</button>
             <button id="retag-all-btn" class="btn btn-secondary btn-sm">Re-tag All in Folder</button>
             <label for="retag-dir" class="retag-label">Target folder:</label>
-            <input type="text" id="retag-dir" class="retag-dir-input" placeholder="~/Music/FLACs" />
+            <input type="text" id="retag-dir" class="retag-dir-input" placeholder="~/Music/DJ-library" />
           </div>
           <div id="history-list" class="history-list"></div>
           <div id="retag-status" class="status hidden"></div>

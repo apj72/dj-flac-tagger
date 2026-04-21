@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Settings — DJ FLAC Tagger</title>
+  <title>Settings — DJ MetaManager</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <div class="app">
     <header>
-      <h1>DJ FLAC Tagger</h1>
-      <p class="subtitle">Extract &middot; Tag &middot; Embed Artwork</p>
+      <h1>DJ MetaManager</h1>
+      <p class="subtitle">Multi-format audio &middot; Tag &middot; Artwork</p>
       <nav class="tab-nav">
         <a href="/" class="tab-link">Extract</a>
         <a href="/fix" class="tab-link">Fix Metadata</a>
@@ -23,7 +23,7 @@
     <main>
       <section class="card">
         <h2><span class="step-alt">&#9881;</span> Settings</h2>
-        <p class="hint">Paths, extract format, and loudness targets apply across Extract, Fix, Inspect, and Normalise. Save after changes.</p>
+        <p class="hint">Paths, extract format (FLAC / MP3 / AAC), and loudness targets apply across Extract, Fix, Inspect, and Normalise. Save after changes.</p>
 
         <div class="field-row">
           <label for="cfg-extract-profile">Extract &amp; normalise output format</label>
@@ -36,7 +36,7 @@
         </div>
         <div class="field-row">
           <label for="cfg-dest">Destination folder (copy of extracted audio)</label>
-          <input type="text" id="cfg-dest" placeholder="~/Documents/Rekordbox-music/FLACs" />
+          <input type="text" id="cfg-dest" placeholder="~/Music/DJ-library" />
         </div>
         <div class="field-row">
           <label for="cfg-pn-app">Platinum Notes — app name (macOS “Open after extract”)</label>

@@ -1,5 +1,11 @@
 const $ = (sel) => document.querySelector(sel);
 
+/** Fallback extension when API omits filename (matches Settings extract format). */
+function extensionForExtractProfile(profileKey) {
+  const m = { flac: ".flac", mp3_320: ".mp3", aac_256: ".m4a" };
+  return m[profileKey] || ".flac";
+}
+
 let selectedFile = null;
 let currentTracklist = [];
 let currentLoudnormParams = null;
@@ -353,7 +359,7 @@ async function extractAndTag() {
     `;
   } else {
     result.className = "result";
-    const outName = data.filename || `${data.title}.flac`;
+    const outName = data.filename || `${data.title}${extensionForExtractProfile(data.extract_profile)}`;
     const fmtLabel = data.extract_profile_label || "FLAC (lossless)";
     const lossHint = data.is_lossless_output ? "lossless" : "lossy";
     const lines = [
@@ -368,7 +374,7 @@ async function extractAndTag() {
     lines.push(`Saved to: ${data.output_path}`);
     if (data.copied_to) lines.push(`Copied to: ${data.copied_to}`);
     if (data.copy_error) lines.push(`Copy failed: ${data.copy_error}`);
-    if (data.source_trashed) lines.push(`Source MKV moved to Bin`);
+    if (data.source_trashed) lines.push(`Source recording moved to Bin`);
     if (data.source_trash_error) lines.push(`Could not trash source: ${data.source_trash_error}`);
 
     result.innerHTML = `

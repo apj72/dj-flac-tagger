@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Normalise — DJ FLAC Tagger</title>
+  <title>Normalise — DJ MetaManager</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <div class="app">
     <header>
-      <h1>DJ FLAC Tagger</h1>
-      <p class="subtitle">Extract &middot; Tag &middot; Embed Artwork</p>
+      <h1>DJ MetaManager</h1>
+      <p class="subtitle">Multi-format audio &middot; Tag &middot; Artwork</p>
       <nav class="tab-nav">
         <a href="/" class="tab-link">Extract</a>
         <a href="/fix" class="tab-link">Fix Metadata</a>
@@ -23,9 +23,9 @@
     <main>
       <section class="card">
         <h2><span class="step">1</span> Select audio</h2>
-        <p class="hint">Two-pass EBU R128 to <strong id="norm-target-label">your Settings target</strong>. Tags and artwork are copied to the new file. Output format and extension come from <strong id="norm-format-hint">Settings → extract format</strong> (default FLAC). For <strong>FLAC</strong>: audio is <strong>16-bit</strong> at the source sample rate and layout; normalised files are often larger than the original because the waveform is harder to compress — that is normal. With Xiph <code>flac</code> installed, FLAC encoding uses <code>flac --best -e -p</code>. For <strong>MP3 / AAC</strong>, FFmpeg encodes after loudnorm. Output: <code>filename_suffix</code> plus the configured extension, in the same folder.</p>
+        <p class="hint">Two-pass EBU R128 to <strong id="norm-target-label">your Settings target</strong>. Tags and artwork are copied to the new file. <strong>Output format</strong> and file extension come from <strong id="norm-format-hint">Settings → extract format</strong> (FLAC, MP3, or AAC/M4A; default FLAC). For <strong>FLAC</strong> output: audio is <strong>16-bit</strong> at the source sample rate and layout; files are often larger than the original because lossless waveforms are harder to compress — that is expected. With Xiph <code>flac</code> installed, FLAC encoding uses <code>flac --best -e -p</code>. For <strong>MP3 / AAC</strong>, FFmpeg encodes after loudnorm. Writes <code>{stem}{suffix}</code> plus the configured extension beside the original.</p>
         <div class="dir-bar">
-          <input type="text" id="norm-dir" placeholder="~/Music/FLACs" />
+          <input type="text" id="norm-dir" placeholder="~/Music/DJ-library" />
           <button id="norm-browse-btn" class="btn btn-secondary">Browse</button>
         </div>
         <div id="norm-file-list" class="file-list"></div>

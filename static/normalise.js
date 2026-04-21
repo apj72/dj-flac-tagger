@@ -23,7 +23,7 @@ async function loadSettings() {
   updateNormTargetLabels(cfg);
 }
 
-async function browseFlacs() {
+async function browseAudio() {
   const dir = $("#norm-dir").value.trim();
   if (!dir) return;
 
@@ -220,7 +220,7 @@ async function runNormalise() {
         <span class="hint">Metadata and artwork were copied from the source file. Format: ${data.extract_profile_label || "from Settings"}.</span>
       </div>
     `;
-    browseFlacs();
+    browseAudio();
   }
 
   btn.disabled = false;
@@ -229,10 +229,10 @@ async function runNormalise() {
   updateNormTargetLabels(cfg);
 }
 
-$("#norm-browse-btn").addEventListener("click", browseFlacs);
+$("#norm-browse-btn").addEventListener("click", browseAudio);
 $("#norm-dir").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") browseFlacs();
+  if (e.key === "Enter") browseAudio();
 });
 $("#norm-run-btn").addEventListener("click", runNormalise);
 
-loadSettings().then(() => browseFlacs());
+loadSettings().then(() => browseAudio());
