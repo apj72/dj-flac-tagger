@@ -8,3 +8,4 @@ processing_log.json
 .dj-metamanager.pid
 .dj-flac-tagger.pid
 server.log
+design/
