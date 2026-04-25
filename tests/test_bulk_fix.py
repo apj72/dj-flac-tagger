@@ -1,0 +1,75 @@
+"""Tests for bulk metadata fix API (scan + helpers)."""
+
+import pytest
+
+
+def test_search_query_from_stem_matched(app_module):
+    sq = app_module.search_query_from_ableton_stem("A06 - 139 - Members Of Mayday - 10 In 01")
+    assert sq["pattern_matched"] is True
+    assert "Members Of Mayday" in sq["query"] and "10 In 01" in sq["query"]
+    assert sq["title_hint"] == "10 In 01"
+
+
+def test_best_track_in_list_prefers_close_title(app_module):
+    tl = [
+        {"position": "A1", "title": "Intro", "duration": ""},
+        {"position": "A2", "title": "My Real Title", "duration": ""},
+    ]
+    best = app_module._best_track_in_list(tl, "My Real Title")
+    assert best["title"] == "My Real Title"
+
+
+def test_bulk_fix_scan_paged(client, tmp_path):
+    d = tmp_path / "lib"
+    d.mkdir()
+    (d / "A01 - 128 - X - Y.flac").write_bytes(b"x")
+    (d / "other.flac").write_bytes(b"y")
+
+    r = client.get(f"/api/bulk-fix/scan?path={d}&recursive=0&offset=0&limit=1")
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j["total"] == 2
+    assert len(j["items"]) == 1
+    assert j["items"][0]["pattern_matched"] is True
+    assert "X" in j["items"][0]["query"]
+
+    r2 = client.get(f"/api/bulk-fix/scan?path={d}&recursive=0&offset=1&limit=5")
+    j2 = r2.get_json()
+    assert len(j2["items"]) == 1
+    assert "other" in (j2["items"][0]["basename"] or "").lower()
+
+
+def test_fetch_metadata_uses_track_hint_for_discogs_tracklist(client, app_module, monkeypatch):
+    """Multi-track discogs style meta picks title from hint."""
+    def fake_fetch(url):
+        return {
+            "artist": "Album Artist",
+            "album": "The LP",
+            "date": "2020",
+            "artwork_url": "",
+            "tracklist": [
+                {"position": "1", "title": "Alpha", "duration": ""},
+                {"position": "2", "title": "Beta", "duration": ""},
+            ],
+            "source": "discogs",
+        }
+
+    monkeypatch.setattr(app_module, "_metadata_from_url", fake_fetch)
+    r = client.post(
+        "/api/fetch-metadata",
+        json={"url": "https://www.discogs.com/release/1", "track_name": "Beta"},
+    )
+    assert r.status_code == 200
+    assert r.get_json().get("title") == "Beta"
+
+
+def test_bulk_fix_page_serves(client):
+    r = client.get("/bulk-fix")
+    assert r.status_code == 200
+    assert b"Bulk fix" in r.data or b"bulk-fix.js" in r.data
+
+
+def test_bulk_fix_apply_rejects_empty_items(client):
+    r = client.post("/api/bulk-fix/apply", json={"items": []})
+    assert r.status_code == 400
+    assert "items" in (r.get_json().get("error") or "").lower()

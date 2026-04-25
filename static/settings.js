@@ -25,6 +25,7 @@ async function loadSettings() {
     cfg.target_true_peak !== undefined && cfg.target_true_peak !== null
       ? String(cfg.target_true_peak)
       : "-1";
+  $("#cfg-loudness-verify").checked = cfg.loudness_verify_enabled !== false;
 }
 
 async function saveSettings() {
@@ -39,6 +40,7 @@ async function saveSettings() {
       pn_output_suffix: $("#cfg-pn-suffix").value.trim() || "_PN",
       target_lufs: $("#cfg-target-lufs").value.trim(),
       target_true_peak: $("#cfg-target-tp").value.trim(),
+      loudness_verify_enabled: $("#cfg-loudness-verify").checked,
     }),
   });
   await resp.json();

@@ -370,6 +370,16 @@ async function extractAndTag() {
       const lu = data.target_lufs != null ? data.target_lufs : "";
       const tp = data.target_tp != null ? data.target_tp : "";
       lines.push(`Normalised to ${lu} LUFS, ${tp} dBTP peak (EBU R128)`);
+      if (data.loudness_retried) {
+        lines.push(
+          "Loudness was re-checked: output did not pass verification at first, so the app re-encoded once from a fresh source analysis (safe to open in Platinum Notes if no warning below)."
+        );
+      }
+      if (data.loudness_verify_warning) {
+        lines.push(
+          `<span style="color:var(--danger);display:block;margin-top:0.35rem">Loudness warning: ${data.loudness_verify_warning}</span>`
+        );
+      }
     }
     lines.push(`Saved to: ${data.output_path}`);
     if (data.copied_to) lines.push(`Copied to: ${data.copied_to}`);

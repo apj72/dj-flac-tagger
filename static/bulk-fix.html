@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bulk fix metadata — DJ MetaManager</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="page-bulk-fix">
+  <div class="app">
+    <header>
+      <h1>DJ MetaManager</h1>
+      <p class="subtitle">Multi-format audio &middot; Tag &middot; Artwork</p>
+      <nav class="tab-nav">
+        <a href="/" class="tab-link">Extract</a>
+        <a href="/fix" class="tab-link">Fix Metadata</a>
+        <a href="/inspect" class="tab-link">Inspect</a>
+        <a href="/normalise" class="tab-link">Normalise</a>
+        <a href="/convert" class="tab-link">WAV → FLAC</a>
+        <a href="/bulk-fix" class="tab-link active">Bulk fix</a>
+        <a href="/settings" class="tab-link">Settings</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2><span class="step">1</span> Folder of FLACs</h2>
+        <p class="hint" style="margin-top:0">Use after <a href="/convert">WAV → FLAC</a> (e.g. flat “Converted WAVs” folder) or any library tree. If you finish a batch run there with a <strong>single flat output</strong>, use <strong>Open Bulk fix for this folder</strong> on the convert page — or open this tab with <code class="mono">?dir=…</code> in the address bar. The app builds a <strong>search query</strong> from each filename (<code>Slot - BPM - Artist - Title</code> or <code>Artist - Title</code>).</p>
+        <div class="dir-bar">
+          <input type="text" id="bf-dir" placeholder="~/Music/FLACs/Converted WAVs" />
+          <button type="button" id="bf-choose-btn" class="btn btn-secondary" title="Server folder list">Choose folder…</button>
+          <button type="button" id="bf-default-btn" class="btn btn-secondary" title="Settings → destination">Default</button>
+        </div>
+        <div class="field-row" style="margin:0.5rem 0 0.35rem; flex-wrap:wrap; gap:0.75rem 1.25rem">
+          <label class="inline" style="display:inline-flex;align-items:center;gap:0.35rem">
+            <input type="checkbox" id="bf-recursive" checked />
+            <span>Include <strong>subfolders</strong></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2><span class="step">2</span> Batch size &amp; load</h2>
+        <p class="hint" style="margin-top:0">Process in chunks to limit API load (Discogs / Apple) and to review matches. Example: 320 files → 25 per pass, 13 “next” loads.</p>
+        <div class="field-row" style="align-items:flex-end;flex-wrap:wrap;gap:0.75rem">
+          <div>
+            <label for="bf-batch-size" style="display:block;font-size:0.85rem;margin-bottom:0.2rem">Files per pass</label>
+            <input type="number" id="bf-batch-size" min="1" max="200" value="25" style="width:5rem" />
+          </div>
+          <div>
+            <label for="bf-offset" style="display:block;font-size:0.85rem;margin-bottom:0.2rem">Start offset (file index, 0-based)</label>
+            <input type="number" id="bf-offset" min="0" value="0" style="width:6rem" />
+          </div>
+          <button type="button" id="bf-load-batch-btn" class="btn btn-primary">Load batch</button>
+          <button type="button" id="bf-next-batch-btn" class="btn btn-secondary" title="Add batch size to offset, then load">Next batch</button>
+        </div>
+        <p id="bf-range-status" class="status" style="margin:0.5rem 0 0"></p>
+        <p id="bf-load-hint" class="hint" style="margin:0.35rem 0 0"></p>
+      </section>
+
+      <section class="card">
+        <h2><span class="step">3</span> Search &amp; review</h2>
+        <p class="hint" style="margin-top:0">Click <strong>Fetch online matches</strong> to query Apple Music and Discogs for this batch, then pick a result per row or paste a <strong>Bandcamp / Discogs / Apple</strong> URL. Only checked rows are applied.</p>
+        <div class="field-row" style="gap:0.5rem; flex-wrap:wrap; margin:0.5rem 0">
+          <button type="button" id="bf-fetch-matches-btn" class="btn btn-primary" disabled>Fetch online matches</button>
+          <span id="bf-fetch-status" class="status hidden"></span>
+        </div>
+        <div class="bulk-table-wrap">
+          <table class="bulk-table" id="bf-table">
+            <thead>
+              <tr>
+                <th class="th-check">Use</th>
+                <th>File</th>
+                <th>Query</th>
+                <th>Title hint</th>
+                <th>Match</th>
+                <th>Or paste URL</th>
+              </tr>
+            </thead>
+            <tbody id="bf-tbody">
+              <tr><td colspan="6" class="status">Load a batch (step 2).</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="field-row" style="margin:0.75rem 0 0.35rem; flex-wrap:wrap; gap:0.75rem">
+          <label class="inline" style="display:inline-flex;align-items:center;gap:0.35rem">
+            <input type="checkbox" id="bf-rename" />
+            <span>Rename file to <code>Artist - Title.flac</code> after apply (see Fix Metadata)</span>
+          </label>
+        </div>
+        <div class="field-row" style="margin:0.25rem 0; gap:0.5rem; flex-wrap:wrap">
+          <button type="button" id="bf-apply-btn" class="btn btn-accent" disabled>Apply metadata to selected rows</button>
+        </div>
+        <div id="bf-result" class="result hidden" style="margin-top:0.5rem"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="bf-folder-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bf-folder-modal-title">
+    <div class="modal-card" style="max-width:32rem">
+      <h3 id="bf-folder-modal-title">Choose folder</h3>
+      <div class="modal-path mono" id="bf-modal-path"></div>
+      <div class="modal-nav">
+        <button type="button" id="bf-modal-up" class="btn btn-secondary btn-sm">Enclosing folder</button>
+      </div>
+      <div id="bf-modal-dir-list" class="modal-dir-list"></div>
+      <div class="modal-actions">
+        <button type="button" id="bf-modal-select" class="btn btn-primary">Use this folder</button>
+        <button type="button" id="bf-modal-cancel" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/bulk-fix.js"></script>
+</body>
+</html>

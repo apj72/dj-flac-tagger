@@ -4,6 +4,37 @@ let selectedFile = null;
 let currentTracklist = [];
 let currentMeta = {};
 let artworkUrl = "";
+/** Paths in current file list (same order as .file-item data-idx). */
+let fixBrowseFilePaths = [];
+
+// ---- Filename helpers (e.g. Ableton: A06 - 139 - Artist - Title) ----
+/**
+ * If the stem looks like: [slot]-[BPM]-[artist]-[title], return a search string and
+ * suggested title/artist for empty tags. Otherwise fall back to a looser string from the whole stem.
+ */
+function parseAbletonStyleFilename(stem) {
+  const t = (stem || "").replace(/_PN$/i, "").trim();
+  if (!t) {
+    return { searchQuery: "", suggestedTitle: "", suggestedArtist: "" };
+  }
+  // E.g. A06 - 139 - Members Of Mayday - 10 In 01
+  const m4 = t.match(
+    /^(?:[A-Za-z]?\d+|Track\s*\d+|\d+)\s*-\s*\d{2,3}\s*-\s*(.+?)\s*-\s*(.+)$/i
+  );
+  if (m4) {
+    const artist = m4[1].trim();
+    const title = m4[2].trim();
+    return {
+      searchQuery: [artist, title].join(" ").replace(/\s+/g, " ").trim(),
+      suggestedTitle: title,
+      suggestedArtist: artist,
+    };
+  }
+  // Strip leading "NN - 123 -" once if present, keep rest
+  const stripped = t.replace(/^(?:[A-Za-z]?\d+|Track\s*\d+|\d+)\s*-\s*\d{2,3}\s*-\s*/i, "").trim();
+  const loose = (stripped || t).replace(/\s*-\s*/g, " ").replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  return { searchQuery: loose, suggestedTitle: "", suggestedArtist: "" };
+}
 
 // ---- Browse audio files ----
 async function loadSettings() {
@@ -12,30 +43,118 @@ async function loadSettings() {
   $("#fix-dir").value = cfg.destination_dir || "";
 }
 
+async function resetFixDirToDefault() {
+  const resp = await fetch("/api/settings");
+  const cfg = await resp.json();
+  $("#fix-dir").value = cfg.destination_dir || "";
+  await browseAudio();
+}
+
+// ---- Server-side folder picker (path cannot be read from a browser file dialog) ----
+let folderModalPath = "";
+
+function closeFolderModal() {
+  const el = document.getElementById("fix-folder-modal");
+  if (el) el.classList.add("hidden");
+  document.removeEventListener("keydown", onFolderModalKeydown);
+}
+
+function onFolderModalKeydown(e) {
+  if (e.key === "Escape") closeFolderModal();
+}
+
+async function openFolderModal() {
+  let start = $("#fix-dir").value.trim();
+  if (!start) {
+    const resp = await fetch("/api/settings");
+    const cfg = await resp.json();
+    start = cfg.destination_dir || "";
+  }
+  if (!start) start = "~";
+  const modal = document.getElementById("fix-folder-modal");
+  modal.classList.remove("hidden");
+  document.addEventListener("keydown", onFolderModalKeydown);
+  await loadFolderInModal(start);
+}
+
+async function loadFolderInModal(path) {
+  const listEl = $("#fix-modal-dir-list");
+  const pathEl = $("#fix-modal-path");
+  const upBtn = $("#fix-modal-up");
+  listEl.innerHTML = '<div class="status">Loading…</div>';
+  upBtn.disabled = true;
+
+  const resp = await fetch(`/api/browse-folders?path=${encodeURIComponent(path)}`);
+  const data = await resp.json();
+  if (data.error) {
+    listEl.innerHTML = `<div class="status">${data.error}</div>`;
+    pathEl.textContent = path;
+    folderModalPath = path;
+    return;
+  }
+  folderModalPath = data.path;
+  pathEl.textContent = data.path;
+  if (data.parent) {
+    upBtn.disabled = false;
+    upBtn.onclick = () => loadFolderInModal(data.parent);
+  } else {
+    upBtn.disabled = true;
+    upBtn.onclick = null;
+  }
+
+  if (!data.directories || data.directories.length === 0) {
+    listEl.innerHTML = '<div class="status">No subfolders (you can still use this folder)</div>';
+    return;
+  }
+  const paths = data.directories.map((d) => d.path);
+  const esc = (s) =>
+    String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  listEl.innerHTML = data.directories
+    .map(
+      (d, i) =>
+        `<button type="button" class="modal-dir-item" data-idx="${i}">${esc(d.name)}/</button>`
+    )
+    .join("");
+  listEl.querySelectorAll(".modal-dir-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const i = parseInt(btn.dataset.idx, 10);
+      if (!Number.isNaN(i) && paths[i]) loadFolderInModal(paths[i]);
+    });
+  });
+}
+
 async function browseAudio() {
   const dir = $("#fix-dir").value.trim();
-  if (!dir) return;
+  if (!dir) {
+    fixBrowseFilePaths = [];
+    return null;
+  }
 
   const resp = await fetch(`/api/browse-audio?dir=${encodeURIComponent(dir)}`);
   const data = await resp.json();
 
   if (data.error) {
     $("#fix-file-list").innerHTML = `<div class="status">${data.error}</div>`;
-    return;
+    fixBrowseFilePaths = [];
+    return null;
   }
 
   $("#fix-dir").value = data.directory;
 
   if (data.files.length === 0) {
     $("#fix-file-list").innerHTML = '<div class="status">No audio files found</div>';
-    return;
+    fixBrowseFilePaths = [];
+    return data;
   }
 
+  fixBrowseFilePaths = data.files.map((f) => f.path);
+  const esc = (s) =>
+    String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   $("#fix-file-list").innerHTML = data.files
     .map(
-      (f) =>
-        `<div class="file-item" data-path="${f.path}">
-          <span class="file-name">${f.name}</span>
+      (f, i) =>
+        `<div class="file-item" data-idx="${i}">
+          <span class="file-name">${esc(f.name)}</span>
           <span class="file-size">${f.size_mb} MB</span>
         </div>`
     )
@@ -44,12 +163,21 @@ async function browseAudio() {
   $("#fix-file-list").querySelectorAll(".file-item").forEach((el) => {
     el.addEventListener("click", () => selectFlacFile(el));
   });
+  return data;
+}
+
+function findFileItemByPath(path) {
+  const idx = fixBrowseFilePaths.indexOf(path);
+  if (idx < 0) return null;
+  return document.querySelector(`#fix-file-list .file-item[data-idx="${idx}"]`);
 }
 
 async function selectFlacFile(el) {
   $("#fix-file-list").querySelectorAll(".file-item").forEach((e) => e.classList.remove("selected"));
   el.classList.add("selected");
-  selectedFile = el.dataset.path;
+  const bidx = parseInt(el.dataset.idx, 10);
+  selectedFile = !Number.isNaN(bidx) && fixBrowseFilePaths[bidx] ? fixBrowseFilePaths[bidx] : null;
+  if (!selectedFile) return;
   currentTracklist = [];
   currentMeta = {};
   artworkUrl = "";
@@ -91,11 +219,33 @@ async function selectFlacFile(el) {
   $("#fix-comment").value = data.comment || "";
   $("#fix-url").value = data.source_url || "";
 
+  const stem = selectedFile.split("/").pop().replace(/\.[^.]+$/, "");
+  const parsed = parseAbletonStyleFilename(stem);
+  if (!data.title && parsed.suggestedTitle) {
+    $("#fix-title").value = parsed.suggestedTitle;
+  }
+  if (!data.artist && parsed.suggestedArtist) {
+    $("#fix-artist").value = parsed.suggestedArtist;
+  }
+
+  let searchOverride = null;
+  if (window.__fixSearchOverrideFromUrl) {
+    searchOverride = window.__fixSearchOverrideFromUrl;
+    window.__fixSearchOverrideFromUrl = null;
+  } else if (!data.title && !data.artist) {
+    searchOverride = parsed.searchQuery || null;
+  }
+
   $("#fix-artwork-preview").innerHTML = data.has_artwork
     ? '<span style="color:var(--primary)">Artwork embedded</span>'
     : "<span>No artwork</span>";
 
-  autoSearch(data);
+  const searchPayload = { ...data };
+  if (searchOverride) {
+    searchPayload._searchQuery = searchOverride;
+  }
+  autoSearch(searchPayload);
+  updateRenamePreview();
 }
 
 // ---- Auto-search from file tags ----
@@ -105,17 +255,29 @@ async function autoSearch(tags) {
   const status = $("#fix-search-status");
 
   const parts = [];
-  if (tags.title) parts.push(tags.title);
-  if (tags.artist) parts.push(tags.artist);
-
-  if (!parts.length) {
-    const name = selectedFile
-      ? selectedFile.split("/").pop().replace(/\.[^.]+$/, "").replace(/_PN$/, "").replace(/[_-]/g, " ").trim()
-      : "";
-    if (name) parts.push(name);
+  let q;
+  if (tags._searchQuery) {
+    q = tags._searchQuery;
+  } else {
+    if (tags.title) parts.push(tags.title);
+    if (tags.artist) parts.push(tags.artist);
+    if (!parts.length) {
+      const name = selectedFile
+        ? selectedFile.split("/").pop().replace(/\.[^.]+$/, "").replace(/_PN$/, "")
+        : "";
+      const p = name ? parseAbletonStyleFilename(name) : { searchQuery: "" };
+      if (p.searchQuery) {
+        q = p.searchQuery;
+      } else {
+        const flat = name.replace(/[_-]/g, " ").replace(/\s+/g, " ").trim();
+        if (flat) q = flat;
+      }
+    } else {
+      q = parts.join(" ");
+    }
   }
 
-  if (!parts.length) {
+  if (!q) {
     section.classList.add("hidden");
     return;
   }
@@ -124,8 +286,6 @@ async function autoSearch(tags) {
   status.classList.remove("hidden");
   status.innerHTML = '<span class="spinner"></span> Searching...';
   container.innerHTML = "";
-
-  const q = parts.join(" ");
   const resp = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
   const data = await resp.json();
 
@@ -254,6 +414,7 @@ function populateFromMeta(meta) {
     const proxyUrl = `/api/fetch-artwork?url=${encodeURIComponent(artworkUrl)}`;
     $("#fix-artwork-preview").innerHTML = `<img src="${proxyUrl}" alt="Cover art" onerror="this.parentElement.innerHTML='<span>Failed to load</span>'" />`;
   }
+  updateRenamePreview();
 }
 
 // ---- Tracklist ----
@@ -292,6 +453,40 @@ function selectTrack(el, meta) {
   if (meta.label) $("#fix-label").value = meta.label;
   if (meta.catno) $("#fix-catno").value = meta.catno;
   $("#fix-comment").value = `${track.position} - ${meta.album || ""}`.trim();
+  updateRenamePreview();
+}
+
+// ---- Rename preview (match server: Artist - Title.ext) ----
+function getExtensionForRename() {
+  if (!selectedFile) return ".flac";
+  const m = selectedFile.match(/(\.[^./]+)$/i);
+  return m ? m[0].toLowerCase() : ".flac";
+}
+
+function previewRenamedFilename() {
+  const artist = $("#fix-artist").value.trim();
+  const title = $("#fix-title").value.trim();
+  const ext = getExtensionForRename();
+  if (!title && !artist) return null;
+  let base = title && artist ? `${artist} - ${title}` : (title || artist);
+  base = base.replace(/[<>:"/\\|?*]/g, "").replace(/\s+/g, " ").replace(/^\.+|\.+$/g, "").trim();
+  if (!base) return null;
+  if (base.length > 200) base = base.slice(0, 200).replace(/\s+$/, "");
+  return `${base}${ext}`;
+}
+
+function updateRenamePreview() {
+  const el = $("#fix-rename-preview");
+  if (!$("#fix-rename-to-tags").checked) {
+    el.textContent = "Rename is off — file on disk will keep the current name.";
+    return;
+  }
+  const s = previewRenamedFilename();
+  if (!s) {
+    el.textContent = "Enter a title and/or artist to preview the new filename.";
+    return;
+  }
+  el.textContent = `New filename: ${s}`;
 }
 
 // ---- Clear all ----
@@ -311,6 +506,8 @@ function clearAll() {
   $("#fix-search-section").classList.add("hidden");
   $("#fix-fetch-status").classList.add("hidden");
   $("#fix-result").classList.add("hidden");
+  $("#fix-rename-to-tags").checked = false;
+  updateRenamePreview();
   artworkUrl = "";
   currentTracklist = [];
   currentMeta = {};
@@ -348,6 +545,7 @@ async function saveTags() {
       metadata,
       artwork_url: artworkUrl,
       metadata_source_url,
+      rename_to_tags: $("#fix-rename-to-tags").checked,
     }),
   });
 
@@ -359,13 +557,27 @@ async function saveTags() {
     result.innerHTML = `<div class="result-title">Error</div><div class="result-detail">${data.error}</div>`;
   } else {
     result.className = "result";
-    const filename = selectedFile.split("/").pop();
-    const parts = [`Tags updated for <strong>${filename}</strong>`];
+    const outPath = data.filepath || selectedFile;
+    const shortName = outPath.split("/").pop();
+    const parts = [`Tags updated for <strong>${shortName}</strong>`];
     if (artworkUrl) parts.push("Artwork embedded");
+    if (data.renamed) parts.push("File renamed on disk to match title &amp; artist.");
     result.innerHTML = `<div class="result-title">Saved!</div><div class="result-detail">${parts.join("<br>")}</div>`;
 
-    const sel = $("#fix-file-list").querySelector(".file-item.selected");
-    if (sel) selectFlacFile(sel);
+    if (outPath && (data.renamed || outPath !== selectedFile)) {
+      const parent = outPath.split("/").slice(0, -1).join("/");
+      if (parent) $("#fix-dir").value = parent;
+      await browseAudio();
+      const item = findFileItemByPath(outPath);
+      if (item) {
+        await selectFlacFile(item);
+      } else {
+        selectedFile = outPath;
+      }
+    } else {
+      const sel = $("#fix-file-list").querySelector(".file-item.selected");
+      if (sel) selectFlacFile(sel);
+    }
   }
 
   btn.disabled = false;
@@ -374,11 +586,63 @@ async function saveTags() {
 
 // ---- Event listeners ----
 $("#fix-browse-btn").addEventListener("click", browseAudio);
+document.getElementById("fix-choose-folder-btn").addEventListener("click", openFolderModal);
+document.getElementById("fix-default-dir-btn").addEventListener("click", resetFixDirToDefault);
+document.getElementById("fix-modal-select").addEventListener("click", () => {
+  if (folderModalPath) {
+    $("#fix-dir").value = folderModalPath;
+    closeFolderModal();
+    browseAudio();
+  }
+});
+document.getElementById("fix-modal-cancel").addEventListener("click", closeFolderModal);
+document.getElementById("fix-folder-modal").addEventListener("click", (e) => {
+  if (e.target && e.target.id === "fix-folder-modal") closeFolderModal();
+});
 $("#fix-dir").addEventListener("keydown", (e) => { if (e.key === "Enter") browseAudio(); });
 $("#fix-fetch-btn").addEventListener("click", fetchMetadata);
 $("#fix-url").addEventListener("keydown", (e) => { if (e.key === "Enter") fetchMetadata(); });
 $("#fix-clear-btn").addEventListener("click", clearAll);
 $("#fix-save-btn").addEventListener("click", saveTags);
+$("#fix-rename-to-tags").addEventListener("change", updateRenamePreview);
+["fix-title", "fix-artist"].forEach((id) => {
+  document.getElementById(id).addEventListener("input", updateRenamePreview);
+});
 
-// ---- Init ----
-loadSettings().then(() => browseAudio());
+// ---- Init (optional deep link: /fix?file=/path/to/song.flac &q=optional+search+query) ----
+async function initFixPage() {
+  const params = new URLSearchParams(window.location.search);
+  const file = (params.get("file") || "").trim();
+  const q = (params.get("q") || "").trim();
+  if (q) {
+    window.__fixSearchOverrideFromUrl = q;
+  }
+  await loadSettings();
+  if (file) {
+    const lastSlash = file.lastIndexOf("/");
+    const dir = lastSlash > 0 ? file.slice(0, lastSlash) : "";
+    if (dir) {
+      $("#fix-dir").value = dir;
+    }
+    await browseAudio();
+    const item = findFileItemByPath(file);
+    if (item) {
+      await selectFlacFile(item);
+    } else {
+      $("#fix-file-list").innerHTML =
+        '<div class="status">That file is not in this folder listing. Set the path above, click <strong>Browse</strong>, then select the file. Or <a href="/fix">open Fix</a> without a link.</div>';
+    }
+    if (file || q) {
+      try {
+        history.replaceState({}, "", "/fix");
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  } else {
+    await browseAudio();
+  }
+  updateRenamePreview();
+}
+
+initFixPage();

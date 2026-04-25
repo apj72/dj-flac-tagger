@@ -5,5 +5,8 @@
   "platinum_notes_app": "Platinum Notes 10",
   "pn_output_suffix": "_PN",
   "target_lufs": -11.5,
-  "target_true_peak": -1.0
+  "target_true_peak": -1.0,
+  "loudness_verify_enabled": true,
+  "loudness_verify_tolerance_lufs": 2.0,
+  "loudness_verify_tolerance_tp": 0.35
 }

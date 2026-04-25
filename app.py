@@ -1,7 +1,9 @@
 import base64
+import difflib
 import json
 import os
 import re
+import time
 import shutil
 import subprocess
 import sys
@@ -77,6 +79,11 @@ def load_config():
         "target_true_peak": -1.0,
         # extract_profile: flac | mp3_320 | aac_256
         "extract_profile": "flac",
+        # When normalised extract finishes, re-measure the output; if I/TP miss Settings, re-encode once
+        # from a fresh source analysis (stale client loudnorm params caused rare over-boost; PN gets a good base).
+        "loudness_verify_enabled": True,
+        "loudness_verify_tolerance_lufs": 2.0,
+        "loudness_verify_tolerance_tp": 0.35,
     }
     try:
         with open(CONFIG_PATH) as f:
@@ -331,6 +338,46 @@ def analyse_loudness(filepath):
         "target_tp": ttp,
         "loudnorm_params": loudnorm,
     }
+
+
+def _loudnorm_params_usable(loudnorm_params):
+    """True if ffmpeg returned measured input_* for two-pass EBU R128."""
+    if not loudnorm_params or "input_i" not in loudnorm_params:
+        return False
+    return True
+
+
+def normalised_output_meets_targets(
+    loudnorm_params,
+    target_lufs,
+    target_tp,
+    tol_lufs=2.0,
+    tol_tp=0.35,
+):
+    """
+    Check first-pass I/TP of a *rendered* file against Settings (same as diagnostic script).
+    Fails e.g. when true peak is above the configured ceiling.
+    """
+    if not _loudnorm_params_usable(loudnorm_params):
+        return False, ["loudnorm measurement missing or empty (ffmpeg)"]
+    try:
+        i = float(loudnorm_params.get("input_i", -99))
+        tp = float(loudnorm_params.get("input_tp", 99))
+    except (TypeError, ValueError):
+        return False, ["invalid input_i or input_tp in loudnorm result"]
+    reasons = []
+    ok = True
+    if abs(i - target_lufs) > tol_lufs:
+        ok = False
+        reasons.append(
+            f"integrated {i:+.2f} LUFS vs target {target_lufs:+.2f} (±{tol_lufs} LUFS allowed)"
+        )
+    if tp > target_tp + tol_tp:
+        ok = False
+        reasons.append(
+            f"true peak {tp:+.2f} dBTP vs ceiling {target_tp:+.2f} (max +{tol_tp} dB over ceiling)"
+        )
+    return ok, reasons
 
 
 def _ffmpeg_loudnorm_encode(input_path, output_path, loudnorm_params, profile_key, target_lufs=None, target_tp=None):
@@ -1202,6 +1249,133 @@ def search_discogs(query, limit=5):
     return results
 
 
+def search_query_from_ableton_stem(stem: str) -> dict:
+    """
+    Build an online search query from a file stem (matches Fix Metadata / fix.js intent).
+    """
+    p = parse_ableton_style_wav_stem(stem)
+    if p.get("matched") and (p.get("artist") or "").strip() and (p.get("title") or "").strip():
+        a = p["artist"].strip()
+        t = p["title"].strip()
+        q = f"{a} {t}"
+        return {
+            "query": re.sub(r"\s+", " ", q).strip(),
+            "title_hint": t,
+            "artist_hint": a,
+            "pattern_matched": True,
+        }
+    if (p.get("title") or "").strip() and not p.get("matched"):
+        loose = p["title"].strip()
+        return {
+            "query": loose,
+            "title_hint": loose,
+            "artist_hint": "",
+            "pattern_matched": False,
+        }
+    if p.get("loose"):
+        return {
+            "query": p["loose"],
+            "title_hint": "",
+            "artist_hint": "",
+            "pattern_matched": False,
+        }
+    t = re.sub(r"\s+", " ", stem.replace("_", " ")).strip()
+    return {
+        "query": t,
+        "title_hint": "",
+        "artist_hint": "",
+        "pattern_matched": False,
+    }
+
+
+def _best_track_in_list(tracklist: list, title_hint: str) -> dict:
+    if not tracklist:
+        return None
+    hint = re.sub(r"\s+", " ", (title_hint or "").lower().strip())
+    if not hint:
+        return tracklist[0]
+    best = None
+    best_score = 0.0
+    for tr in tracklist:
+        tt = re.sub(r"\s+", " ", (tr.get("title") or "").lower().strip())
+        if not tt:
+            continue
+        s = difflib.SequenceMatcher(None, hint, tt).ratio()
+        if hint in tt or tt in hint:
+            s = max(s, 0.88)
+        if s > best_score:
+            best_score = s
+            best = tr
+    if best and best_score >= 0.32:
+        return best
+    return tracklist[0]
+
+
+def _resolve_metadata_track_hint(meta: dict, track_name: str) -> None:
+    """Use filename-derived track title to pick a track on multi-track releases (mutates meta)."""
+    if not meta or not (track_name or "").strip():
+        return
+    track_name = track_name.strip()
+    tl = meta.get("tracklist") or []
+    if len(tl) > 1:
+        best = _best_track_in_list(tl, track_name)
+        if best:
+            meta["title"] = (best.get("title") or "").strip()
+            pos = (best.get("position") or "").strip()
+            alb = (meta.get("album") or "").strip()
+            if pos and alb:
+                meta["comment"] = f"{pos} — {alb}"
+    elif len(tl) == 1 and not (meta.get("title") or "").strip():
+        meta["title"] = (tl[0].get("title") or "").strip()
+    if not (meta.get("title") or "").strip():
+        meta["title"] = track_name
+
+
+def _metadata_from_url(url: str) -> dict:
+    meta = {}
+    if not (url or "").strip():
+        return meta
+    try:
+        if "bandcamp.com" in url:
+            meta = scrape_bandcamp(url)
+        elif "discogs.com" in url:
+            meta = fetch_discogs(url)
+        elif "music.apple.com" in url:
+            meta = scrape_apple_music(url)
+        elif "spotify.com" in url or "spotify.link" in url:
+            meta = scrape_spotify(url)
+        else:
+            meta = scrape_generic(url)
+    except Exception as e:
+        meta = {"_warning": f"Scrape failed: {e}"}
+    return meta
+
+
+def _iter_flac_paths(root_resolved: str, recursive: bool):
+    if not os.path.isdir(root_resolved):
+        return
+    if recursive:
+        for dirpath, _dirnames, filenames in os.walk(root_resolved):
+            for fn in sorted(filenames):
+                if fn.startswith("."):
+                    continue
+                if not fn.lower().endswith(".flac"):
+                    continue
+                p = os.path.join(dirpath, fn)
+                try:
+                    if os.path.isfile(p):
+                        yield p
+                except OSError:
+                    continue
+    else:
+        try:
+            for f in sorted(Path(root_resolved).iterdir()):
+                if f.is_file() and not f.name.startswith(".") and f.suffix.lower() == ".flac":
+                    yield str(f)
+        except OSError:
+            return
+
+
 # ---------------------------------------------------------------------------
 # API routes
 # ---------------------------------------------------------------------------
@@ -1226,6 +1400,11 @@ def settings_page():
     return app.send_static_file("settings.html")
 
 
+@app.route("/convert")
+def convert_wav_page():
+    return app.send_static_file("convert.html")
+
+
 @app.route("/api/search")
 def search():
     """Search iTunes + Discogs for a track by query string."""
@@ -1246,6 +1425,270 @@ def search():
             combined.append(r)
 
     return jsonify({"results": combined})
+
+
+@app.route("/bulk-fix")
+def bulk_fix_page():
+    return app.send_static_file("bulk-fix.html")
+
+
+@app.route("/api/bulk-fix/scan", methods=["GET"])
+def bulk_fix_scan():
+    """List a slice of .flac files with parsed search query from each filename (for batch metadata)."""
+    root = (request.args.get("path") or request.args.get("dir") or "").strip()
+    if not root:
+        return jsonify({"error": "path or dir query parameter required"}), 400
+    try:
+        off = int(request.args.get("offset", 0))
+    except (TypeError, ValueError):
+        off = 0
+    try:
+        lim = int(request.args.get("limit", 25))
+    except (TypeError, ValueError):
+        lim = 25
+    lim = max(1, min(lim, 200))
+    recursive = request.args.get("recursive", "1").lower() in ("1", "true", "yes", "on")
+    try:
+        root_r = os.path.realpath(resolve(root))
+    except (OSError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+    if not os.path.isdir(root_r):
+        return jsonify({"error": f"Not a directory: {root_r}"}), 404
+    all_paths = list(_iter_flac_paths(root_r, recursive))
+    total = len(all_paths)
+    if off < 0:
+        off = 0
+    batch = all_paths[off : off + lim]
+    items = []
+    for p in batch:
+        stem = Path(p).stem
+        sq = search_query_from_ableton_stem(stem)
+        items.append({
+            "filepath": p,
+            "basename": os.path.basename(p),
+            "query": sq["query"],
+            "title_hint": sq.get("title_hint") or "",
+            "artist_hint": sq.get("artist_hint") or "",
+            "pattern_matched": sq.get("pattern_matched", False),
+        })
+    return jsonify({
+        "root": root_r,
+        "total": total,
+        "offset": off,
+        "limit": lim,
+        "items": items,
+    })
+
+
+@app.route("/api/bulk-fix/suggest", methods=["POST"])
+def bulk_fix_suggest():
+    """For each file path, run the same iTunes + Discogs search as /api/search (rate-limited)."""
+    data = request.get_json() or {}
+    paths = data.get("paths") or data.get("filepaths") or []
+    if not isinstance(paths, list):
+        return jsonify({"error": "paths must be a list"}), 400
+    paths = [p for p in paths if (p or "").strip()]
+    if len(paths) > 60:
+        return jsonify({"error": "Maximum 60 paths per suggest request (use multiple batches)."}), 400
+    delay = 0.12
+    items = []
+    for p in paths:
+        p = p.strip()
+        if not p or not os.path.isfile(p):
+            items.append({
+                "filepath": p,
+                "query": "",
+                "results": [],
+                "error": "File not found",
+            })
+            time.sleep(delay)
+            continue
+        stem = Path(p).stem
+        sq = search_query_from_ableton_stem(stem)
+        q = sq.get("query") or ""
+        if not q:
+            items.append({
+                "filepath": p,
+                "query": "",
+                "results": [],
+                "error": "Empty search query from filename",
+            })
+            time.sleep(delay)
+            continue
+        itunes = search_itunes(q, limit=6)
+        time.sleep(delay)
+        discogs = search_discogs(q, limit=4)
+        time.sleep(delay)
+        seen = set()
+        combined = []
+        for r in itunes + discogs:
+            key = (r.get("title", "").lower().strip(), (r.get("artist") or "").lower().strip())
+            if key in seen:
+                continue
+            seen.add(key)
+            combined.append(r)
+        items.append({
+            "filepath": p,
+            "query": q,
+            "title_hint": sq.get("title_hint") or "",
+            "results": combined,
+            "error": None,
+        })
+    return jsonify({"items": items})
+
+
+def _retag_file_from_source_url(
+    filepath: str,
+    source_url: str,
+    title_hint: str,
+    rename_to_tags: bool,
+    record_in_log: bool,
+) -> dict:
+    meta = _metadata_from_url(source_url)
+    th = (title_hint or "").strip()
+    if th:
+        _resolve_metadata_track_hint(meta, th)
+    if not (meta.get("title") or "").strip() and th:
+        meta["title"] = th
+
+    mcopy = {k: v for k, v in meta.items() if not k.startswith("_") and k != "tracklist" and k != "source"}
+    for drop in ("artwork_url",):
+        mcopy.pop(drop, None)
+    for key, val in list(mcopy.items()):
+        if val is None or val == "":
+            del mcopy[key]
+    if not mcopy.get("title") and not mcopy.get("artist") and not mcopy.get("album"):
+        err = (meta.get("_warning") or "No usable metadata (title, artist, or album) from URL.").strip()
+        return {"status": "error", "reason": err}
+
+    artwork_url = (meta.get("artwork_url") or "").strip()
+    artwork_bytes, artwork_mime = None, None
+    if artwork_url:
+        try:
+            artwork_bytes, artwork_mime = fetch_artwork(artwork_url)
+        except Exception as e:
+            return {"status": "error", "reason": f"artwork: {e}"}
+
+    su = (source_url or "").strip()
+    if su:
+        mcopy["source_url"] = su
+
+    planned_new_name = None
+    if rename_to_tags:
+        ext = Path(filepath).suffix.lower() or ".flac"
+        planned_new_name = _basename_from_artist_title_for_rename(
+            mcopy.get("artist", ""),
+            mcopy.get("title", ""),
+            ext,
+        )
+        if not planned_new_name:
+            return {
+                "status": "error",
+                "reason": "Rename: need a title or artist in fetched metadata, or turn off rename.",
+            }
+        dest_dir = os.path.dirname(filepath)
+        candidate = os.path.join(dest_dir, planned_new_name)
+        if os.path.basename(filepath) != planned_new_name and os.path.exists(candidate):
+            try:
+                if not os.path.samefile(filepath, candidate):
+                    return {
+                        "status": "error",
+                        "reason": f"Target filename exists: {planned_new_name}",
+                    }
+            except (OSError, FileNotFoundError):
+                return {"status": "error", "reason": f"Target filename exists: {planned_new_name}"}
+
+    try:
+        apply_metadata(filepath, mcopy, artwork_bytes, artwork_mime)
+    except Exception as e:
+        return {"status": "error", "reason": str(e)}
+
+    out_path = filepath
+    renamed = False
+    if rename_to_tags and planned_new_name:
+        dest_dir = os.path.dirname(filepath)
+        candidate = os.path.join(dest_dir, planned_new_name)
+        if os.path.basename(filepath) != planned_new_name:
+            try:
+                os.rename(filepath, candidate)
+                out_path = candidate
+                renamed = True
+            except OSError as e:
+                return {
+                    "status": "error",
+                    "reason": f"Tags saved, rename failed: {e}",
+                }
+
+    if record_in_log and su:
+        log_extraction({
+            "kind": "fix",
+            "filename": os.path.basename(out_path),
+            "output_path": out_path,
+            "target_path": out_path,
+            "metadata": {k: v for k, v in mcopy.items() if k != "source_url"},
+            "artwork_url": artwork_url,
+            "metadata_source_url": su,
+            "metadata_source_type": infer_metadata_source_type(su),
+        })
+    return {"status": "ok", "filepath": out_path, "renamed": renamed}
+
+
+@app.route("/api/bulk-fix/apply", methods=["POST"])
+def bulk_fix_apply():
+    """
+    For each item with source_url, fetch remote metadata, match track when possible,
+    and write tags (same as Fix Metadata + Save).
+    """
+    data = request.get_json() or {}
+    items = data.get("items") or []
+    if not isinstance(items, list) or not items:
+        return jsonify({"error": "items (non-empty list) required"}), 400
+    if len(items) > 40:
+        return jsonify({"error": "Maximum 40 items per apply request."}), 400
+    rename_to_tags = bool(data.get("rename_to_tags", False))
+    record_in_log = data.get("record_in_log", True)
+    if isinstance(record_in_log, str):
+        record_in_log = record_in_log.lower() in ("1", "true", "yes", "on")
+    results = []
+    for raw in items:
+        filepath = (raw.get("filepath") or "").strip()
+        source_url = (raw.get("source_url") or raw.get("url") or "").strip()
+        if raw.get("skip"):
+            results.append({
+                "filepath": filepath,
+                "status": "skipped",
+            })
+            continue
+        if not filepath or not source_url:
+            results.append({
+                "filepath": filepath,
+                "status": "error",
+                "reason": "filepath and source_url required",
+            })
+            continue
+        if not os.path.isfile(filepath):
+            results.append({
+                "filepath": filepath,
+                "status": "error",
+                "reason": "File not found",
+            })
+            continue
+        th = (raw.get("title_hint") or "").strip()
+        if not th:
+            stem = Path(filepath).stem
+            th = (search_query_from_ableton_stem(stem).get("title_hint") or "").strip()
+        r = _retag_file_from_source_url(
+            filepath, source_url, th, rename_to_tags, record_in_log
+        )
+        r["filepath"] = r.get("filepath", filepath)
+        results.append(r)
+    n_ok = sum(1 for r in results if r.get("status") == "ok")
+    n_err = sum(1 for r in results if r.get("status") == "error")
+    n_sk = sum(1 for r in results if r.get("status") == "skipped")
+    return jsonify({
+        "summary": {"ok": n_ok, "errors": n_err, "skipped": n_sk},
+        "results": results,
+    })
 
 
 @app.route("/api/settings", methods=["GET"])
@@ -1285,6 +1728,22 @@ def update_settings():
         pk = (data["extract_profile"] or "flac").strip().lower()
         if pk in EXTRACT_PROFILES:
             cfg["extract_profile"] = pk
+    if "loudness_verify_enabled" in data:
+        cfg["loudness_verify_enabled"] = bool(data["loudness_verify_enabled"])
+    if "loudness_verify_tolerance_lufs" in data and data["loudness_verify_tolerance_lufs"] not in (None, ""):
+        try:
+            v = float(data["loudness_verify_tolerance_lufs"])
+            if 0.5 <= v <= 6.0:
+                cfg["loudness_verify_tolerance_lufs"] = v
+        except (TypeError, ValueError):
+            pass
+    if "loudness_verify_tolerance_tp" in data and data["loudness_verify_tolerance_tp"] not in (None, ""):
+        try:
+            v = float(data["loudness_verify_tolerance_tp"])
+            if 0.1 <= v <= 2.0:
+                cfg["loudness_verify_tolerance_tp"] = v
+        except (TypeError, ValueError):
+            pass
 
     save_config(cfg)
 
@@ -1407,30 +1866,12 @@ def normalise_audio_route():
 
 @app.route("/api/fetch-metadata", methods=["POST"])
 def fetch_metadata():
-    data = request.get_json()
+    data = request.get_json() or {}
     url = (data.get("url") or "").strip()
-    track_name = (data.get("track_name") or "").strip()
-
-    meta = {}
-
-    if url:
-        try:
-            if "bandcamp.com" in url:
-                meta = scrape_bandcamp(url)
-            elif "discogs.com" in url:
-                meta = fetch_discogs(url)
-            elif "music.apple.com" in url:
-                meta = scrape_apple_music(url)
-            elif "spotify.com" in url or "spotify.link" in url:
-                meta = scrape_spotify(url)
-            else:
-                meta = scrape_generic(url)
-        except Exception as e:
-            meta["_warning"] = f"Scrape failed: {e}"
-
-    if track_name and not meta.get("title"):
-        meta["title"] = track_name
-
+    track_name = (data.get("track_name") or data.get("track_name_hint") or "").strip()
+    meta = _metadata_from_url(url)
+    if track_name:
+        _resolve_metadata_track_hint(meta, track_name)
     return jsonify(meta)
 
 
@@ -1473,12 +1914,81 @@ def extract():
         return jsonify({"error": f"Output file already exists: {output_path}"}), 409
 
     normalise = data.get("normalise", False)
+    # Always measure the source in this request; client loudnorm JSON can be from another file/session.
     loudnorm_params = data.get("loudnorm_params")
+    loudness_retried = False
+    loudness_verify_warning = None
+    tgt_lufs, tgt_tp = get_normalisation_targets()
+
+    if normalise:
+        an_src = analyse_loudness(filepath)
+        lp = an_src.get("loudnorm_params") or {}
+        if not _loudnorm_params_usable(lp):
+            return jsonify({
+                "error": "Loudness analysis of the source failed (ffmpeg did not return loudnorm measurements). "
+                "Is ffmpeg installed? Try the level meters (Analyse) on this file, then extract again.",
+            }), 500
+        loudnorm_params = lp
 
     try:
         source_codec = extract_audio(filepath, output_path, profile_key, normalise, loudnorm_params)
     except subprocess.CalledProcessError as e:
         return jsonify({"error": f"ffmpeg failed: {e.stderr}"}), 500
+
+    if (
+        normalise
+        and cfg.get("loudness_verify_enabled", True)
+    ):
+        try:
+            tol_lufs = float(cfg.get("loudness_verify_tolerance_lufs", 2.0))
+        except (TypeError, ValueError):
+            tol_lufs = 2.0
+        try:
+            tol_tp = float(cfg.get("loudness_verify_tolerance_tp", 0.35))
+        except (TypeError, ValueError):
+            tol_tp = 0.35
+        post = analyse_loudness(output_path)
+        pparams = post.get("loudnorm_params") or {}
+        ok, reasons = normalised_output_meets_targets(pparams, tgt_lufs, tgt_tp, tol_lufs, tol_tp)
+        if not ok:
+            # One retry: fresh source pass + re-encode; fixes stale client params and odd ffmpeg runs.
+            an2 = analyse_loudness(filepath)
+            flp = an2.get("loudnorm_params") or {}
+            if not _loudnorm_params_usable(flp):
+                loudness_verify_warning = (
+                    "Loudness check failed: " + "; ".join(reasons) + " — could not re-analyse the source for a retry."
+                )
+            else:
+                tmp_fd, tmp_path = tempfile.mkstemp(
+                    prefix=".loudness_retry_",
+                    suffix=prof["ext"],
+                    dir=output_dir,
+                )
+                os.close(tmp_fd)
+                loudness_retried = True
+                try:
+                    _ffmpeg_loudnorm_encode(
+                        filepath, tmp_path, flp, profile_key, target_lufs=tgt_lufs, target_tp=tgt_tp
+                    )
+                    os.replace(tmp_path, output_path)
+                except subprocess.CalledProcessError as re_err:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    loudness_verify_warning = f"Loudness re-encode failed: {re_err.stderr or re_err}"
+                else:
+                    post2 = analyse_loudness(output_path)
+                    p2 = post2.get("loudnorm_params") or {}
+                    ok2, reasons2 = normalised_output_meets_targets(
+                        p2, tgt_lufs, tgt_tp, tol_lufs, tol_tp
+                    )
+                    if not ok2:
+                        loudness_verify_warning = (
+                            "Loudness check still failing after a server re-encode: " + "; ".join(reasons2)
+                        )
+                    else:
+                        loudness_verify_warning = None
 
     artwork_bytes, artwork_mime = None, None
     if artwork_url:
@@ -1524,7 +2034,6 @@ def extract():
     suffix = cfg.get("pn_output_suffix", "_PN")
     expected_pn_path = str(pn_derivative_path(output_path, suffix))
 
-    tgt_lufs, tgt_tp = get_normalisation_targets()
     log_index = log_extraction({
         "kind": "extract",
         "filename": filename,
@@ -1539,6 +2048,8 @@ def extract():
         "normalised": normalise,
         "normalise_target_lufs": tgt_lufs if normalise else None,
         "normalise_target_tp": tgt_tp if normalise else None,
+        "loudness_retried": loudness_retried if normalise else None,
+        "loudness_verify_warning": loudness_verify_warning if normalise else None,
         "source_codec": source_codec,
         "pn_output_suffix": suffix,
     })
@@ -1566,6 +2077,9 @@ def extract():
     if normalise:
         result["target_lufs"] = tgt_lufs
         result["target_tp"] = tgt_tp
+        result["loudness_retried"] = loudness_retried
+        if loudness_verify_warning:
+            result["loudness_verify_warning"] = loudness_verify_warning
     if copied_to:
         result["copied_to"] = copied_to
     if copy_error:
@@ -1711,6 +2225,27 @@ def fix_artwork():
         return jsonify({"error": str(e)}), 500
 
 
+def _basename_from_artist_title_for_rename(artist: str, title: str, ext: str) -> str | None:
+    """Build a safe filename (basename) from tag fields; ext must be like .flac."""
+    if not ext.startswith("."):
+        ext = "." + ext
+    a = (artist or "").strip()
+    t = (title or "").strip()
+    if not t and not a:
+        return None
+    if t and a:
+        base = f"{a} - {t}"
+    else:
+        base = t or a
+    base = re.sub(r'[<>:"/\\|?*]', "", base)
+    base = re.sub(r"\s+", " ", base).strip(" .")
+    if not base:
+        return None
+    if len(base) > 200:
+        base = base[:200].rstrip(" .")
+    return f"{base}{ext}"
+
+
 @app.route("/api/retag", methods=["POST"])
 def retag():
     """Re-apply metadata and artwork to an existing audio file from a log entry."""
@@ -1720,6 +2255,7 @@ def retag():
     artwork_url = data.get("artwork_url", "")
     metadata_source_url = (data.get("metadata_source_url") or "").strip()
     record_in_log = data.get("record_in_log", True)
+    rename_to_tags = bool(data.get("rename_to_tags"))
 
     if not filepath or not os.path.isfile(filepath):
         return jsonify({"error": f"File not found: {filepath}"}), 404
@@ -1727,6 +2263,31 @@ def retag():
     meta_for_file = dict(metadata)
     if metadata_source_url:
         meta_for_file["source_url"] = metadata_source_url
+
+    planned_new_name = None
+    if rename_to_tags:
+        ext = Path(filepath).suffix.lower() or ".flac"
+        planned_new_name = _basename_from_artist_title_for_rename(
+            metadata.get("artist", ""),
+            metadata.get("title", ""),
+            ext,
+        )
+        if not planned_new_name:
+            return jsonify({
+                "error": "Rename: enter at least a title or artist so a new filename can be built.",
+            }), 400
+        dest_dir = os.path.dirname(filepath)
+        candidate = os.path.join(dest_dir, planned_new_name)
+        if os.path.basename(filepath) != planned_new_name and os.path.exists(candidate):
+            try:
+                if not os.path.samefile(filepath, candidate):
+                    return jsonify({
+                        "error": f"That filename is already in use: {planned_new_name}. Change title/artist or remove the other file first.",
+                    }), 409
+            except (OSError, FileNotFoundError):
+                return jsonify({
+                    "error": f"That filename is already in use: {planned_new_name}.",
+                }), 409
 
     artwork_bytes, artwork_mime = None, None
     if artwork_url:
@@ -1740,19 +2301,38 @@ def retag():
     except Exception as e:
         return jsonify({"error": f"Tagging failed: {e}"}), 500
 
+    out_path = filepath
+    renamed = False
+    if rename_to_tags and planned_new_name:
+        dest_dir = os.path.dirname(filepath)
+        candidate = os.path.join(dest_dir, planned_new_name)
+        if os.path.basename(filepath) != planned_new_name:
+            try:
+                os.rename(filepath, candidate)
+                out_path = candidate
+                renamed = True
+            except OSError as e:
+                return jsonify({
+                    "error": f"Tags were saved, but rename failed: {e}",
+                }), 500
+
     if record_in_log and (metadata_source_url or artwork_url):
         log_extraction({
             "kind": "fix",
-            "filename": os.path.basename(filepath),
-            "output_path": filepath,
-            "target_path": filepath,
+            "filename": os.path.basename(out_path),
+            "output_path": out_path,
+            "target_path": out_path,
             "metadata": metadata,
             "artwork_url": artwork_url,
             "metadata_source_url": metadata_source_url,
             "metadata_source_type": infer_metadata_source_type(metadata_source_url),
         })
 
-    return jsonify({"status": "ok", "filepath": filepath})
+    return jsonify({
+        "status": "ok",
+        "filepath": out_path,
+        "renamed": renamed,
+    })
 
 
 @app.route("/api/retag-batch", methods=["POST"])
@@ -1803,6 +2383,42 @@ def retag_batch():
     return jsonify({"results": results})
 
 
+@app.route("/api/browse-folders")
+def browse_folders():
+    """
+    List subdirectories for a server-side folder picker (Fix Metadata).
+    The browser cannot obtain full disk paths from a native dialog; navigation is in-app.
+    """
+    raw = (request.args.get("path") or "").strip()
+    if not raw:
+        return jsonify({"error": "path query parameter required"}), 400
+    try:
+        path = os.path.realpath(resolve(raw))
+    except (OSError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+    if not os.path.isdir(path):
+        return jsonify({"error": f"Not a directory: {path}"}), 404
+    par = os.path.dirname(path)
+    if par == path:
+        parent_path = None
+    else:
+        parent_path = par
+    dirs = []
+    try:
+        for entry in sorted(Path(path).iterdir()):
+            if not entry.is_dir():
+                continue
+            if entry.name.startswith("."):
+                continue
+            try:
+                dirs.append({"name": entry.name, "path": str(entry.resolve())})
+            except OSError:
+                continue
+    except OSError as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"path": path, "parent": parent_path, "directories": dirs})
+
+
 @app.route("/api/browse-audio")
 def browse_audio():
     cfg = load_config()
@@ -1820,6 +2436,397 @@ def browse_audio():
                 "size_mb": round(f.stat().st_size / (1024 * 1024), 1),
             })
     return jsonify({"directory": directory, "files": files})
+
+
+@app.route("/api/browse-wav")
+def browse_wav():
+    """List .wav files in a directory (WAV → FLAC tab)."""
+    cfg = load_config()
+    directory = request.args.get("dir", cfg.get("destination_dir") or cfg.get("source_dir", ""))
+    directory = resolve(directory)
+    if not os.path.isdir(directory):
+        return jsonify({"error": f"Directory not found: {directory}"}), 404
+
+    files = []
+    for f in sorted(Path(directory).iterdir()):
+        if f.suffix.lower() != ".wav" or not f.is_file():
+            continue
+        try:
+            files.append({
+                "name": f.name,
+                "path": str(f),
+                "size_mb": round(f.stat().st_size / (1024 * 1024), 1),
+            })
+        except OSError:
+            continue
+    return jsonify({"directory": directory, "files": files})
+
+
+def _ffmpeg_wav_to_flac_file(wav_path: str, flac_path: str) -> None:
+    d = os.path.dirname(flac_path)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    subprocess.run(
+        [
+            "ffmpeg", "-hide_banner", "-y", "-i", wav_path,
+            "-c:a", "flac", "-compression_level", "12",
+            flac_path,
+        ],
+        capture_output=True, text=True, check=True,
+    )
+
+
+def parse_ableton_style_wav_stem(stem: str) -> dict:
+    """
+    Parse DJ / Ableton-style stem: e.g. A06 - 139 - Members Of Mayday - 10 In 01
+    → artist + title. Aligns with static/fix.js parseAbletonStyleFilename.
+    """
+    t = re.sub(r"_PN$", "", stem, flags=re.I).strip()
+    if not t:
+        return {"artist": "", "title": "", "matched": False, "loose": ""}
+    m4 = re.match(
+        r"^(?:[A-Za-z]?\d+|Track\s*\d+|\d+)\s*-\s*\d{2,3}\s*-\s*(.+?)\s*-\s*(.+)$",
+        t,
+        re.I,
+    )
+    if m4:
+        return {
+            "artist": m4.group(1).strip(),
+            "title": m4.group(2).strip(),
+            "matched": True,
+            "loose": "",
+        }
+    stripped = re.sub(
+        r"^(?:[A-Za-z]?\d+|Track\s*\d+|\d+)\s*-\s*\d{2,3}\s*-\s*",
+        "",
+        t,
+        flags=re.I,
+    ).strip()
+    rest = stripped or t
+    rest = re.sub(r"\s*-\s*", " ", rest).replace("_", " ")
+    rest = re.sub(r"\s+", " ", rest).strip()
+    return {"artist": "", "title": rest, "matched": False, "loose": rest}
+
+
+def _sanitize_basename(s: str) -> str:
+    s = re.sub(r'[<>:"/\\|?*]', "", s)
+    s = re.sub(r"\s+", " ", s).strip(" .")
+    if len(s) > 200:
+        s = s[:200].rstrip(" .")
+    return s or "track"
+
+
+def _flat_flac_filename_from_parsed(parsed: dict, stem_fallback: str) -> str:
+    if parsed.get("matched") and parsed.get("artist") and parsed.get("title"):
+        base = f"{parsed['artist']} - {parsed['title']}"
+    elif parsed.get("matched") and parsed.get("title"):
+        base = parsed["title"]
+    elif parsed.get("loose") or (not parsed.get("matched") and (parsed.get("title") or "").strip()):
+        base = (parsed.get("loose") or parsed.get("title") or stem_fallback).strip()
+    else:
+        base = stem_fallback
+    return _sanitize_basename(base) + ".flac"
+
+
+def _unique_path_in_dir(directory: str, filename: str) -> str:
+    path = os.path.join(directory, filename)
+    if not os.path.exists(path):
+        return path
+    base, ext = os.path.splitext(filename)
+    n = 2
+    while n < 5000:
+        cand = os.path.join(directory, f"{base} {n}{ext}")
+        if not os.path.exists(cand):
+            return cand
+        n += 1
+    return os.path.join(directory, f"{base} {n}{ext}")
+
+
+def _embed_artist_title_tags_from_wav_stem(flac_path: str, wav_stem: str) -> None:
+    p = parse_ableton_style_wav_stem(wav_stem)
+    artist = (p.get("artist") or "").strip()
+    title = (p.get("title") or "").strip()
+    if not title and p.get("loose"):
+        title = p["loose"].strip()
+    if not artist and not title:
+        return
+    audio = FLAC(flac_path)
+    if artist:
+        audio["artist"] = [artist]
+    if title:
+        audio["title"] = [title]
+    audio.save()
+
+
+def _iter_wav_paths(root_resolved: str, recursive: bool):
+    """Yield every .wav file under root (non-hidden). root_resolved must be real. """
+    if not os.path.isdir(root_resolved):
+        return
+    if recursive:
+        for dirpath, _dirnames, filenames in os.walk(root_resolved):
+            for fn in sorted(filenames):
+                if fn.startswith("."):
+                    continue
+                if not fn.lower().endswith(".wav"):
+                    continue
+                p = os.path.join(dirpath, fn)
+                try:
+                    if os.path.isfile(p):
+                        yield p
+                except OSError:
+                    continue
+    else:
+        try:
+            for f in sorted(Path(root_resolved).iterdir()):
+                if f.is_file() and not f.name.startswith(".") and f.suffix.lower() == ".wav":
+                    yield str(f)
+        except OSError:
+            return
+
+
+def _list_wav_paths_sorted(root_resolved: str, recursive: bool) -> list:
+    """Stable sorted list of all .wav paths (for batch offset/limit)."""
+    return sorted((p for p in _iter_wav_paths(root_resolved, recursive)), key=lambda p: p.lower())
+
+
+def _bulk_flac_output_path(wav_path: str, root_resolved: str, output_mode: str, dest_resolved) -> str:
+    """For destination, mirror the folder tree under dest (rel. to root) so names don’t collide."""
+    if output_mode == "same":
+        return str(Path(wav_path).with_suffix(".flac"))
+    if not dest_resolved:
+        return str(Path(wav_path).with_suffix(".flac"))
+    try:
+        rel = os.path.relpath(wav_path, start=root_resolved)
+    except ValueError:
+        rel = os.path.basename(wav_path)
+    if rel.startswith(".."):
+        rel = os.path.basename(wav_path)
+    out = os.path.join(dest_resolved, os.path.splitext(rel)[0] + ".flac")
+    return os.path.normpath(out)
+
+
+@app.route("/api/scan-wav-bulk")
+def scan_wav_bulk():
+    """Count .wav files under a root (for bulk convert UI)."""
+    root = (request.args.get("path") or request.args.get("root") or "").strip()
+    if not root:
+        return jsonify({"error": "path or root query parameter required"}), 400
+    recursive = request.args.get("recursive", "1").lower() in ("1", "true", "yes", "on")
+    try:
+        root_r = os.path.realpath(resolve(root))
+    except (OSError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+    if not os.path.isdir(root_r):
+        return jsonify({"error": f"Not a directory: {root_r}"}), 404
+    n = 0
+    for _p in _iter_wav_paths(root_r, recursive):
+        n += 1
+    return jsonify({
+        "root": root_r,
+        "count": n,
+        "recursive": recursive,
+    })
+
+
+@app.route("/api/convert-wav-bulk", methods=["POST"])
+def convert_wav_bulk():
+    """
+    Recursively convert every .wav under a root. WAVs are not deleted.
+    output=same: each .flac next to its .wav. output=destination: mirroring subpaths under
+    Settings destination. output=custom: all FLACs into target_dir, named from parsed
+    slot-BPM-artist-title when possible (flat Rekordbox-style library folder).
+    """
+    data = request.get_json() or {}
+    root = (data.get("root_dir") or data.get("path") or data.get("root") or "").strip()
+    output_mode = (data.get("output") or "same").strip().lower()
+    if output_mode not in ("same", "destination", "custom"):
+        output_mode = "same"
+    target_dir = (data.get("target_dir") or "").strip()
+    rec = data.get("recursive", True)
+    if isinstance(rec, str):
+        rec = rec.lower() in ("1", "true", "yes", "on")
+    skip = data.get("skip_if_flac_exists", True)
+    if isinstance(skip, str):
+        skip = skip.lower() in ("1", "true", "yes", "on")
+
+    raw_off = data.get("offset", 0)
+    raw_lim = data.get("limit")
+    try:
+        offset = int(raw_off)
+    except (TypeError, ValueError):
+        offset = 0
+    offset = max(0, offset)
+    limit = None
+    if raw_lim is not None and raw_lim != "":
+        try:
+            limit = int(raw_lim)
+        except (TypeError, ValueError):
+            limit = None
+        if limit is not None:
+            limit = max(1, min(limit, 5000))
+
+    if not root:
+        return jsonify({"error": "root_dir (or path) required"}), 400
+    if output_mode == "custom" and not target_dir:
+        return jsonify({
+            "error": "Set a target folder (target_dir) when using single-folder output, or change output mode.",
+        }), 400
+    try:
+        root_r = os.path.realpath(resolve(root))
+    except (OSError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+    if not os.path.isdir(root_r):
+        return jsonify({"error": f"Not a directory: {root_r}"}), 404
+
+    target_r = None
+    if output_mode == "custom":
+        try:
+            tpath = resolve(target_dir)
+            target_r = os.path.realpath(tpath)
+            os.makedirs(target_r, exist_ok=True)
+        except (OSError, TypeError) as e:
+            return jsonify({"error": f"Target folder: {e}"}), 400
+
+    cfg = load_config()
+    dest_resolved = None
+    if output_mode == "destination":
+        d = (cfg.get("destination_dir") or "").strip()
+        if not d:
+            return jsonify({
+                "error": "Set a destination folder in Settings, or use “same as each WAV” for output.",
+            }), 400
+        dpath = resolve(d)
+        if not os.path.isdir(dpath):
+            return jsonify({
+                "error": f"Destination folder does not exist: {dpath}",
+            }), 400
+        dest_resolved = os.path.realpath(dpath)
+
+    all_wavs = _list_wav_paths_sorted(root_r, rec)
+    total_wavs = len(all_wavs)
+    if limit is not None:
+        wav_queue = all_wavs[offset : offset + limit]
+    else:
+        wav_queue = all_wavs[offset:]
+
+    ok = 0
+    skipped = 0
+    errors = []  # sample details; "errors" in summary = total count
+    err_n = 0
+    err_cap = 100
+    for wav in wav_queue:
+        stem = Path(wav).stem
+        if output_mode == "custom" and target_r is not None:
+            parsed = parse_ableton_style_wav_stem(stem)
+            base_fname = _flat_flac_filename_from_parsed(parsed, stem)
+            candidate = os.path.join(target_r, base_fname)
+            if skip and os.path.isfile(candidate):
+                skipped += 1
+                continue
+            if os.path.isfile(candidate):
+                out = _unique_path_in_dir(target_r, base_fname)
+            else:
+                out = candidate
+        else:
+            out = _bulk_flac_output_path(wav, root_r, output_mode, dest_resolved)
+            if skip and os.path.isfile(out):
+                skipped += 1
+                continue
+        try:
+            _ffmpeg_wav_to_flac_file(wav, out)
+        except (subprocess.CalledProcessError, OSError) as e:
+            err_n += 1
+            msg = e.stderr if isinstance(e, subprocess.CalledProcessError) and getattr(e, "stderr", None) else str(e)
+            if len(errors) < err_cap:
+                errors.append({"source": wav, "error": (msg or str(e))[:500]})
+            continue
+        try:
+            _embed_artist_title_tags_from_wav_stem(out, stem)
+        except Exception as te:
+            err_n += 1
+            if len(errors) < err_cap:
+                errors.append({"source": wav, "error": f"Tags: {te}"[:500]})
+            continue
+        ok += 1
+    j = {
+        "root": root_r,
+        "output": output_mode,
+        "summary": {
+            "converted": ok,
+            "skipped": skipped,
+            "errors": err_n,
+        },
+        "errors": errors,
+        "batch": {
+            "offset": offset,
+            "limit": limit,
+            "total_wavs": total_wavs,
+            "candidates_in_batch": len(wav_queue),
+        },
+    }
+    if target_r is not None:
+        j["target_dir"] = target_r
+    return jsonify(j)
+
+
+@app.route("/api/convert-wav-to-flac", methods=["POST"])
+def convert_wav_to_flac():
+    """Encode a WAV to FLAC with ffmpeg; does not remove or alter the source WAV."""
+    data = request.get_json() or {}
+    filepath = (data.get("filepath") or "").strip()
+    output_mode = (data.get("output") or "same").strip().lower()
+    if output_mode not in ("same", "destination"):
+        output_mode = "same"
+    if not filepath or not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 404
+    if Path(filepath).suffix.lower() != ".wav":
+        return jsonify({"error": "Only .wav source files are supported"}), 400
+
+    cfg = load_config()
+    stem = Path(filepath).stem
+    out_name = f"{stem}.flac"
+
+    if output_mode == "destination":
+        dest = (cfg.get("destination_dir") or "").strip()
+        if not dest:
+            return jsonify({
+                "error": "Destination folder is not set. Open Settings and set the destination folder, or choose “Same folder as the WAV file”.",
+            }), 400
+        dest_dir = resolve(dest)
+        if not os.path.isdir(dest_dir):
+            return jsonify({
+                "error": f"Destination folder does not exist: {dest_dir}. Create it or update Settings.",
+            }), 400
+        output_path = os.path.join(dest_dir, out_name)
+    else:
+        output_path = str(Path(filepath).with_suffix(".flac"))
+
+    if os.path.exists(output_path):
+        return jsonify({"error": f"Output file already exists: {output_path}"}), 409
+
+    try:
+        _ffmpeg_wav_to_flac_file(filepath, output_path)
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error": f"ffmpeg failed: {e.stderr or e}"}), 500
+
+    tag_error = None
+    try:
+        _embed_artist_title_tags_from_wav_stem(output_path, stem)
+    except Exception as e:
+        tag_error = str(e)
+
+    try:
+        stat = os.stat(output_path)
+    except OSError:
+        stat = None
+    j = {
+        "output_path": output_path,
+        "source_path": filepath,
+        "size_mb": round(stat.st_size / (1024 * 1024), 1) if stat else None,
+    }
+    if tag_error:
+        j["tag_error"] = tag_error
+    return jsonify(j)
 
 
 # Keep old endpoint as alias for backwards compatibility

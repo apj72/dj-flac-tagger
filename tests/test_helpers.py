@@ -88,3 +88,22 @@ def test_aformat_opts_preserve_stream(app_module, tmp_path):
     s = app_module._aformat_opts_preserve_stream(str(p))
     assert "sample_fmts=s16" in s
     assert "sample_rates=" in s
+
+
+def test_loudnorm_params_usable(app_module):
+    assert app_module._loudnorm_params_usable({"input_i": "-20"}) is True
+    assert app_module._loudnorm_params_usable({}) is False
+
+
+def test_normalised_output_meets_targets_ok(app_module):
+    p = {"input_i": "-11.5", "input_tp": "-1.1"}
+    ok, reasons = app_module.normalised_output_meets_targets(p, -11.5, -1.0, 2.0, 0.35)
+    assert ok is True
+    assert not reasons
+
+
+def test_normalised_output_meets_targets_hot_true_peak(app_module):
+    p = {"input_i": "-11.54", "input_tp": "0.36"}
+    ok, reasons = app_module.normalised_output_meets_targets(p, -11.5, -1.0, 2.0, 0.35)
+    assert ok is False
+    assert any("true peak" in r for r in reasons)

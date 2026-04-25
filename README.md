@@ -14,17 +14,15 @@ A local web tool for DJs to turn recordings into a clean, tagged library in **mu
 | **`master`** | Stable release; multi-format extract, tag, and normalise as documented below. |
 | **`v2`** | Active development; new features land here first, then merge to `master` when ready. |
 
-### Platinum Notes and file format
+## Recording
 
-If you use **Extract → open in Platinum Notes → watch for processed output**, set Platinum Notes to **Match input format** (and choose an output location **other than** “Replace Original Files,” as Platinum Notes requires). Then the `*_PN` file keeps the **same extension** as the file this app wrote (e.g. both `.flac` or both `.mp3`), matching your **extract format** in Settings. If PN uses a **fixed** output type that does not match, automatic repair may look for the wrong filename.
+This workflow assumes you capture mixes or vinyl rips as **video recordings** (often `.mkv`) using **[OBS Studio](https://obsproject.com/)** with a virtual audio device such as **[BlackHole](https://existential.audio/blackhole/)** on macOS. **OBS** is a practical choice because it is **free and open source**, can **record video** when you want a visual timeline or camera view, and supports **streaming** as well as local capture — one familiar tool for several setups.
 
-## Why?
-
-OBS Studio is primarily a video recorder — it often outputs `.mkv` files even when you only care about audio. If you use a **lossless encoder (e.g. FLAC)** in OBS, that audio sits inside a large container with an unnecessary video stream. This tool strips the audio, optionally normalises it, tags it, embeds artwork, and writes a **library-ready file** in your chosen format. You can also start from **lossy** source codecs and encode to MP3 or AAC when that fits your workflow.
+OBS is still primarily a **video** app: even when you only care about audio, it often writes **`.mkv`** files. If you use a **lossless encoder (e.g. FLAC)** in OBS, that audio sits inside a large container alongside an unnecessary video stream. DJ MetaManager strips the audio, optionally normalises it, tags it, embeds artwork, and writes a **library-ready file** in your chosen format. You can also start from **lossy** source codecs and encode to MP3 or AAC when that fits your workflow.
 
 ## What It Does
 
-Five pages, via tabs at the top:
+Seven pages, via tabs at the top (order: **Extract → Fix Metadata → Inspect → Normalise → WAV → FLAC → Bulk fix → Settings**):
 
 ### Extract (main workflow)
 
@@ -56,12 +54,44 @@ Pick a **supported audio file**, analyse levels, then **normalise** to your **Se
 
 **Sample rate and channel layout** follow the source where applicable so outputs stay e.g. **48 kHz**, not accidentally upsampled.
 
+### Platinum Notes
+
+**Platinum Notes** is optional: many DJs use it for loudness or “polish” passes on finished files. DJ MetaManager can **open an extracted file in Platinum Notes** from the Extract step and **watch for its processed output** (typically a sibling file with a configured suffix, e.g. `_PN`). When that file appears, the app can **re-apply the same tags and artwork** from your processing log, and optionally copy the result next to your library copy. Set the **exact macOS app name** and output suffix under **Settings**.
+
+#### Platinum Notes and file format
+
+If you use **Extract → open in Platinum Notes → watch for processed output**, set Platinum Notes to **Match input format** (and choose an output location **other than** “Replace Original Files,” as Platinum Notes requires). Then the `*_PN` file keeps the **same extension** as the file this app wrote (e.g. both `.flac` or both `.mp3`), matching your **extract format** in Settings. If PN uses a **fixed** output type that does not match, automatic repair may look for the wrong filename.
+
 ### Settings
 
 - **Source / destination** folders  
 - **Extract format** — global default for **Extract** output and **Normalise** re-encode  
 - **Platinum Notes** app name and **`_PN` output suffix**  
 - **Loudness target (LUFS)** and **true peak (dBTP)** — e.g. **-11.5** / **-1** to match Platinum Notes; **-14** / **-1** for streaming-style reference. You may enter **11.5** (positive); it is treated as **-11.5 LUFS**.
+
+### WAV → FLAC
+
+Convert **WAV** recordings to **FLAC** (ffmpeg, compression level 12). Source WAVs are never deleted.
+
+- **Single file** — browse a folder for `.wav`, choose output next to the file or under **Settings → destination**.
+- **Bulk (folder tree)** — convert every `.wav` under a root (optionally recursive). Output modes:
+  - **Next to each WAV** — write `<name>.flac` beside the source.
+  - **Mirror under destination** — preserve subfolders under your **Settings** destination (avoids name collisions across BPM folders).
+  - **One flat folder** — e.g. all converted files into a single Rekordbox-style directory; filenames use **`Slot - BPM - Artist - Title`** when the WAV name matches that pattern.
+- **Tags from filename** — after each encode, **artist** and **title** Vorbis tags are set when the stem matches the Ableton-style pattern (aligned with **Fix Metadata** parsing).
+- **Batching (recommended for large trees)** — by default, each run only processes a **batch** of WAVs in **sorted path order** using **offset** and **limit** (e.g. 25 per run). Use **Next offset** to step through hundreds of files safely; keep **skip if FLAC exists** on to resume. Uncheck “limit each run” only if you intentionally want one run for the whole tree (you’ll get a stronger warning when the scan count is high).
+- After a successful **flat-folder** run, the UI offers **Open Bulk fix for this folder** (or use **Bulk fix** with `?dir=/path/to/folder`).
+
+### Bulk fix (metadata in batches)
+
+For a **folder of FLACs** (often the same flat folder as **WAV → FLAC** output), review and apply **Discogs / Apple Music** (and other) metadata without doing one file at a time on **Fix Metadata**.
+
+1. **Scan & load** — choose root, **files per pass**, and **offset** (same idea as WAV batching: stable sorted list).
+2. **Fetch online matches** — runs the same combined **iTunes + Discogs search** as Fix, with gentle rate spacing between files.
+3. **Review** — per row, pick a search result or paste a **Bandcamp / Discogs / Apple / Spotify** URL.
+4. **Apply** — fetches full metadata, matches **multi-track** Discogs releases using the **title hint** from the filename when possible, embeds tags and artwork; optional **rename to `Artist - Title.flac`**. Optional logging to the processing log.
+
+The **WAV → FLAC** tab links here after a flat-folder conversion; **Bulk fix** also reads **`?dir=...`** from the URL to pre-fill the folder path.
 
 ## Recording Setup
 
@@ -178,6 +208,23 @@ Example (see `config.json.example`):
 }
 ```
 
+## API notes (selected)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/browse-wav` | List `.wav` in a directory (WAV → FLAC). |
+| `POST` | `/api/convert-wav-to-flac` | Single WAV → FLAC; optional `output` `same` / `destination`. |
+| `POST` | `/api/convert-wav-bulk` | Bulk WAV → FLAC; `output` `same` / `destination` / `custom` + `target_dir` for flat output. Optional **`offset`**, **`limit`** for batch slices; response includes **`batch`** (`total_wavs`, `candidates_in_batch`, etc.). |
+| `GET` | `/api/bulk-fix/scan` | Paginated `.flac` list with parsed **search query** and **title_hint** from filenames. |
+| `POST` | `/api/bulk-fix/suggest` | Search results per file path (Apple + Discogs). |
+| `POST` | `/api/bulk-fix/apply` | Apply metadata from chosen URLs to many files. |
+| `GET` | `/api/search` | iTunes + Discogs search (used by Fix and Bulk fix). |
+| `POST` | `/api/fetch-metadata` | Full metadata from a URL; optional **`track_name`** / **`track_name_hint`** to pick a track on multi-track releases. |
+| `POST` | `/api/retag` | Save tags/artwork/rename for one file (Fix Metadata). |
+| `GET` | `/api/browse-folders` | Server-side folder picker for paths the browser cannot read. |
+
+Routes **`/convert`**, **`/bulk-fix`**, etc. serve the static HTML shells; the app runs locally (default **http://127.0.0.1:5123**).
+
 ## Development / tests
 
 ```bash
@@ -185,6 +232,8 @@ source venv/bin/activate
 pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
+
+Coverage includes: browse/convert WAV, bulk convert (including **offset/limit** and **custom** flat output + tags), **retag** rename, **bulk-fix** scan/helpers and **fetch-metadata** track hints, normalise API, and shared helpers. Tests that invoke **ffmpeg** skip automatically if it is missing. Network calls to Discogs/Apple are **not** exercised in CI-style tests; bulk **suggest**/**apply** against real APIs are left to manual checks.
 
 ## Project structure
 
@@ -199,10 +248,12 @@ dj-meta-manager/
 ├── start.sh / stop.sh     # Background server helpers
 ├── tests/                 # pytest
 ├── static/
-│   ├── index.html / app.js       # Extract
-│   ├── fix.html / fix.js         # Fix Metadata
-│   ├── inspect.html / inspect.js # Inspect
+│   ├── index.html / app.js          # Extract
+│   ├── fix.html / fix.js            # Fix Metadata
+│   ├── inspect.html / inspect.js    # Inspect
 │   ├── normalise.html / normalise.js
+│   ├── convert.html / convert.js   # WAV → FLAC
+│   ├── bulk-fix.html / bulk-fix.js # Bulk metadata fix
 │   ├── settings.html / settings.js
 │   └── style.css
 └── README.md
