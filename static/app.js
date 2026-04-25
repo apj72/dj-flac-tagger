@@ -396,7 +396,7 @@ async function extractAndTag() {
         "beforeend",
         '<div id="pn-watch-msg" class="hint" style="margin-top:0.75rem">Waiting for Platinum Notes output…</div>'
       );
-      pollAndRepairPn(data.output_path, data.log_index);
+      pollAndRepairPn(data.output_path, data.log_index, data.copied_to || "");
     }
     if (data.source_trashed) {
       browseFiles();
@@ -551,7 +551,7 @@ $("#history-toggle").addEventListener("click", toggleHistory);
 $("#retag-selected-btn").addEventListener("click", retagSelected);
 $("#retag-all-btn").addEventListener("click", retagAll);
 
-async function pollAndRepairPn(baseFlacPath, logIndex) {
+async function pollAndRepairPn(baseFlacPath, logIndex, copiedTo) {
   const watchEl = $("#pn-watch-msg");
   const end = Date.now() + 180000;
   const cfgResp = await fetch("/api/settings");
@@ -563,7 +563,11 @@ async function pollAndRepairPn(baseFlacPath, logIndex) {
     const resp = await fetch("/api/poll-pn-derivative", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ base_flac_path: baseFlacPath, pn_output_suffix: suffix }),
+      body: JSON.stringify({
+        base_flac_path: baseFlacPath,
+        pn_output_suffix: suffix,
+        copied_to: copiedTo || "",
+      }),
     });
     const d = await resp.json();
     if (d.error && d.ready === undefined) {

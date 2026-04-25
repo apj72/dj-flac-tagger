@@ -37,6 +37,60 @@ function syncConvertBulkBatchFields() {
   if (wrap) wrap.classList.toggle("hidden", !on);
 }
 
+function setConvertBulkProgress(visible, label) {
+  const wrap = document.getElementById("convert-bulk-progress-wrap");
+  const lab = document.getElementById("convert-bulk-progress-label");
+  if (!wrap) return;
+  wrap.classList.toggle("hidden", !visible);
+  wrap.setAttribute("aria-busy", visible ? "true" : "false");
+  if (lab && label) lab.textContent = label;
+}
+
+function updateConvertNextOffsetFromResponse(data) {
+  const box = document.getElementById("convert-bulk-next-box");
+  if (!box) return;
+  const b = data.batch || {};
+  if (data.error || b.total_wavs == null || typeof b.candidates_in_batch !== "number") {
+    box.classList.add("hidden");
+    return;
+  }
+  if (b.candidates_in_batch === 0) {
+    box.classList.add("hidden");
+    return;
+  }
+  const nextOff = b.offset + b.candidates_in_batch;
+  const total = b.total_wavs;
+  const v0 = document.getElementById("convert-next-offset-0");
+  const v1 = document.getElementById("convert-next-1-based");
+  const det = document.getElementById("convert-next-offset-detail");
+  if (v0) v0.textContent = String(nextOff);
+  if (v1) v1.textContent = String(nextOff + 1);
+  if (det) {
+    if (nextOff < total) {
+      det.textContent = `${total} WAV(s) in the sorted list. Next run: set Offset to ${nextOff} — that starts at the ${nextOff + 1}${nth(nextOff + 1)} file when counting 1, 2, 3…`;
+    } else {
+      det.textContent = `End of the list (${total} WAV path(s)). You are done unless you add files.`;
+    }
+  }
+  box.dataset.nextOffset = String(nextOff);
+  box.classList.remove("hidden");
+}
+
+function nth(n) {
+  const s = n % 100;
+  if (s >= 11 && s <= 13) return "th";
+  switch (n % 10) {
+    case 1:
+      return "st";
+    case 2:
+      return "nd";
+    case 3:
+      return "rd";
+    default:
+      return "th";
+  }
+}
+
 async function loadSettingsHints() {
   const resp = await fetch("/api/settings");
   const cfg = await resp.json();
@@ -329,11 +383,13 @@ async function runBulkConvert() {
   }
   if (!window.confirm(msg)) return;
 
+  document.getElementById("convert-bulk-next-box")?.classList.add("hidden");
   const out = document.getElementById("convert-bulk-result");
   out.classList.add("hidden");
   const btn = document.getElementById("convert-bulk-run-btn");
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Converting…';
+  setConvertBulkProgress(true, "Converting WAVs to FLAC (server is processing the batch)…");
   const rec = document.getElementById("convert-bulk-recursive")?.checked !== false;
   const sk = document.getElementById("convert-bulk-skip")?.checked !== false;
   const body = {
@@ -349,16 +405,30 @@ async function runBulkConvert() {
     body.offset = off;
     body.limit = perRun;
   }
-  const resp = await fetch("/api/convert-wav-bulk", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await resp.json();
+  let data;
+  try {
+    const resp = await fetch("/api/convert-wav-bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    data = await resp.json();
+  } catch (e) {
+    setConvertBulkProgress(false);
+    out.classList.remove("hidden");
+    out.className = "result error";
+    out.innerHTML = `<div class="result-title">Error</div><div class="result-detail">${String(e.message || e)}</div>`;
+    btn.disabled = false;
+    btn.textContent = "Run conversion";
+    updateBulkRunEnabled();
+    return;
+  }
+  setConvertBulkProgress(false);
   out.classList.remove("hidden");
   if (data.error) {
     out.className = "result error";
     out.innerHTML = `<div class="result-title">Error</div><div class="result-detail">${data.error}</div>`;
+    document.getElementById("convert-bulk-next-box")?.classList.add("hidden");
   } else {
     out.className = "result";
     const s = data.summary || {};
@@ -401,6 +471,7 @@ async function runBulkConvert() {
         </p>`;
     }
     out.innerHTML = `<div class="result-title">Run finished</div><div class="result-detail">${parts.join(" · ")}</div>${rangeNote}${bulkFixCta}${errBlock}`;
+    updateConvertNextOffsetFromResponse(data);
   }
   btn.disabled = false;
   btn.textContent = "Run conversion";
@@ -442,11 +513,24 @@ document.getElementById("convert-bulk-scan-btn")?.addEventListener("click", runB
 document.getElementById("convert-bulk-run-btn")?.addEventListener("click", runBulkConvert);
 document.getElementById("convert-bulk-limited")?.addEventListener("change", syncConvertBulkBatchFields);
 document.getElementById("convert-bulk-next-off-btn")?.addEventListener("click", () => {
+  const box = document.getElementById("convert-bulk-next-box");
+  const fromBox = box && !box.classList.contains("hidden") && box.dataset && box.dataset.nextOffset;
+  if (fromBox) {
+    document.getElementById("convert-bulk-offset").value = fromBox;
+    return;
+  }
   let per = parseInt(document.getElementById("convert-bulk-limit")?.value || "25", 10);
   if (Number.isNaN(per) || per < 1) per = 25;
   let off = parseInt(document.getElementById("convert-bulk-offset")?.value || "0", 10);
   if (Number.isNaN(off) || off < 0) off = 0;
   document.getElementById("convert-bulk-offset").value = String(off + per);
+});
+document.getElementById("convert-apply-next-offset")?.addEventListener("click", () => {
+  const box = document.getElementById("convert-bulk-next-box");
+  const n = (box && box.dataset && box.dataset.nextOffset) || "";
+  if (n === "") return;
+  const el = document.getElementById("convert-bulk-offset");
+  if (el) el.value = n;
 });
 document.getElementById("convert-bulk-root")?.addEventListener("input", updateBulkRunEnabled);
 document.getElementById("convert-bulk-root")?.addEventListener("keydown", (e) => {

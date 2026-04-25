@@ -90,34 +90,155 @@ function setBatchUiEnabled(hasBatch) {
   document.getElementById("bf-apply-btn").disabled = !hasBatch;
 }
 
+function setBfProgress(wrapId, visible, label) {
+  const wrap = document.getElementById(wrapId);
+  const lab = wrapId === "bf-progress-wrap" ? document.getElementById("bf-progress-label") : document.getElementById("bf-step3-progress-label");
+  if (!wrap) return;
+  wrap.classList.toggle("hidden", !visible);
+  if (lab && label) lab.textContent = label;
+}
+
+function nth(n) {
+  const s = n % 100;
+  if (s >= 11 && s <= 13) return "th";
+  switch (n % 10) {
+    case 1:
+      return "st";
+    case 2:
+      return "nd";
+    case 3:
+      return "rd";
+    default:
+      return "th";
+  }
+}
+
+function bfDuplicateTooltip(row) {
+  if (!row.duplicate_basename) return "";
+  const n = row.same_basename_count || 1;
+  const others = row.same_basename_other_paths || [];
+  const lines = [`This filename appears ${n} time(s) under the scanned folder (including this file).`];
+  if (others.length) {
+    lines.push("Other path(s):");
+    others.forEach((p) => lines.push(p));
+  }
+  return lines.join("\n");
+}
+
+function updateBfNextOffsetBox(currentOff, itemsInPage, total) {
+  const box = document.getElementById("bf-next-offset-box");
+  if (!box) return;
+  if (itemsInPage === 0) {
+    box.classList.add("hidden");
+    return;
+  }
+  const nextOff = currentOff + itemsInPage;
+  const v = document.getElementById("bf-next-offset-value");
+  const v1 = document.getElementById("bf-next-1-based");
+  const det = document.getElementById("bf-next-offset-detail");
+  if (v) v.textContent = String(nextOff);
+  if (v1) v1.textContent = String(nextOff + 1);
+  box.dataset.nextOffset = String(nextOff);
+  if (det) {
+    if (nextOff < total) {
+      det.textContent = `${total} FLAC(s) total. For the next batch, set Start offset to ${nextOff} (that starts at the ${nextOff + 1}${nth(nextOff + 1)} file when counting 1, 2, 3…).`;
+    } else {
+      det.textContent = `You have reached the end of the list (${total} file(s)). Nothing more to load with this offset.`;
+    }
+  }
+  box.classList.remove("hidden");
+}
+
 function renderTable() {
   const tbody = $("#bf-tbody");
   if (!batchRows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="status">No rows. Load a batch (step 2).</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="status">No rows. Load a batch (step 2).</td></tr>';
     setBatchUiEnabled(false);
     return;
   }
+  function sourceLabel(source) {
+    if (source === "discogs") return "Discogs";
+    if (source === "apple_music") return "Apple";
+    if (source === "bandcamp") return "Bandcamp";
+    return source ? String(source) : "Web";
+  }
   tbody.innerHTML = batchRows
     .map((row, idx) => {
-      const opts = (row.results || []).map((r, j) => {
+      const opts = (row.results || []).map((r) => {
         const label = [r.title, r.artist || r.album].filter(Boolean).join(" — ");
-        const src = r.source === "discogs" ? "Discogs" : "Apple";
-        const u = r.url || "";
-        return `<option value="${esc(u)}">${esc(src)}: ${esc(label).slice(0, 120)}</option>`;
+        const u = (r.url || "").trim();
+        return `<option value="${esc(u)}">${esc(sourceLabel(r.source))}: ${esc(label).slice(0, 100)}</option>`;
       });
+      const linkBits = (row.results || [])
+        .map((r) => {
+          const u = (r.url || "").trim();
+          if (!u) return "";
+          return `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" class="bf-proof-link" title="Open in new tab">${esc(
+            sourceLabel(r.source)
+          )}</a>`;
+        })
+        .filter(Boolean);
+      const fullUrlLines = (row.results || [])
+        .map((r) => {
+          const u = (r.url || "").trim();
+          if (!u) return "";
+          return `<div class="bf-url-line"><a class="bf-url-raw" href="${esc(
+            u
+          )}" target="_blank" rel="noopener noreferrer" title="Validate this result">${esc(u)}</a></div>`;
+        })
+        .filter(Boolean)
+        .join("");
+      const openLinks = linkBits.length
+        ? `<div class="bf-open-links" style="margin-top:0.2rem;line-height:1.45">${linkBits.join(
+            ' <span class="hint" aria-hidden="true">·</span> '
+          )}</div>
+          <div class="bf-url-raw-block" style="margin-top:0.35rem">${fullUrlLines}</div>
+          <p class="hint" style="font-size:0.7rem;margin:0.2rem 0 0">Short labels above; full URLs for copy or open.</p>`
+        : "";
       const selectHtml =
         opts.length > 0
           ? `<select class="bf-pick" data-idx="${idx}" style="max-width:14rem;font-size:0.85rem">
               <option value="">— pick a result —</option>
               ${opts.join("")}
-            </select>`
+            </select>
+            ${openLinks}`
           : '<span class="hint">—</span>';
+      const wtags = row.wav_tags || null;
+      let wavCell = "—";
+      if (row.wav_sibling) {
+        const bits = [];
+        if (wtags) {
+          if (wtags.artist) bits.push(esc(wtags.artist));
+          if (wtags.title) bits.push(esc(wtags.title));
+          if (wtags.album) bits.push(`<span class="hint">${esc(wtags.album)}</span>`);
+        }
+        const inner = bits.length ? bits.join(" — ") : '<span class="hint">(no tags)</span>';
+        wavCell = `<div style="font-size:0.82rem;max-width:12rem" title="${esc(row.wav_sibling)}">${inner}</div>`;
+      }
+      const nSame = row.same_basename_count || 1;
+      const dupTip = esc(bfDuplicateTooltip(row));
+      const fileCell = row.duplicate_basename
+        ? `<div class="bf-file-col">
+            <div class="mono bf-file-name">${esc(row.basename)}</div>
+            <div class="bf-dup-line" title="${dupTip}">
+              ${
+                row.duplicate_in_batch
+                  ? '<span class="bf-dup-pill">Duplicate in this batch</span>'
+                  : '<span class="bf-dup-pill bf-dup-pill-soft">Same name elsewhere</span>'
+              }
+              <span class="bf-dup-meta">(${nSame}× in tree)</span>
+            </div>
+          </div>`
+        : `<div class="bf-file-col"><div class="mono bf-file-name" style="font-size:0.8rem;word-break:break-all">${esc(
+            row.basename
+          )}</div></div>`;
       return `<tr data-idx="${idx}">
         <td class="th-check"><input type="checkbox" class="bf-use" data-idx="${idx}" checked /></td>
-        <td class="mono" style="font-size:0.8rem;word-break:break-all">${esc(row.basename)}</td>
+        <td class="bf-td-file">${fileCell}</td>
+        <td style="vertical-align:top">${wavCell}</td>
         <td style="font-size:0.85rem">${esc(row.query)}</td>
         <td style="font-size:0.85rem">${esc(row.title_hint || "—")}</td>
-        <td>${selectHtml}</td>
+        <td style="vertical-align:top;min-width:10rem">${selectHtml}</td>
         <td><input type="url" class="bf-manual" data-idx="${idx}" placeholder="https://…" style="width:100%;min-width:10rem;font-size:0.8rem" value="${esc(row.manualUrl || "")}" /></td>
       </tr>`;
     })
@@ -150,6 +271,7 @@ async function loadBatch() {
   hint.textContent = "";
   if (!dir) {
     st.textContent = "Set a folder path first.";
+    document.getElementById("bf-next-offset-box")?.classList.add("hidden");
     batchRows = [];
     renderTable();
     return;
@@ -162,18 +284,31 @@ async function loadBatch() {
   }
 
   st.textContent = "Scanning…";
+  setBfProgress("bf-progress-wrap", true, "Listing FLAC files in the folder…");
   const u = new URL("/api/bulk-fix/scan", window.location.origin);
   u.searchParams.set("path", dir);
   u.searchParams.set("recursive", rec ? "1" : "0");
   u.searchParams.set("offset", String(off));
   u.searchParams.set("limit", String(lim));
 
-  const resp = await fetch(u);
-  const data = await resp.json();
+  let data;
+  try {
+    const resp = await fetch(u);
+    data = await resp.json();
+  } catch (e) {
+    st.textContent = String(e.message || e);
+    batchRows = [];
+    renderTable();
+    return;
+  } finally {
+    setBfProgress("bf-progress-wrap", false);
+  }
+
   if (data.error) {
     st.textContent = data.error;
     batchRows = [];
     renderTable();
+    document.getElementById("bf-next-offset-box")?.classList.add("hidden");
     return;
   }
 
@@ -184,20 +319,39 @@ async function loadBatch() {
     basename: it.basename,
     query: it.query,
     title_hint: it.title_hint || "",
+    artist_hint: it.artist_hint || "",
+    wav_sibling: it.wav_sibling || "",
+    wav_tags: it.wav_tags || null,
+    duplicate_basename: !!it.duplicate_basename,
+    same_basename_count: it.same_basename_count ?? 1,
+    same_basename_other_paths: it.same_basename_other_paths || [],
+    duplicate_in_batch: !!it.duplicate_in_batch,
     results: [],
     manualUrl: "",
   }));
 
   const end = off + items.length;
+  const dupInView = data.duplicates_in_batch ?? 0;
+  const dupTree = items.filter((it) => it.duplicate_basename).length;
   st.textContent = `Folder: ${data.root} — ${total} FLAC file(s) total. Showing ${items.length ? off + 1 : 0}–${end} (offset ${off}, limit ${lim}).`;
   if (end < total) {
-    hint.textContent = `For the next chunk, set offset to ${end} (or increase “Files per pass”) and click Load batch again.`;
+    hint.textContent = `Next chunk: use offset ${end} (see the highlighted box below).`;
   } else if (total > 0) {
     hint.textContent = "You are at the end of the list (or the offset is past the last file).";
   } else {
     hint.textContent = "No .flac files in this folder with the current options.";
   }
+  if (dupInView > 0) {
+    hint.textContent =
+      (hint.textContent || "") +
+      ` Warning: ${dupInView} row(s) share a filename with another row in this batch (see labels in the File column). Uncheck extras if you only want one copy tagged.`;
+  } else if (dupTree > 0 && items.length) {
+    hint.textContent =
+      (hint.textContent || "") +
+      ` Note: ${dupTree} file(s) in this batch have the same name as another file elsewhere under this folder (hover the “Same name elsewhere” label for paths).`;
+  }
 
+  updateBfNextOffsetBox(off, items.length, total);
   renderTable();
   $("#bf-result").classList.add("hidden");
 }
@@ -207,16 +361,27 @@ async function fetchMatches() {
   const status = $("#bf-fetch-status");
   const btn = $("#bf-fetch-matches-btn");
   status.classList.remove("hidden");
-  status.textContent = "Searching (this may take a minute for large batches)…";
+  status.textContent = "";
   btn.disabled = true;
+  setBfProgress("bf-step3-progress-wrap", true, "Searching Apple Music and Discogs (one file at a time on the server)…");
 
   const paths = batchRows.map((r) => r.filepath);
-  const resp = await fetch("/api/bulk-fix/suggest", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ paths }),
-  });
-  const data = await resp.json();
+  let data;
+  try {
+    const resp = await fetch("/api/bulk-fix/suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths }),
+    });
+    data = await resp.json();
+  } catch (e) {
+    setBfProgress("bf-step3-progress-wrap", false);
+    status.classList.remove("hidden");
+    status.textContent = String(e.message || e);
+    btn.disabled = false;
+    return;
+  }
+  setBfProgress("bf-step3-progress-wrap", false);
   btn.disabled = false;
   status.classList.add("hidden");
 
@@ -277,23 +442,47 @@ async function applySelected() {
       '<div class="result-title">Nothing to apply</div><div class="result-detail">Check at least one row and choose a match or enter a URL.</div>';
     return;
   }
-  if (!window.confirm(`Apply metadata to ${items.length} file(s) from the selected sources?`)) return;
+  const tbody0 = $("#bf-tbody");
+  let dupSelected = 0;
+  batchRows.forEach((row, idx) => {
+    const use = tbody0.querySelector(`.bf-use[data-idx="${idx}"]`);
+    if (!use || !use.checked) return;
+    if (row.duplicate_basename) dupSelected += 1;
+  });
+  let confirmMsg = `Apply metadata to ${items.length} file(s) from the selected sources?`;
+  if (dupSelected > 0) {
+    confirmMsg += `\n\n${dupSelected} selected row(s) have the same filename as another file under this folder (see File column). Continue only if you want those copies tagged.`;
+  }
+  if (!window.confirm(confirmMsg)) return;
 
   out.classList.add("hidden");
   const btn = $("#bf-apply-btn");
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Applying…';
+  setBfProgress("bf-step3-progress-wrap", true, "Fetching metadata and writing tags to FLAC…");
 
-  const resp = await fetch("/api/bulk-fix/apply", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      items,
-      rename_to_tags: $("#bf-rename").checked === true,
-      record_in_log: true,
-    }),
-  });
-  const data = await resp.json();
+  let data;
+  try {
+    const resp = await fetch("/api/bulk-fix/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items,
+        rename_to_tags: $("#bf-rename").checked === true,
+        record_in_log: true,
+      }),
+    });
+    data = await resp.json();
+  } catch (e) {
+    setBfProgress("bf-step3-progress-wrap", false);
+    btn.disabled = false;
+    btn.textContent = "Apply metadata to selected rows";
+    out.classList.remove("hidden");
+    out.className = "result error";
+    out.innerHTML = `<div class="result-title">Error</div><div class="result-detail">${esc(e.message || e)}</div>`;
+    return;
+  }
+  setBfProgress("bf-step3-progress-wrap", false);
   btn.disabled = false;
   btn.textContent = "Apply metadata to selected rows";
   out.classList.remove("hidden");
@@ -333,12 +522,25 @@ document.getElementById("bf-folder-modal").addEventListener("click", (e) => {
 });
 document.getElementById("bf-load-batch-btn").addEventListener("click", loadBatch);
 document.getElementById("bf-next-batch-btn").addEventListener("click", () => {
-  let lim = parseInt($("#bf-batch-size").value, 10);
-  if (Number.isNaN(lim) || lim < 1) lim = 25;
-  let off = parseInt($("#bf-offset").value, 10);
-  if (Number.isNaN(off) || off < 0) off = 0;
-  $("#bf-offset").value = String(off + lim);
+  const box = document.getElementById("bf-next-offset-box");
+  const fromBox = box && !box.classList.contains("hidden") && box.dataset && box.dataset.nextOffset;
+  if (fromBox) {
+    $("#bf-offset").value = fromBox;
+  } else {
+    let lim = parseInt($("#bf-batch-size").value, 10);
+    if (Number.isNaN(lim) || lim < 1) lim = 25;
+    let off = parseInt($("#bf-offset").value, 10);
+    if (Number.isNaN(off) || off < 0) off = 0;
+    $("#bf-offset").value = String(off + lim);
+  }
   loadBatch();
+});
+document.getElementById("bf-apply-next-offset")?.addEventListener("click", () => {
+  const box = document.getElementById("bf-next-offset-box");
+  const n = (box && box.dataset && box.dataset.nextOffset) || "";
+  if (n === "") return;
+  const el = document.getElementById("bf-offset");
+  if (el) el.value = n;
 });
 document.getElementById("bf-fetch-matches-btn").addEventListener("click", fetchMatches);
 document.getElementById("bf-apply-btn").addEventListener("click", applySelected);

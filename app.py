@@ -1,6 +1,7 @@
 import base64
 import difflib
 import json
+from collections import defaultdict
 import os
 import re
 import time
@@ -10,7 +11,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote_plus, urlunparse, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -232,6 +233,47 @@ def pn_derivative_path(base_audio_path, suffix):
     """Platinum Notes-style sibling: <stem><suffix>.<same ext as base>."""
     p = Path(base_audio_path)
     return p.parent / f"{p.stem}{suffix}{p.suffix}"
+
+
+def _pn_output_candidate_paths(
+    base_flac_path: str,
+    suffix: str,
+    *,
+    copied_to: str = None,
+    destination_dir: str = None,
+) -> list:
+    """
+    Where a PN output file might live: beside the extract, beside the library copy,
+    or flat in Settings destination (e.g. user configures Platinum Notes to write to FLACs).
+    """
+    p = Path(base_flac_path)
+    name = f"{p.stem}{suffix}{p.suffix}"
+    seen = set()
+    out = []
+
+    def add(path_str: str) -> None:
+        try:
+            n = os.path.normpath(path_str)
+        except (OSError, TypeError, ValueError):
+            n = path_str
+        if n and n not in seen:
+            seen.add(n)
+            out.append(n)
+
+    add(str(pn_derivative_path(base_flac_path, suffix)))
+    if (copied_to or "").strip():
+        try:
+            add(str(Path((copied_to or "").strip()).parent / name))
+        except (OSError, ValueError):
+            pass
+    d = (destination_dir or "").strip()
+    if d:
+        try:
+            dpath = resolve(d)
+            add(os.path.join(dpath, name))
+        except (OSError, TypeError):
+            pass
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -1205,13 +1247,20 @@ def search_itunes(query, limit=8):
         data = resp.json()
         for r in data.get("results", []):
             art_url = r.get("artworkUrl100", "")
+            web = (r.get("trackViewUrl") or r.get("collectionViewUrl") or "").strip()
+            if not web:
+                an = r.get("artistName") or ""
+                tn = r.get("trackName") or ""
+                t_a = f"{an} {tn}".strip()
+                if t_a:
+                    web = f"https://music.apple.com/search?term={quote_plus(t_a)}"
             results.append({
                 "title": r.get("trackName", ""),
                 "artist": r.get("artistName", ""),
                 "album": r.get("collectionName", ""),
                 "year": str(r.get("releaseDate", ""))[:4],
                 "artwork_thumb": art_url,
-                "url": r.get("trackViewUrl", ""),
+                "url": web,
                 "source": "apple_music",
             })
     except Exception:
@@ -1232,8 +1281,17 @@ def search_discogs(query, limit=5):
         data = resp.json()
         for r in data.get("results", []):
             labels = r.get("label", [])
-            uri = r.get("uri", "")
-            discogs_url = f"https://www.discogs.com{uri}" if uri else ""
+            uri = (r.get("uri") or "").strip()
+            if uri.startswith("http://") or uri.startswith("https://"):
+                discogs_url = uri
+            elif uri:
+                discogs_url = f"https://www.discogs.com{uri}" if uri.startswith("/") else f"https://www.discogs.com/{uri}"
+            else:
+                rid, rty = r.get("id"), (r.get("type") or "").lower()
+                if rty == "release" and rid is not None:
+                    discogs_url = f"https://www.discogs.com/release/{rid}"
+                else:
+                    discogs_url = ""
             results.append({
                 "title": r.get("title", ""),
                 "artist": "",
@@ -1247,6 +1305,120 @@ def search_discogs(query, limit=5):
     except Exception:
         pass
     return results
+
+
+def _bandcamp_clean_result_url(href: str) -> str:
+    """Normalize a Bandcamp search link to a stable https URL (no tracking query)."""
+    if not (href or "").strip():
+        return ""
+    p = urlparse(href.strip())
+    netloc = (p.netloc or "").lower()
+    if "bandcamp.com" not in netloc:
+        return ""
+    path = (p.path or "").rstrip("/")
+    if "/track/" not in path and "/album/" not in path:
+        return ""
+    return urlunparse(("https", p.netloc, path, "", "", ""))
+
+
+def search_bandcamp(query, limit=6):
+    """
+    Search bandcamp.com (public search page). Returns track hits with clean URLs suitable
+    for scrape_bandcamp / apply metadata.
+    """
+    results = []
+    q = (query or "").strip()
+    if not q or limit < 1:
+        return results
+    try:
+        resp = requests.get(
+            "https://bandcamp.com/search",
+            params={"q": q},
+            headers=HEADERS,
+            timeout=18,
+        )
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "lxml")
+        for li in soup.find_all("li"):
+            if len(results) >= limit:
+                break
+            classes = li.get("class") or []
+            if "searchresult" not in classes:
+                continue
+            artcont = li.find("a", class_="artcont")
+            if not artcont or not artcont.get("href"):
+                continue
+            href = artcont["href"]
+            if "/track/" not in href:
+                continue
+            clean = _bandcamp_clean_result_url(href)
+            if not clean:
+                continue
+            heading = li.find("div", class_="heading")
+            title = ""
+            if heading:
+                ha = heading.find("a")
+                if ha:
+                    title = ha.get_text(" ", strip=True)
+            if not title:
+                continue
+            subhead = li.find("div", class_="subhead")
+            artist, album = "", ""
+            if subhead:
+                text = re.sub(r"\s+", " ", subhead.get_text(" ", strip=True))
+                m = re.search(r"from\s+(.+?)\s+by\s+(.+)$", text, re.I)
+                if m:
+                    album, artist = m.group(1).strip(), m.group(2).strip()
+                else:
+                    m2 = re.search(r"\bby\s+(.+)$", text, re.I)
+                    if m2:
+                        artist = m2.group(1).strip()
+            thumb = ""
+            art = li.find("div", class_="art")
+            if art:
+                im = art.find("img")
+                if im and (im.get("src") or im.get("data-src")):
+                    thumb = (im.get("src") or im.get("data-src") or "").strip()
+            year = ""
+            rel = li.find("div", class_="released")
+            if rel:
+                y = re.search(r"(\d{4})", rel.get_text())
+                if y:
+                    year = y.group(1)
+            results.append({
+                "title": title,
+                "artist": artist,
+                "album": album,
+                "year": year,
+                "artwork_thumb": thumb,
+                "url": clean,
+                "source": "bandcamp",
+            })
+    except Exception:
+        pass
+    return results
+
+
+def strip_rekordbox_style_filename_affixes(stem: str) -> str:
+    """
+    Remove common DJ library export noise from a file stem:
+    - Leading slot / deck (e.g. A02, B12)
+    - Trailing Camelot key + BPM (e.g. 2A 120, 12A 98)
+
+    So bulk metadata search can use the artist/title string only.
+    """
+    t = (stem or "").strip()
+    if not t:
+        return t
+    t = re.sub(r"(?i)\s+\d{1,2}[AB]\s+\d{2,3}$", "", t).strip()
+    t = re.sub(r"(?i)^[A-Za-z]\d{1,2}\s+", "", t).strip()
+    return t
+
+
+def _normalize_track_filename_stem(stem: str) -> str:
+    """_PN strip + Rekordbox-style slot / key / BPM affixes (shared by parse and search)."""
+    t = re.sub(r"_PN$", "", (stem or ""), flags=re.I).strip()
+    return strip_rekordbox_style_filename_affixes(t)
 
 
 def search_query_from_ableton_stem(stem: str) -> dict:
@@ -1279,13 +1451,73 @@ def search_query_from_ableton_stem(stem: str) -> dict:
             "artist_hint": "",
             "pattern_matched": False,
         }
-    t = re.sub(r"\s+", " ", stem.replace("_", " ")).strip()
+    tail = _normalize_track_filename_stem(stem)
+    t = re.sub(r"\s+", " ", tail.replace("_", " ")).strip()
     return {
         "query": t,
         "title_hint": "",
         "artist_hint": "",
         "pattern_matched": False,
     }
+
+
+def _read_wav_embedded_tags(path: str) -> dict:
+    """
+    Best-effort title / artist / album from a .wav (RIFF/BWF, ID3-in-WAV, etc.).
+    """
+    out = {"title": "", "artist": "", "album": ""}
+    if not path or not os.path.isfile(path):
+        return out
+    if Path(path).suffix.lower() != ".wav":
+        return out
+    try:
+        audio = mutagen.File(path, easy=True)
+    except (OSError, mutagen.MutagenError, KeyError, TypeError, ValueError):
+        return out
+    if audio is None:
+        return out
+    for vkey, outkey in (("title", "title"), ("artist", "artist"), ("album", "album")):
+        try:
+            vals = audio.get(vkey, [])
+        except (AttributeError, KeyError, TypeError):
+            continue
+        if vals and str(vals[0]).strip():
+            out[outkey] = str(vals[0]).strip()
+    return out
+
+
+def bulk_fix_search_info_for_flac(flac_path: str) -> dict:
+    """
+    Search query and hints for bulk fix: same filename rules as search_query_from_ableton_stem,
+    optionally refined when a same-name .wav exists beside the FLAC with both artist+title in tags
+    (typical when the DAW or recorder wrote metadata). Sibling with only one field can fill
+    title_hint/artist_hint without replacing the main filename-based query.
+    """
+    p = os.path.realpath((flac_path or "").strip())
+    stem = Path(p).stem
+    base = search_query_from_ableton_stem(stem)
+    wav_sibling = str(Path(p).with_suffix(".wav"))
+    wt = _read_wav_embedded_tags(wav_sibling) if os.path.isfile(wav_sibling) else {
+        "title": "", "artist": "", "album": ""
+    }
+    wa = (wt.get("artist") or "").strip()
+    wti = (wt.get("title") or "").strip()
+    wal = (wt.get("album") or "").strip()
+    merged = {**base}
+    merged["wav_sibling"] = wav_sibling if os.path.isfile(wav_sibling) else ""
+    tag_blob = {k: v for k, v in {"artist": wa, "title": wti, "album": wal}.items() if v}
+    merged["wav_tags"] = tag_blob or None
+    if wa and wti:
+        q = f"{wa} {wti}"
+        merged["query"] = re.sub(r"\s+", " ", q).strip()
+        merged["title_hint"] = wti
+        merged["artist_hint"] = wa
+    else:
+        if wti and not (merged.get("title_hint") or "").strip():
+            merged["title_hint"] = wti
+        if wa and not (merged.get("artist_hint") or "").strip():
+            merged["artist_hint"] = wa
+    return merged
 
 
 def _best_track_in_list(tracklist: list, title_hint: str) -> dict:
@@ -1407,22 +1639,29 @@ def convert_wav_page():
 
 @app.route("/api/search")
 def search():
-    """Search iTunes + Discogs for a track by query string."""
+    """Search iTunes, Discogs, and Bandcamp for a track by query string."""
     q = request.args.get("q", "").strip()
     if not q:
         return jsonify({"results": []})
 
     itunes = search_itunes(q, limit=8)
     discogs = search_discogs(q, limit=5)
+    bandcamp = search_bandcamp(q, limit=6)
 
-    # Interleave: iTunes results first, then Discogs, de-duped by rough title match
+    # De-dupe by title + artist (or album for Discogs) + source so the same work can appear
+    # on Apple, Discogs, and Bandcamp for validation.
     seen = set()
     combined = []
-    for r in itunes + discogs:
-        key = (r["title"].lower().strip(), r.get("artist", "").lower().strip())
-        if key not in seen:
-            seen.add(key)
-            combined.append(r)
+    for r in itunes + discogs + bandcamp:
+        key = (
+            (r.get("title", "") or "").lower().strip(),
+            (r.get("artist") or r.get("album") or "").lower().strip(),
+            (r.get("source") or "").lower().strip(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        combined.append(r)
 
     return jsonify({"results": combined})
 
@@ -1455,21 +1694,41 @@ def bulk_fix_scan():
     if not os.path.isdir(root_r):
         return jsonify({"error": f"Not a directory: {root_r}"}), 404
     all_paths = list(_iter_flac_paths(root_r, recursive))
+    # Deduplicate exact paths (defensive) while preserving order
+    all_paths = list(dict.fromkeys(all_paths))
+    by_basename = defaultdict(list)
+    for p in all_paths:
+        by_basename[os.path.basename(p)].append(p)
     total = len(all_paths)
     if off < 0:
         off = 0
     batch = all_paths[off : off + lim]
+    batch_basenames = [os.path.basename(p) for p in batch]
+    _bc = {}
+    for b in batch_basenames:
+        _bc[b] = _bc.get(b, 0) + 1
+    in_batch_dups = {b for b, c in _bc.items() if c > 1}
+    dup_row_count = sum(1 for b in batch_basenames if _bc.get(b, 0) > 1)
     items = []
     for p in batch:
-        stem = Path(p).stem
-        sq = search_query_from_ableton_stem(stem)
+        base = os.path.basename(p)
+        sibs = by_basename.get(base) or []
+        n = len(sibs)
+        other_paths = [x for x in sibs if x != p]
+        info = bulk_fix_search_info_for_flac(p)
         items.append({
             "filepath": p,
-            "basename": os.path.basename(p),
-            "query": sq["query"],
-            "title_hint": sq.get("title_hint") or "",
-            "artist_hint": sq.get("artist_hint") or "",
-            "pattern_matched": sq.get("pattern_matched", False),
+            "basename": base,
+            "query": info["query"],
+            "title_hint": info.get("title_hint") or "",
+            "artist_hint": info.get("artist_hint") or "",
+            "pattern_matched": info.get("pattern_matched", False),
+            "wav_sibling": info.get("wav_sibling") or "",
+            "wav_tags": info.get("wav_tags"),
+            "duplicate_basename": n > 1,
+            "same_basename_count": n,
+            "same_basename_other_paths": other_paths[:12],
+            "duplicate_in_batch": base in in_batch_dups,
         })
     return jsonify({
         "root": root_r,
@@ -1477,12 +1736,13 @@ def bulk_fix_scan():
         "offset": off,
         "limit": lim,
         "items": items,
+        "duplicates_in_batch": dup_row_count,
     })
 
 
 @app.route("/api/bulk-fix/suggest", methods=["POST"])
 def bulk_fix_suggest():
-    """For each file path, run the same iTunes + Discogs search as /api/search (rate-limited)."""
+    """For each file path, run the same iTunes + Discogs + Bandcamp search as /api/search (rate-limited)."""
     data = request.get_json() or {}
     paths = data.get("paths") or data.get("filepaths") or []
     if not isinstance(paths, list):
@@ -1503,9 +1763,8 @@ def bulk_fix_suggest():
             })
             time.sleep(delay)
             continue
-        stem = Path(p).stem
-        sq = search_query_from_ableton_stem(stem)
-        q = sq.get("query") or ""
+        info = bulk_fix_search_info_for_flac(p)
+        q = (info.get("query") or "").strip()
         if not q:
             items.append({
                 "filepath": p,
@@ -1519,18 +1778,26 @@ def bulk_fix_suggest():
         time.sleep(delay)
         discogs = search_discogs(q, limit=4)
         time.sleep(delay)
+        bandcamp = search_bandcamp(q, limit=5)
+        time.sleep(delay)
         seen = set()
         combined = []
-        for r in itunes + discogs:
-            key = (r.get("title", "").lower().strip(), (r.get("artist") or "").lower().strip())
+        for r in itunes + discogs + bandcamp:
+            u = (r.get("url") or "").strip()
+            key = (
+                (r.get("title", "") or "").lower().strip(),
+                (r.get("artist") or r.get("album") or "").lower().strip(),
+                (r.get("source") or "").lower().strip(),
+            )
             if key in seen:
                 continue
             seen.add(key)
-            combined.append(r)
+            out = {**r, "url": u}
+            combined.append(out)
         items.append({
             "filepath": p,
             "query": q,
-            "title_hint": sq.get("title_hint") or "",
+            "title_hint": info.get("title_hint") or "",
             "results": combined,
             "error": None,
         })
@@ -2092,30 +2359,50 @@ def extract():
 
 @app.route("/api/poll-pn-derivative", methods=["POST"])
 def poll_pn_derivative():
-    """Return whether <stem><pn_suffix>.<ext> exists beside the freshly extracted base file."""
+    """
+    Return whether <stem><pn_suffix>.<ext> exists. Checks: beside the extract, beside the
+    library copy (copied_to from the same run), and flat in Settings destination — so PN
+    can be configured to write only to the FLACs / destination folder.
+    """
     data = request.get_json() or {}
     cfg = load_config()
-    base_flac_path = data.get("base_flac_path")
+    base_flac_path = (data.get("base_flac_path") or "").strip()
+    copied_to = (data.get("copied_to") or "").strip() or None
     suffix = (data.get("pn_output_suffix") or cfg.get("pn_output_suffix") or "_PN").strip()
     if not base_flac_path:
         return jsonify({"error": "base_flac_path required"}), 400
     if not os.path.isfile(base_flac_path):
         return jsonify({"error": "Base audio file not found", "ready": False}), 404
 
+    dest = (cfg.get("destination_dir") or "").strip()
+    candidates = _pn_output_candidate_paths(
+        base_flac_path, suffix, copied_to=copied_to, destination_dir=dest
+    )
+    try:
+        base_mt = os.path.getmtime(base_flac_path)
+    except OSError:
+        base_mt = 0.0
+
+    ready = False
     pn_path = str(pn_derivative_path(base_flac_path, suffix))
-    ready = os.path.isfile(pn_path)
-    if ready:
+    for cand in candidates:
+        if not os.path.isfile(cand):
+            continue
         try:
-            if os.path.getmtime(pn_path) < os.path.getmtime(base_flac_path):
-                ready = False
+            if os.path.getmtime(cand) < base_mt:
+                continue
         except OSError:
-            ready = False
+            continue
+        ready = True
+        pn_path = cand
+        break
 
     return jsonify({
         "ready": ready,
         "pn_path": pn_path,
         "pn_flac_path": pn_path,
         "pn_output_suffix": suffix,
+        "candidates": candidates,
     })
 
 
@@ -2173,9 +2460,20 @@ def repair_pn_derivative():
         dest_pn = os.path.join(os.path.dirname(copied_orig), os.path.basename(pn_path))
         try:
             os.makedirs(os.path.dirname(copied_orig), exist_ok=True)
-            shutil.copy2(pn_path, dest_pn)
-            copied_pn = dest_pn
-        except Exception as e:
+            if os.path.isfile(pn_path) and os.path.isfile(dest_pn):
+                try:
+                    if os.path.samefile(pn_path, dest_pn):
+                        copied_pn = dest_pn
+                    else:
+                        shutil.copy2(pn_path, dest_pn)
+                        copied_pn = dest_pn
+                except (OSError, FileNotFoundError):
+                    shutil.copy2(pn_path, dest_pn)
+                    copied_pn = dest_pn
+            else:
+                shutil.copy2(pn_path, dest_pn)
+                copied_pn = dest_pn
+        except OSError as e:
             copy_err = str(e)
 
     return jsonify({
@@ -2480,13 +2778,16 @@ def parse_ableton_style_wav_stem(stem: str) -> dict:
     """
     Parse DJ / Ableton-style stem: e.g. A06 - 139 - Members Of Mayday - 10 In 01
     → artist + title. Aligns with static/fix.js parseAbletonStyleFilename.
+
+    If that pattern does not match, strip Rekordbox-style lead (A02) and tail key+BPM (2A 120)
+    so names like "A02 Artist Name 2A 120" search and tag correctly.
     """
-    t = re.sub(r"_PN$", "", stem, flags=re.I).strip()
-    if not t:
+    t0 = re.sub(r"_PN$", "", stem, flags=re.I).strip()
+    if not t0:
         return {"artist": "", "title": "", "matched": False, "loose": ""}
     m4 = re.match(
         r"^(?:[A-Za-z]?\d+|Track\s*\d+|\d+)\s*-\s*\d{2,3}\s*-\s*(.+?)\s*-\s*(.+)$",
-        t,
+        t0,
         re.I,
     )
     if m4:
@@ -2496,6 +2797,9 @@ def parse_ableton_style_wav_stem(stem: str) -> dict:
             "matched": True,
             "loose": "",
         }
+    t = strip_rekordbox_style_filename_affixes(t0)
+    if not t:
+        return {"artist": "", "title": "", "matched": False, "loose": ""}
     stripped = re.sub(
         r"^(?:[A-Za-z]?\d+|Track\s*\d+|\d+)\s*-\s*\d{2,3}\s*-\s*",
         "",

@@ -41,7 +41,7 @@
 
       <section class="card">
         <h2><span class="step">2</span> Batch size &amp; load</h2>
-        <p class="hint" style="margin-top:0">Process in chunks to limit API load (Discogs / Apple) and to review matches. Example: 320 files → 25 per pass, 13 “next” loads.</p>
+        <p class="hint" style="margin-top:0">Process in chunks to limit API load (Discogs / Apple / Bandcamp) and to review matches. Example: 320 files → 25 per pass, 13 “next” loads.</p>
         <div class="field-row" style="align-items:flex-end;flex-wrap:wrap;gap:0.75rem">
           <div>
             <label for="bf-batch-size" style="display:block;font-size:0.85rem;margin-bottom:0.2rem">Files per pass</label>
@@ -54,16 +54,34 @@
           <button type="button" id="bf-load-batch-btn" class="btn btn-primary">Load batch</button>
           <button type="button" id="bf-next-batch-btn" class="btn btn-secondary" title="Add batch size to offset, then load">Next batch</button>
         </div>
+        <div id="bf-progress-wrap" class="progress-wrap hidden" aria-live="polite">
+          <p class="progress-label" id="bf-progress-label">Working…</p>
+          <div class="progress-bar-outer" role="progressbar" aria-label="In progress">
+            <div class="progress-bar-indeterminate"></div>
+          </div>
+        </div>
         <p id="bf-range-status" class="status" style="margin:0.5rem 0 0"></p>
         <p id="bf-load-hint" class="hint" style="margin:0.35rem 0 0"></p>
+        <div id="bf-next-offset-box" class="next-offset-box hidden">
+          <p style="margin:0 0 0.35rem"><strong>Next offset for “Load batch”</strong> (0-based index into the sorted FLAC list)</p>
+          <p style="margin:0 0 0.5rem">Set <strong>Start offset</strong> to <span class="next-offset-value mono" id="bf-next-offset-value">0</span> to load files starting at list position <span id="bf-next-1-based">1</span> (1-based).</p>
+          <p class="hint" style="margin:0 0 0.5rem" id="bf-next-offset-detail"></p>
+          <button type="button" class="btn btn-secondary btn-sm" id="bf-apply-next-offset">Set offset field to this value</button>
+        </div>
       </section>
 
       <section class="card">
         <h2><span class="step">3</span> Search &amp; review</h2>
-        <p class="hint" style="margin-top:0">Click <strong>Fetch online matches</strong> to query Apple Music and Discogs for this batch, then pick a result per row or paste a <strong>Bandcamp / Discogs / Apple</strong> URL. Only checked rows are applied.</p>
-        <div class="field-row" style="gap:0.5rem; flex-wrap:wrap; margin:0.5rem 0">
+        <p class="hint" style="margin-top:0">Click <strong>Fetch online matches</strong> to query Apple Music and Discogs for this batch, then pick a result per row or paste a <strong>Bandcamp / Discogs / Apple</strong> URL. <strong>Open</strong> links go to the same page used for apply (so you can validate in the browser). If a same-named <code class="mono">.wav</code> sits next to a FLAC, embedded WAV tags (when present) can refine the search and hints. Only checked rows are applied.</p>
+        <div class="field-row" style="gap:0.5rem; flex-wrap:wrap; margin:0.5rem 0; align-items:center">
           <button type="button" id="bf-fetch-matches-btn" class="btn btn-primary" disabled>Fetch online matches</button>
           <span id="bf-fetch-status" class="status hidden"></span>
+        </div>
+        <div id="bf-step3-progress-wrap" class="progress-wrap hidden" style="margin:0.25rem 0 0.5rem" aria-live="polite">
+          <p class="progress-label" id="bf-step3-progress-label">Working…</p>
+          <div class="progress-bar-outer" role="progressbar" aria-label="In progress">
+            <div class="progress-bar-indeterminate"></div>
+          </div>
         </div>
         <div class="bulk-table-wrap">
           <table class="bulk-table" id="bf-table">
@@ -71,6 +89,7 @@
               <tr>
                 <th class="th-check">Use</th>
                 <th>File</th>
+                <th>WAV (sibling)</th>
                 <th>Query</th>
                 <th>Title hint</th>
                 <th>Match</th>
@@ -78,7 +97,7 @@
               </tr>
             </thead>
             <tbody id="bf-tbody">
-              <tr><td colspan="6" class="status">Load a batch (step 2).</td></tr>
+              <tr><td colspan="7" class="status">Load a batch (step 2).</td></tr>
             </tbody>
           </table>
         </div>

@@ -8,17 +8,27 @@ let artworkUrl = "";
 let fixBrowseFilePaths = [];
 
 // ---- Filename helpers (e.g. Ableton: A06 - 139 - Artist - Title) ----
+/** Match app.py `strip_rekordbox_style_filename_affixes` (trailing key+BPM, then lead slot). */
+function stripRekordboxStyleFilenameAffixes(stem) {
+  let t = (stem || "").trim();
+  if (!t) return t;
+  t = t.replace(/\s+\d{1,2}[AB]\s+\d{2,3}$/i, "").trim();
+  t = t.replace(/^[A-Za-z]\d{1,2}\s+/i, "").trim();
+  return t;
+}
+
 /**
  * If the stem looks like: [slot]-[BPM]-[artist]-[title], return a search string and
  * suggested title/artist for empty tags. Otherwise fall back to a looser string from the whole stem.
+ * Rekordbox flat exports: "A02 Artist 2A 120" are normalized after the hyphenated form is ruled out.
  */
 function parseAbletonStyleFilename(stem) {
-  const t = (stem || "").replace(/_PN$/i, "").trim();
-  if (!t) {
+  const t0 = (stem || "").replace(/_PN$/i, "").trim();
+  if (!t0) {
     return { searchQuery: "", suggestedTitle: "", suggestedArtist: "" };
   }
   // E.g. A06 - 139 - Members Of Mayday - 10 In 01
-  const m4 = t.match(
+  const m4 = t0.match(
     /^(?:[A-Za-z]?\d+|Track\s*\d+|\d+)\s*-\s*\d{2,3}\s*-\s*(.+?)\s*-\s*(.+)$/i
   );
   if (m4) {
@@ -30,7 +40,10 @@ function parseAbletonStyleFilename(stem) {
       suggestedArtist: artist,
     };
   }
-  // Strip leading "NN - 123 -" once if present, keep rest
+  const t = stripRekordboxStyleFilenameAffixes(t0);
+  if (!t) {
+    return { searchQuery: "", suggestedTitle: "", suggestedArtist: "" };
+  }
   const stripped = t.replace(/^(?:[A-Za-z]?\d+|Track\s*\d+|\d+)\s*-\s*\d{2,3}\s*-\s*/i, "").trim();
   const loose = (stripped || t).replace(/\s*-\s*/g, " ").replace(/_/g, " ").replace(/\s+/g, " ").trim();
   return { searchQuery: loose, suggestedTitle: "", suggestedArtist: "" };
@@ -298,8 +311,14 @@ async function autoSearch(tags) {
 
   container.innerHTML = data.results
     .map((r, i) => {
-      const srcClass = r.source === "discogs" ? "src-discogs" : "src-apple";
-      const srcLabel = r.source === "discogs" ? "Discogs" : "Apple Music";
+      const srcMap = {
+        discogs: { label: "Discogs", cls: "src-discogs" },
+        apple_music: { label: "Apple Music", cls: "src-apple" },
+        bandcamp: { label: "Bandcamp", cls: "src-bandcamp" },
+      };
+      const sm = srcMap[r.source] || { label: "Web", cls: "src-generic" };
+      const srcClass = sm.cls;
+      const srcLabel = sm.label;
       const thumb = r.artwork_thumb
         ? `<img class="search-thumb" src="${r.artwork_thumb}" alt="" />`
         : `<div class="search-thumb"></div>`;

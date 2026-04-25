@@ -1,6 +1,8 @@
 """Unit tests for small pure helpers (no ffmpeg)."""
 
+import os
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -20,6 +22,30 @@ def test_pn_derivative_path(app_module):
     assert p2.name == "c_norm.flac"
     p3 = app_module.pn_derivative_path("/a/b/track.mp3", "_PN")
     assert p3.name == "track_PN.mp3"
+
+
+def test_pn_output_candidate_paths_includes_dest_and_library_copy(
+    app_module, tmp_path, monkeypatch
+):
+    """PN may write only to FLACs (Settings destination) — same stem_PN beside library copy or flat in dest."""
+    monkeypatch.setattr(
+        app_module, "resolve", lambda p: os.path.normpath(os.path.expanduser(str(p)))
+    )
+    rec = tmp_path / "rec"
+    rec.mkdir()
+    flacs = tmp_path / "FLACs"
+    flacs.mkdir()
+    base = str(rec / "Song.flac")
+    copied = str(flacs / "Song.flac")
+    paths = app_module._pn_output_candidate_paths(
+        base, "_PN", copied_to=copied, destination_dir=str(flacs)
+    )
+    want_extract = str(rec / "Song_PN.flac")
+    want_flacs = str(flacs / "Song_PN.flac")
+    assert want_extract in paths
+    assert want_flacs in paths
+    # copied_to parent + name and destination_dir + name are the same file in this layout
+    assert len(paths) == 2
 
 
 def test_resolve_extract_profile_key(app_module):

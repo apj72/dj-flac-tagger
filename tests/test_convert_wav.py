@@ -159,6 +159,21 @@ def test_parse_ableton_wav_stem(app_module):
     assert p["title"] == "10 In 01"
 
 
+def test_parse_ableton_rekordbox_slot_key_bpm_strips(app_module):
+    """Rekordbox flat exports: lead slot and trailing Camelot + BPM, not the hyphenated Ableton form."""
+    s = "A02 Christian Loeffler All Comes (Mind Against Remix) 2A 120"
+    p = app_module.parse_ableton_style_wav_stem(s)
+    assert p["matched"] is False
+    want = "Christian Loeffler All Comes (Mind Against Remix)"
+    assert p["title"] == want
+    assert p["loose"] == want
+
+    s2 = "A02 Ripperton Unfold 2A 119"
+    p2 = app_module.parse_ableton_style_wav_stem(s2)
+    assert p2["title"] == "Ripperton Unfold"
+    assert p2["loose"] == p2["title"]
+
+
 def test_convert_wav_bulk_custom_flat_target(client, app_module, tmp_path):
     """All FLACs land in one folder; filename from Artist - Title when pattern matches."""
     try:

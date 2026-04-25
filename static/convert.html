@@ -116,6 +116,18 @@
           <button type="button" id="convert-bulk-scan-btn" class="btn btn-secondary">Scan for WAVs</button>
           <button type="button" id="convert-bulk-run-btn" class="btn btn-primary">Run conversion</button>
         </div>
+        <div id="convert-bulk-progress-wrap" class="progress-wrap hidden" aria-busy="false" aria-live="polite">
+          <p class="progress-label" id="convert-bulk-progress-label">Converting…</p>
+          <div class="progress-bar-outer" role="progressbar" aria-label="In progress">
+            <div class="progress-bar-indeterminate"></div>
+          </div>
+        </div>
+        <div id="convert-bulk-next-box" class="next-offset-box hidden">
+          <p style="margin:0 0 0.35rem"><strong>Next offset for the following run</strong> (type this into <strong>Offset</strong> above; it is <em>0-based</em>)</p>
+          <p style="margin:0 0 0.5rem">Use offset <span class="next-offset-value mono" id="convert-next-offset-0">0</span> — that continues at file <span id="convert-next-1-based">1</span> in the sorted list when counting 1, 2, 3…</p>
+          <p class="hint" style="margin:0 0 0.5rem" id="convert-next-offset-detail"></p>
+          <button type="button" class="btn btn-secondary btn-sm" id="convert-apply-next-offset">Set offset field to this value</button>
+        </div>
         <p id="convert-bulk-scan-status" class="status hidden" style="margin:0.5rem 0 0"></p>
         <div id="convert-bulk-result" class="result hidden" style="margin-top:0.5rem"></div>
       </section>
