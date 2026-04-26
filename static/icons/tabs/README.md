@@ -1,8 +1,15 @@
 # Main tab icons
 
-Icons are **SVG masks**: black shapes on transparent background. The UI colours them with `currentColor` via CSS (`mask-image`).
+Icons are **masks** (SVG or **PNG**): opaque pixels define the shape; transparent areas are see-through. The UI tints them with `currentColor` via CSS `mask-image` + `background: currentColor`.
 
-To replace with assets from **TAB_ICON_PROMPTS.md** (e.g. generated PNG):
+**Formats with transparency (common):**
 
-1. Export with **transparent** background and a **single-colour** glyph (black on transparent is ideal).
-2. Overwrite the matching file name, or add `.png` and update `mask-image` URLs in `static/style.css` (search for `tab-icon-`).
+| Format | Transparency | Notes |
+|--------|----------------|--------|
+| **PNG** | Yes (alpha channel) | Best default for raster icons; what `extract.png` uses. |
+| **SVG** | Yes (no “background”) | Vector; also supported. |
+| **WebP** | Yes (can have alpha) | Supported similarly to PNG in modern browsers. |
+| **GIF** | 1-bit only | Poor for smooth icons; avoid for new assets. |
+| **JPEG / JPG** | No | Do **not** use for icons that need a clear silhouette on the tab bar. |
+
+To add more tabs from **`design/UI/icons/`**, copy into **`static/icons/tabs/`** and set `mask-image` in `static/style.css` under the matching `.tab-icon-*` rule (see **Extract** → `extract.png`).

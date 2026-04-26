@@ -285,8 +285,8 @@ header h1 {
 }
 .tab-link.active .tab-icon { opacity: 1; }
 .tab-icon-extract {
-  -webkit-mask-image: url("/static/icons/tabs/extract.svg");
-  mask-image: url("/static/icons/tabs/extract.svg");
+  -webkit-mask-image: url("/static/icons/tabs/extract.png");
+  mask-image: url("/static/icons/tabs/extract.png");
 }
 .tab-icon-fix {
   -webkit-mask-image: url("/static/icons/tabs/fix-metadata.svg");
