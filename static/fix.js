@@ -124,17 +124,23 @@ function parseAbletonStyleFilename(stem) {
 }
 
 // ---- Browse audio files ----
+function fixDefaultBrowseDir(cfg) {
+  const d = ((cfg.fix_metadata_default_dir || "") + "").trim();
+  if (d) return d;
+  return ((cfg.destination_dir || "") + "").trim();
+}
+
 async function loadSettings() {
   const resp = await fetch("/api/settings");
   const cfg = await resp.json();
   const last = typeof djmmGetLastAudioBrowseDir === "function" ? djmmGetLastAudioBrowseDir().trim() : "";
-  $("#fix-dir").value = last || cfg.destination_dir || "";
+  $("#fix-dir").value = last || fixDefaultBrowseDir(cfg);
 }
 
 async function resetFixDirToDefault() {
   const resp = await fetch("/api/settings");
   const cfg = await resp.json();
-  $("#fix-dir").value = cfg.destination_dir || "";
+  $("#fix-dir").value = fixDefaultBrowseDir(cfg);
   await browseAudio();
 }
 
@@ -156,7 +162,7 @@ async function openFolderModal() {
   if (!start) {
     const resp = await fetch("/api/settings");
     const cfg = await resp.json();
-    start = cfg.destination_dir || "";
+    start = fixDefaultBrowseDir(cfg);
   }
   if (!start) start = "~";
   const modal = document.getElementById("fix-folder-modal");

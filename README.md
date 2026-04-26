@@ -80,6 +80,7 @@ If you use **Extract → open in Platinum Notes → watch for processed output**
 ### Settings
 
 - **Source / destination** folders  
+- **Fix Metadata / Inspect default folders** (optional; when empty, the **destination** folder is used for the initial path and **Default** on those tabs)  
 - **Extract format** — global default for **Extract** output and **Normalise** re-encode  
 - **Platinum Notes** app name and **`_PN` output suffix**  
 - **Loudness target (LUFS)** and **true peak (dBTP)** — e.g. **-11.5** / **-1** to match Platinum Notes; **-14** / **-1** for streaming-style reference. You may enter **11.5** (positive); it is treated as **-11.5 LUFS**.
@@ -242,6 +243,8 @@ Example (see `config.json.example`):
 {
   "source_dir": "~/DJ-Mixes",
   "destination_dir": "~/Music/DJ-library",
+  "fix_metadata_default_dir": "",
+  "inspect_default_dir": "",
   "extract_profile": "flac",
   "platinum_notes_app": "Platinum Notes 10",
   "pn_output_suffix": "_PN",

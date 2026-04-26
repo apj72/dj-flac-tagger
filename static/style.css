@@ -1108,3 +1108,146 @@ label {
   .metadata-layout { flex-direction: column; }
   .artwork-panel { flex: none; }
 }
+
+/* ---- WAV → FLAC: collapsible sections & help tooltips ---- */
+.convert-rollup-card {
+  padding: 0.85rem 1.25rem 1.25rem;
+}
+.convert-rollup-head-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem 0.5rem;
+  flex-wrap: wrap;
+}
+.convert-rollup-head-row .convert-rollup-toggle {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.convert-rollup-head-help {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+.convert-rollup-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.35rem 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+.convert-rollup-toggle:hover {
+  color: var(--accent);
+}
+.convert-rollup-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  line-height: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  transition: transform 0.2s ease;
+}
+.convert-rollup-toggle[aria-expanded="true"] .convert-rollup-arrow {
+  transform: rotate(90deg);
+}
+.convert-rollup-panel {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.convert-rollup-panel.convert-rollup-panel--hidden {
+  display: none;
+}
+.convert-step-block {
+  margin-bottom: 1.25rem;
+}
+.convert-step-block:last-child {
+  margin-bottom: 0;
+}
+.convert-step-block h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.65rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+}
+.convert-step-block h3 .step {
+  margin-right: 0.15rem;
+}
+
+.help-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 0.15rem;
+}
+.help-tip-btn {
+  width: 1.28rem;
+  height: 1.28rem;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: inherit;
+  line-height: 1;
+  padding: 0;
+  cursor: help;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.help-tip-btn:hover,
+.help-tip-btn:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  outline: none;
+}
+.help-tip-bubble {
+  display: none;
+  position: absolute;
+  z-index: 200;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: 8px;
+  width: min(22rem, calc(100vw - 2rem));
+  max-width: 90vw;
+  padding: 0.55rem 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--text);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+.help-tip:hover .help-tip-bubble,
+.help-tip:focus-within .help-tip-bubble,
+.help-tip.help-tip--open .help-tip-bubble {
+  display: block;
+  pointer-events: auto;
+}
+.help-tip-bubble a {
+  color: var(--bulk-table-link);
+}

@@ -24,11 +24,17 @@ function esc(s) {
     .replace(/"/g, "&quot;");
 }
 
+function inspectDefaultBrowseDir(cfg) {
+  const d = ((cfg.inspect_default_dir || "") + "").trim();
+  if (d) return d;
+  return ((cfg.destination_dir || "") + "").trim();
+}
+
 async function loadSettings() {
   const resp = await fetch("/api/settings");
   const cfg = await resp.json();
   const last = typeof djmmGetLastAudioBrowseDir === "function" ? djmmGetLastAudioBrowseDir().trim() : "";
-  $("#ins-dir").value = last || cfg.destination_dir || "";
+  $("#ins-dir").value = last || inspectDefaultBrowseDir(cfg);
 }
 
 async function resetInspectDirToDefault() {
@@ -54,7 +60,7 @@ async function openInsFolderModal() {
   if (!start) {
     const resp = await fetch("/api/settings");
     const cfg = await resp.json();
-    start = (cfg.destination_dir || "").trim();
+    start = inspectDefaultBrowseDir(cfg);
   }
   if (!start) start = "~";
   document.getElementById("ins-folder-modal").classList.remove("hidden");

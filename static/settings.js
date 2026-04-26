@@ -5,6 +5,8 @@ function collectSettingsPageDraft() {
     v: 1,
     source_dir: $("#cfg-source").value,
     destination_dir: $("#cfg-dest").value,
+    fix_metadata_default_dir: $("#cfg-fix-default").value,
+    inspect_default_dir: $("#cfg-inspect-default").value,
     extract_profile: $("#cfg-extract-profile").value,
     platinum_notes_app: $("#cfg-pn-app").value,
     pn_output_suffix: $("#cfg-pn-suffix").value,
@@ -23,6 +25,8 @@ function scheduleSettingsPageSave() {
 function applySettingsDraft(st) {
   if (st.source_dir != null) $("#cfg-source").value = st.source_dir;
   if (st.destination_dir != null) $("#cfg-dest").value = st.destination_dir;
+  if (st.fix_metadata_default_dir != null) $("#cfg-fix-default").value = st.fix_metadata_default_dir;
+  if (st.inspect_default_dir != null) $("#cfg-inspect-default").value = st.inspect_default_dir;
   if (st.extract_profile != null) {
     const sel = $("#cfg-extract-profile");
     if ([...sel.options].some((o) => o.value === st.extract_profile)) sel.value = st.extract_profile;
@@ -51,6 +55,8 @@ async function loadSettings() {
   fillExtractProfileSelect(cfg);
   $("#cfg-source").value = cfg.source_dir || "";
   $("#cfg-dest").value = cfg.destination_dir || "";
+  $("#cfg-fix-default").value = cfg.fix_metadata_default_dir || "";
+  $("#cfg-inspect-default").value = cfg.inspect_default_dir || "";
   $("#cfg-pn-app").value = cfg.platinum_notes_app || "";
   $("#cfg-pn-suffix").value = cfg.pn_output_suffix || "_PN";
   $("#cfg-target-lufs").value =
@@ -71,6 +77,8 @@ async function saveSettings() {
     body: JSON.stringify({
       source_dir: $("#cfg-source").value.trim(),
       destination_dir: $("#cfg-dest").value.trim(),
+      fix_metadata_default_dir: $("#cfg-fix-default").value.trim(),
+      inspect_default_dir: $("#cfg-inspect-default").value.trim(),
       extract_profile: $("#cfg-extract-profile").value,
       platinum_notes_app: $("#cfg-pn-app").value.trim(),
       pn_output_suffix: $("#cfg-pn-suffix").value.trim() || "_PN",
@@ -105,6 +113,8 @@ function wireSettingsPersistence() {
   [
     "cfg-source",
     "cfg-dest",
+    "cfg-fix-default",
+    "cfg-inspect-default",
     "cfg-extract-profile",
     "cfg-pn-app",
     "cfg-pn-suffix",

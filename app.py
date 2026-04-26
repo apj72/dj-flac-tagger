@@ -70,6 +70,9 @@ def load_config():
     defaults = {
         "source_dir": "~/DJ-Mixes",
         "destination_dir": "~/Music/DJ-library",
+        # Default folder when opening Fix Metadata / Inspect (empty = use destination_dir)
+        "fix_metadata_default_dir": "",
+        "inspect_default_dir": "",
         # Exact app name as shown by macOS "open -a" (e.g. "Platinum Notes")
         "platinum_notes_app": "",
         # Platinum Notes default output: <stem>_PN.<ext> (same extension family as input)
@@ -2031,6 +2034,10 @@ def update_settings():
         cfg["source_dir"] = data["source_dir"]
     if "destination_dir" in data:
         cfg["destination_dir"] = data["destination_dir"]
+    if "fix_metadata_default_dir" in data:
+        cfg["fix_metadata_default_dir"] = (data["fix_metadata_default_dir"] or "").strip()
+    if "inspect_default_dir" in data:
+        cfg["inspect_default_dir"] = (data["inspect_default_dir"] or "").strip()
     if "platinum_notes_app" in data:
         cfg["platinum_notes_app"] = (data["platinum_notes_app"] or "").strip()
     if "pn_output_suffix" in data:

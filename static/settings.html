@@ -51,6 +51,16 @@
           <input type="text" id="cfg-dest" placeholder="~/Music/DJ-library" />
         </div>
         <div class="field-row">
+          <label for="cfg-fix-default">Fix Metadata — default browse folder</label>
+          <input type="text" id="cfg-fix-default" placeholder="Leave empty to use destination folder" />
+          <p class="hint" style="margin-top:0.35rem">Initial path and <strong>Default</strong> on Fix when nothing is remembered in this browser.</p>
+        </div>
+        <div class="field-row">
+          <label for="cfg-inspect-default">Inspect — default browse folder</label>
+          <input type="text" id="cfg-inspect-default" placeholder="Leave empty to use destination folder" />
+          <p class="hint" style="margin-top:0.35rem">Initial path and <strong>Default</strong> on Inspect when nothing is remembered.</p>
+        </div>
+        <div class="field-row">
           <label for="cfg-pn-app">Platinum Notes — app name (macOS “Open after extract”)</label>
           <input type="text" id="cfg-pn-app" placeholder="Platinum Notes" />
           <p class="hint" style="margin-top:0.35rem">Exact name as in <code>/Applications</code>. No official CLI; this runs <code>open -a</code> with your extracted file.</p>

@@ -21,6 +21,8 @@ def app_module(monkeypatch, tmp_path):
             {
                 "source_dir": str(tmp_path),
                 "destination_dir": str(tmp_path),
+                "fix_metadata_default_dir": "",
+                "inspect_default_dir": "",
                 "platinum_notes_app": "",
                 "pn_output_suffix": "_PN",
                 "target_lufs": -14.0,

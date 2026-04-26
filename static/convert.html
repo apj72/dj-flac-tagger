@@ -24,114 +24,166 @@
     </header>
 
     <main>
-      <section class="card">
-        <h2><span class="step">1</span> Choose folder &amp; WAV file</h2>
-        <p class="hint" style="margin-top:0;margin-bottom:0.75rem">The original <strong>.wav</strong> is never modified. Conversion uses ffmpeg (FLAC lossless, compression level 12). Set the default music folder under <a href="/settings">Settings → destination folder</a>.</p>
-        <div class="dir-bar">
-          <input type="text" id="convert-dir" placeholder="~/Music" />
-          <button type="button" id="convert-browse-btn" class="btn btn-secondary">Browse</button>
-          <button type="button" id="convert-choose-folder-btn" class="btn btn-secondary" title="Open folder navigator">Choose folder…</button>
-          <button type="button" id="convert-default-dir-btn" class="btn btn-secondary" title="Path from Settings → destination">Default</button>
-        </div>
-        <div id="convert-file-list" class="file-list"></div>
-        <div id="convert-selected" class="probe-info hidden"></div>
-      </section>
-
-      <section class="card">
-        <h2><span class="step">2</span> Output location</h2>
-        <div class="field-row">
-          <label class="inline" style="display:block;margin-bottom:0.5rem">
-            <input type="radio" name="convert-output" id="convert-out-same" value="same" checked />
-            <span>Same folder as the WAV (writes <code>&lt;name&gt;.flac</code> next to the source)</span>
-          </label>
-          <label class="inline" style="display:block">
-            <input type="radio" name="convert-output" id="convert-out-dest" value="destination" />
-            <span>Settings <strong>destination</strong> folder (FLACs / library path)</span>
-          </label>
-        </div>
-        <p class="hint" id="convert-dest-hint" style="margin:0.5rem 0 0">Loading…</p>
-      </section>
-
-      <section class="card">
-        <h2><span class="step">3</span> Convert</h2>
-        <button type="button" id="convert-run-btn" class="btn btn-accent" disabled>Convert to FLAC</button>
-        <div id="convert-result" class="result hidden"></div>
-      </section>
-
-      <section class="card">
-        <h2><span class="step">4</span> Bulk (folder tree)</h2>
-        <p class="hint" style="margin-top:0">Convert <strong>every</strong> <code>.wav</code> under a root — including in subfolders (e.g. <code>…/Rekordbox-music/Underground/</code>). Original WAVs are not deleted. Use <strong>Scan</strong> to count first.</p>
-        <div class="dir-bar">
-          <input type="text" id="convert-bulk-root" placeholder="/path/to/Underground" />
-          <button type="button" id="convert-bulk-choose-btn" class="btn btn-secondary">Choose folder…</button>
-        </div>
-        <div class="field-row" style="margin:0.5rem 0">
-          <label class="inline" style="display:block;margin-bottom:0.35rem">
-            <input type="checkbox" id="convert-bulk-recursive" checked />
-            <span>Include <strong>subfolders</strong> (entire tree)</span>
-          </label>
-          <label class="inline" style="display:block">
-            <input type="checkbox" id="convert-bulk-skip" checked />
-            <span>Skip if the <code>.flac</code> already exists (re-run / resume safe)</span>
-          </label>
-        </div>
-        <p class="hint" style="margin:0.35rem 0 0.4rem">Where to write <code>.flac</code> files (independent of step 2). Names use <code>Slot - BPM - Artist - Title</code> from each filename when you pick a <strong>single target folder</strong>. Tags are written from the same parse.</p>
-        <div class="field-row" style="margin:0.5rem 0 0.35rem">
-          <label class="inline" style="display:block;margin-bottom:0.35rem">
-            <input type="radio" name="convert-bulk-output" id="convert-bulk-out-same" value="same" checked />
-            <span>Next to each <code>.wav</code> (same tree)</span>
-          </label>
-          <label class="inline" style="display:block;margin-bottom:0.35rem">
-            <input type="radio" name="convert-bulk-output" id="convert-bulk-out-dest" value="destination" />
-            <span>Mirror subfolders under Settings <strong>destination</strong></span>
-          </label>
-          <label class="inline" style="display:block">
-            <input type="radio" name="convert-bulk-output" id="convert-bulk-out-custom" value="custom" />
-            <span>One <strong>flat</strong> folder (e.g. all FLACs for Rekordbox in one place)</span>
-          </label>
-        </div>
-        <div id="convert-bulk-target-wrap" class="dir-bar hidden" style="margin-top:0.5rem">
-          <input type="text" id="convert-bulk-target-dir" placeholder="e.g. ~/Music/FLACs/Converted WAVs" title="All converted FLACs go here" />
-          <button type="button" id="convert-bulk-target-choose-btn" class="btn btn-secondary" title="Choose output folder">Choose folder…</button>
-        </div>
-        <p id="convert-bulk-output-hint" class="hint" style="margin:0.35rem 0 0.75rem">Mirrored mode keeps different BPM/subfolders from overwriting each other. Flat mode renames to <code>Artist - Title.flac</code> when the WAV name matches the usual pattern.</p>
-        <p class="hint" style="margin:0.5rem 0 0.4rem">Large jobs: convert in <strong>smaller runs</strong> instead of hundreds of files at once. The same <strong>sorted</strong> order is used every time, so you can step the offset, or leave “skip if FLAC exists” on and re-run. After a flat folder is filled, use <a href="/bulk-fix">Bulk Fix</a> on that folder in batches too.</p>
-        <div class="field-row" style="margin:0.35rem 0 0.5rem; flex-wrap:wrap; align-items:center; gap:0.5rem 1rem">
-          <label class="inline" style="display:inline-flex;align-items:center;gap:0.35rem">
-            <input type="checkbox" id="convert-bulk-limited" checked />
-            <span>Limit each run to a <strong>batch</strong> of files</span>
-          </label>
-        </div>
-        <div id="convert-bulk-batch-fields" class="field-row" style="margin:0.25rem 0 0.5rem; flex-wrap:wrap; gap:0.75rem; align-items:flex-end">
-          <div>
-            <label for="convert-bulk-limit" style="display:block;font-size:0.85rem;margin-bottom:0.2rem">WAVs per run</label>
-            <input type="number" id="convert-bulk-limit" min="1" max="500" value="25" style="width:4.5rem" />
+      <section class="card convert-rollup-card">
+        <button type="button" class="convert-rollup-toggle" id="convert-toggle-single" aria-expanded="false" aria-controls="convert-single-panel">
+          <span class="convert-rollup-arrow" aria-hidden="true">▶</span>
+          <span>Single file</span>
+        </button>
+        <div id="convert-single-panel" class="convert-rollup-panel convert-rollup-panel--hidden" role="region" aria-labelledby="convert-toggle-single">
+          <div class="convert-step-block">
+            <h3>
+              <span class="step">1</span> Choose folder &amp; WAV file
+              <span class="help-tip">
+                <button type="button" class="help-tip-btn" aria-label="About this step">?</button>
+                <span class="help-tip-bubble" role="tooltip">The original .wav is never modified. Conversion uses ffmpeg (FLAC lossless, compression level 12). Type a path and click Browse, or use Default / Choose folder (paths come from Settings → destination).</span>
+              </span>
+            </h3>
+            <div class="dir-bar">
+              <input type="text" id="convert-dir" placeholder="~/Music" />
+              <button type="button" id="convert-browse-btn" class="btn btn-secondary">Browse</button>
+              <button type="button" id="convert-choose-folder-btn" class="btn btn-secondary" title="Open folder navigator">Choose folder…</button>
+              <button type="button" id="convert-default-dir-btn" class="btn btn-secondary" title="Path from Settings → destination">Default</button>
+            </div>
+            <div id="convert-file-list" class="file-list"></div>
+            <div id="convert-selected" class="probe-info hidden"></div>
           </div>
-          <div>
-            <label for="convert-bulk-offset" style="display:block;font-size:0.85rem;margin-bottom:0.2rem">Offset (0 = first in sorted list)</label>
-            <input type="number" id="convert-bulk-offset" min="0" value="0" style="width:5rem" />
+          <div class="convert-step-block">
+            <h3>
+              <span class="step">2</span> Output location
+              <span class="help-tip">
+                <button type="button" class="help-tip-btn" aria-label="About output options">?</button>
+                <span class="help-tip-bubble" role="tooltip">Same folder writes a .flac next to each WAV. Destination sends output to your library folder from Settings (see the status line below).</span>
+              </span>
+            </h3>
+            <div class="field-row">
+              <label class="inline" style="display:block;margin-bottom:0.5rem">
+                <input type="radio" name="convert-output" id="convert-out-same" value="same" checked />
+                <span>Same folder as the WAV (writes <code>&lt;name&gt;.flac</code> next to the source)</span>
+              </label>
+              <label class="inline" style="display:block">
+                <input type="radio" name="convert-output" id="convert-out-dest" value="destination" />
+                <span>Settings <strong>destination</strong> folder (FLACs / library path)</span>
+              </label>
+            </div>
+            <p class="hint" id="convert-dest-hint" style="margin:0.5rem 0 0">Loading…</p>
           </div>
-          <button type="button" id="convert-bulk-next-off-btn" class="btn btn-secondary" title="Add batch size to offset for the next run">Next offset</button>
-          <button type="button" id="convert-bulk-clear-progress-btn" class="btn btn-secondary" title="Remove saved offset/limit for this folder (uses resolved path)">Clear saved progress</button>
-        </div>
-        <div class="dir-bar" style="margin-top:0.5rem">
-          <button type="button" id="convert-bulk-scan-btn" class="btn btn-secondary">Scan for WAVs</button>
-          <button type="button" id="convert-bulk-run-btn" class="btn btn-primary">Run conversion</button>
-        </div>
-        <div id="convert-bulk-progress-wrap" class="progress-wrap hidden" aria-busy="false" aria-live="polite">
-          <p class="progress-label" id="convert-bulk-progress-label">Converting…</p>
-          <div class="progress-bar-outer" role="progressbar" aria-label="In progress">
-            <div class="progress-bar-indeterminate"></div>
+          <div class="convert-step-block">
+            <h3><span class="step">3</span> Convert</h3>
+            <button type="button" id="convert-run-btn" class="btn btn-accent" disabled>Convert to FLAC</button>
+            <div id="convert-result" class="result hidden"></div>
           </div>
         </div>
-        <div id="convert-bulk-next-box" class="next-offset-box hidden">
-          <p style="margin:0 0 0.35rem"><strong>Next offset for the following run</strong> (type this into <strong>Offset</strong> above; it is <em>0-based</em>)</p>
-          <p style="margin:0 0 0.5rem">Use offset <span class="next-offset-value mono" id="convert-next-offset-0">0</span> — that continues at file <span id="convert-next-1-based">1</span> in the sorted list when counting 1, 2, 3…</p>
-          <p class="hint" style="margin:0 0 0.5rem" id="convert-next-offset-detail"></p>
-          <button type="button" class="btn btn-secondary btn-sm" id="convert-apply-next-offset">Set offset field to this value</button>
+      </section>
+
+      <section class="card convert-rollup-card">
+        <div class="convert-rollup-head-row">
+          <button type="button" class="convert-rollup-toggle" id="convert-toggle-bulk" aria-expanded="false" aria-controls="convert-bulk-panel">
+            <span class="convert-rollup-arrow" aria-hidden="true">▶</span>
+            <span>Bulk</span>
+          </button>
+          <span class="help-tip convert-rollup-head-help">
+            <button type="button" class="help-tip-btn" aria-label="About bulk conversion">?</button>
+            <span class="help-tip-bubble" role="tooltip">Converts every .wav under a root folder; optionally includes all subfolders. Original WAVs are never deleted. Use Scan to count files before Run. Output mode is independent of single-file step 2.</span>
+          </span>
         </div>
-        <p id="convert-bulk-scan-status" class="status hidden" style="margin:0.5rem 0 0"></p>
-        <div id="convert-bulk-result" class="result hidden" style="margin-top:0.5rem"></div>
+        <div id="convert-bulk-panel" class="convert-rollup-panel convert-rollup-panel--hidden" role="region" aria-labelledby="convert-toggle-bulk">
+          <div class="convert-step-block">
+            <h3>
+              <span class="step">4</span> Root folder
+              <span class="help-tip">
+                <button type="button" class="help-tip-btn" aria-label="About bulk root">?</button>
+                <span class="help-tip-bubble" role="tooltip">Example: a Rekordbox or export tree. Scan finds all WAV paths in sorted order so batch offset/limit is stable between runs.</span>
+              </span>
+            </h3>
+            <div class="dir-bar">
+              <input type="text" id="convert-bulk-root" placeholder="/path/to/Underground" />
+              <button type="button" id="convert-bulk-choose-btn" class="btn btn-secondary">Choose folder…</button>
+            </div>
+            <div class="field-row" style="margin:0.5rem 0">
+              <label class="inline" style="display:block;margin-bottom:0.35rem">
+                <input type="checkbox" id="convert-bulk-recursive" checked />
+                <span>Include <strong>subfolders</strong> (entire tree)</span>
+              </label>
+              <label class="inline" style="display:block">
+                <input type="checkbox" id="convert-bulk-skip" checked />
+                <span>Skip if the <code>.flac</code> already exists (re-run / resume safe)</span>
+              </label>
+            </div>
+          </div>
+          <div class="convert-step-block">
+            <h3>
+              Bulk output
+              <span class="help-tip">
+                <button type="button" class="help-tip-btn" aria-label="About bulk output modes">?</button>
+                <span class="help-tip-bubble" role="tooltip">Next to each WAV: FLAC beside the source in the same tree. Mirror: recreate subfolders under Settings destination (avoids collisions across BPM folders). Flat: one folder for all outputs; filenames may use Slot - BPM - Artist - Title when the WAV name matches; tags embed from the same parse.</span>
+              </span>
+            </h3>
+            <div class="field-row" style="margin:0.5rem 0 0.35rem">
+              <label class="inline" style="display:block;margin-bottom:0.35rem">
+                <input type="radio" name="convert-bulk-output" id="convert-bulk-out-same" value="same" checked />
+                <span>Next to each <code>.wav</code> (same tree)</span>
+              </label>
+              <label class="inline" style="display:block;margin-bottom:0.35rem">
+                <input type="radio" name="convert-bulk-output" id="convert-bulk-out-dest" value="destination" />
+                <span>Mirror subfolders under Settings <strong>destination</strong></span>
+              </label>
+              <label class="inline" style="display:block">
+                <input type="radio" name="convert-bulk-output" id="convert-bulk-out-custom" value="custom" />
+                <span>One <strong>flat</strong> folder (e.g. all FLACs for Rekordbox in one place)</span>
+              </label>
+            </div>
+            <div id="convert-bulk-target-wrap" class="dir-bar hidden" style="margin-top:0.5rem">
+              <input type="text" id="convert-bulk-target-dir" placeholder="e.g. ~/Music/FLACs/Converted WAVs" title="All converted FLACs go here" />
+              <button type="button" id="convert-bulk-target-choose-btn" class="btn btn-secondary" title="Choose output folder">Choose folder…</button>
+            </div>
+            <p id="convert-bulk-output-hint" class="hint" style="margin:0.35rem 0 0.75rem">Mirrored mode keeps different BPM/subfolders from overwriting each other. Flat mode renames when the usual filename pattern matches.</p>
+          </div>
+          <div class="convert-step-block">
+            <h3>
+              Batching
+              <span class="help-tip">
+                <button type="button" class="help-tip-btn" aria-label="About batching">?</button>
+                <span class="help-tip-bubble" role="tooltip">Large libraries: use a batch size and offset. Sorted order is the same every run. Skip-if-exists makes re-runs safe. Clear saved progress forgets the stored offset for this root. After a flat-folder run, open Bulk Fix on that folder. Turning off the limit runs everything in one go—use Scan first.</span>
+              </span>
+            </h3>
+            <div class="field-row" style="margin:0.35rem 0 0.5rem; flex-wrap:wrap; align-items:center; gap:0.5rem 1rem">
+              <label class="inline" style="display:inline-flex;align-items:center;gap:0.35rem">
+                <input type="checkbox" id="convert-bulk-limited" checked />
+                <span>Limit each run to a <strong>batch</strong> of files</span>
+              </label>
+            </div>
+            <div id="convert-bulk-batch-fields" class="field-row" style="margin:0.25rem 0 0.5rem; flex-wrap:wrap; gap:0.75rem; align-items:flex-end">
+              <div>
+                <label for="convert-bulk-limit" style="display:block;font-size:0.85rem;margin-bottom:0.2rem">WAVs per run</label>
+                <input type="number" id="convert-bulk-limit" min="1" max="500" value="25" style="width:4.5rem" />
+              </div>
+              <div>
+                <label for="convert-bulk-offset" style="display:block;font-size:0.85rem;margin-bottom:0.2rem">Offset (0 = first in sorted list)</label>
+                <input type="number" id="convert-bulk-offset" min="0" value="0" style="width:5rem" />
+              </div>
+              <button type="button" id="convert-bulk-next-off-btn" class="btn btn-secondary" title="Add batch size to offset for the next run">Next offset</button>
+              <button type="button" id="convert-bulk-clear-progress-btn" class="btn btn-secondary" title="Remove saved offset/limit for this folder (uses resolved path)">Clear saved progress</button>
+            </div>
+            <div class="dir-bar" style="margin-top:0.5rem">
+              <button type="button" id="convert-bulk-scan-btn" class="btn btn-secondary">Scan for WAVs</button>
+              <button type="button" id="convert-bulk-run-btn" class="btn btn-primary">Run conversion</button>
+            </div>
+            <div id="convert-bulk-progress-wrap" class="progress-wrap hidden" aria-busy="false" aria-live="polite">
+              <p class="progress-label" id="convert-bulk-progress-label">Converting…</p>
+              <div class="progress-bar-outer" role="progressbar" aria-label="In progress">
+                <div class="progress-bar-indeterminate"></div>
+              </div>
+            </div>
+            <div id="convert-bulk-next-box" class="next-offset-box hidden">
+              <p style="margin:0 0 0.35rem"><strong>Next offset for the following run</strong> (type this into <strong>Offset</strong> above; it is <em>0-based</em>)</p>
+              <p style="margin:0 0 0.5rem">Use offset <span class="next-offset-value mono" id="convert-next-offset-0">0</span> — that continues at file <span id="convert-next-1-based">1</span> in the sorted list when counting 1, 2, 3…</p>
+              <p class="hint" style="margin:0 0 0.5rem" id="convert-next-offset-detail"></p>
+              <button type="button" class="btn btn-secondary btn-sm" id="convert-apply-next-offset">Set offset field to this value</button>
+            </div>
+            <p id="convert-bulk-scan-status" class="status hidden" style="margin:0.5rem 0 0"></p>
+            <div id="convert-bulk-result" class="result hidden" style="margin-top:0.5rem"></div>
+          </div>
+        </div>
       </section>
     </main>
   </div>

@@ -1,5 +1,48 @@
 const $ = (sel) => document.querySelector(sel);
 
+function initConvertRollups() {
+  function wire(btn, panel) {
+    if (!btn || !panel) return;
+    btn.addEventListener("click", () => {
+      const open = btn.getAttribute("aria-expanded") === "true";
+      const next = !open;
+      btn.setAttribute("aria-expanded", next ? "true" : "false");
+      panel.classList.toggle("convert-rollup-panel--hidden", !next);
+    });
+  }
+  wire(document.getElementById("convert-toggle-single"), document.getElementById("convert-single-panel"));
+  wire(document.getElementById("convert-toggle-bulk"), document.getElementById("convert-bulk-panel"));
+}
+
+function initConvertHelpTips() {
+  document.querySelectorAll(".help-tip").forEach((wrap) => {
+    const btn = wrap.querySelector(".help-tip-btn");
+    if (!btn) return;
+    btn.setAttribute("aria-expanded", "false");
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wasOpen = wrap.classList.contains("help-tip--open");
+      document.querySelectorAll(".help-tip--open").forEach((w) => {
+        w.classList.remove("help-tip--open");
+        const b = w.querySelector(".help-tip-btn");
+        if (b) b.setAttribute("aria-expanded", "false");
+      });
+      if (!wasOpen) {
+        wrap.classList.add("help-tip--open");
+        btn.setAttribute("aria-expanded", "true");
+      }
+    });
+    wrap.addEventListener("click", (e) => e.stopPropagation());
+  });
+  document.addEventListener("click", () => {
+    document.querySelectorAll(".help-tip--open").forEach((w) => {
+      w.classList.remove("help-tip--open");
+      const b = w.querySelector(".help-tip-btn");
+      if (b) b.setAttribute("aria-expanded", "false");
+    });
+  });
+}
+
 let selectedWav = null;
 let folderModalPath = "";
 /** Which field the folder modal writes to: "convert-dir" | "convert-bulk-root" | "convert-bulk-target-dir" */
@@ -915,6 +958,8 @@ document.querySelectorAll('input[name="convert-bulk-output"]').forEach((r) => {
   el.addEventListener(ev, scheduleSaveConvertBulkUi);
 });
 loadSettingsHints().then(async () => {
+  initConvertRollups();
+  initConvertHelpTips();
   try {
     const saved = localStorage.getItem(BULK_TARGET_LS);
     const ti = document.getElementById("convert-bulk-target-dir");
@@ -929,7 +974,7 @@ loadSettingsHints().then(async () => {
     await browseWav();
   } else {
     $("#convert-file-list").innerHTML =
-      '<div class="status">Type a folder path and click Browse, or use <strong>Default</strong> / <strong>Choose folder…</strong></div>';
+      '<div class="status">Expand <strong>Single file</strong> above, enter a folder path, then Browse — or Default / Choose folder…</div>';
   }
   updateBulkRunEnabled();
 });
