@@ -14,7 +14,7 @@ A local web tool for DJs to turn recordings into a clean, tagged library in **mu
 | **`master`** | Stable release; multi-format extract, tag, and normalise as documented below. |
 | **`v2`** | Active development; new features land here first, then merge to `master` when ready. |
 
-**On branch `v2` today:** **Bulk Fix** (batch FLAC metadata, Bandcamp search, duplicate-name warnings, optional sibling `.wav` hints), batch **WAV → FLAC** with offsets, **Inspect** folder picker, last browsed folder remembered between **Fix Metadata** and **Inspect**, and **UTF-8–safe** HTML/JSON scraping so accented titles (e.g. Apple Music) write correctly to tags.
+**On branch `v2` today:** **Bulk Fix** (batch FLAC metadata, Bandcamp search, duplicate-name warnings, optional sibling `.wav` hints, **best-match pre-selection** after fetch), batch **WAV → FLAC** with offsets and **browser-stored batch progress**, **conversion-order handoff** to Bulk Fix for flat output (see [UI state](#ui-state-browser)), in-app **bulk convert confirmation** (no native `confirm` dialog), **per-tab UI drafts** for Extract / Fix / Inspect / Normalise / Settings in `localStorage`, **Inspect** folder picker, last browsed folder remembered between **Fix Metadata** and **Inspect**, and **UTF-8–safe** HTML/JSON scraping so accented titles (e.g. Apple Music) write correctly to tags.
 
 ## Recording
 
@@ -38,6 +38,13 @@ Seven pages, via tabs at the top (order: **Extract → Fix Metadata → Inspect 
 8. **Platinum Notes (optional)** — in Settings, set the **exact app name** (e.g. `Platinum Notes 10`). On Extract you can **open the extracted file in Platinum Notes** and **watch for the `*_PN` output** (same base name and extension family); when it appears, tags and artwork are **re-applied** from the same log entry (and the PN file is **copied next to your library copy** when a destination copy exists).
 
 Paths, loudness targets, and Platinum Notes options live on the **Settings** tab.
+
+### UI state (browser)
+
+The app does **not** use cookies for form memory. **Extract**, **Fix Metadata**, **Inspect**, **Normalise**, and **Settings** save **debounced drafts** to **`localStorage`** under **`djmm.pageState`** (see `static/path-persist.js`: `djmmPageStateSchedule` / `djmmPageStateGetPage`). When you switch tabs and come back in the same browser profile, folders, fields, and selected files are restored where possible.
+
+- **Settings:** After you click **Save Settings**, the settings draft is cleared so the next load matches the server.
+- **WAV → FLAC** and **Bulk Fix** use **additional** keys (e.g. bulk folder/target memory, batch offset handoff, `djmm.bulkFixHandoff` after a flat-folder convert) so large workflows stay separate from the generic page store.
 
 ### Fix Metadata
 
@@ -87,21 +94,22 @@ Convert **WAV** recordings to **FLAC** (ffmpeg, compression level 12). Source WA
   - **Mirror under destination** — preserve subfolders under your **Settings** destination (avoids name collisions across BPM folders).
   - **One flat folder** — e.g. all converted files into a single Rekordbox-style directory; filenames use **`Slot - BPM - Artist - Title`** when the WAV name matches that pattern; many DJ exports instead use a **flat** name with a lead slot and trailing key + BPM (see [Filename search and tags](#filename-search-and-tags)).
 - **Tags from filename** — after each encode, **artist** and **title** Vorbis tags are set when the stem can be parsed (see below; aligned with **Fix Metadata** and **Bulk Fix**).
-- **Batching (recommended for large trees)** — by default, each run only processes a **batch** of WAVs in **sorted path order** using **offset** and **limit** (e.g. 25 per run). Use **Next offset** to step through hundreds of files safely; keep **skip if FLAC exists** on to resume. Uncheck “limit each run” only if you intentionally want one run for the whole tree (you’ll get a stronger warning when the scan count is high).
-- After a successful **flat-folder** run, the UI offers **Open Bulk Fix for this folder** (or use **Bulk Fix** with `?dir=/path/to/folder`).
+- **Batching (recommended for large trees)** — by default, each run only processes a **batch** of WAVs in **sorted path order** using **offset** and **limit** (e.g. 25 per run). Use **Next offset** to step through hundreds of files safely; keep **skip if FLAC exists** on to resume. Uncheck “limit each run” only if you intentionally want one run for the whole tree (you’ll get a stronger warning when the scan count is high). Successful limited batches can **persist the next offset** per source folder (browser only).
+- **Bulk run confirmation** uses an in-page modal (same style as the folder picker), not the browser’s native confirm dialog.
+- After a successful **flat-folder** run, the API returns **`batch_flac_paths`**: the **exact output `.flac` paths in conversion order** for that run (not alphabetical order in the flat folder, which often differs when BPM subfolders drive WAV sort). **Open Bulk Fix** stores a short-lived handoff and opens **Bulk Fix** so that batch loads via **`POST /api/bulk-fix/scan-paths`** instead of folder offset/limit alone.
 
 ### Bulk Fix (metadata in batches)
 
 For a **folder of FLACs** (often the same flat folder as **WAV → FLAC** output), review and apply **Discogs, Apple Music, or Bandcamp** (and other) metadata without doing one file at a time on **Fix Metadata**.
 
 1. **Scan & load** — choose root, **files per pass**, and **offset** (same idea as WAV batching: stable sorted list). If the same **filename** exists more than once (e.g. in different subfolders, or two copies in the same batch), the table flags **Duplicate in this batch** or **Same name elsewhere** and lists other paths; the apply step warns if you are about to tag multiple copies.
-2. **Fetch online matches** — runs the same combined **iTunes + Discogs + Bandcamp** search as Fix, with gentle rate spacing between files. The **search query** for each file is built from the **filename stem** using [Filename search and tags](#filename-search-and-tags).
+2. **Fetch online matches** — runs the same combined **iTunes + Discogs + Bandcamp** search as Fix, with gentle rate spacing between files. The **search query** for each file is built from the **filename stem** using [Filename search and tags](#filename-search-and-tags). After results return, the **Match** dropdown **pre-selects a best guess** (filename hints + light source tie-break) so you can skim and only change wrong rows.
 3. **Review** — per row, pick a search result or paste a **Bandcamp / Discogs / Apple / Spotify** URL. After **Fetch online matches**, each row lists **shortcuts (Apple / Discogs / Bandcamp)** and the **full URL** for every hit (same URL the dropdown uses), so you can open and validate in the browser before apply. The **Match** column uses high-contrast link colours on a slightly lighter cell background so URLs stay readable on dark mode.
 4. **Apply** — fetches full metadata, matches **multi-track** Discogs releases using the **title hint** from the filename when possible, embeds tags and artwork; optional **rename to `Artist - Title.flac`**. Optional logging to the processing log.
 
 **Optional same-name `.wav`:** If `SomeTrack.wav` sits in the **same folder** as `SomeTrack.flac`, the server reads **embedded WAV tags** (when mutagen can see them — e.g. some BWF/RIFF metadata). If **both** artist and title are present in the WAV, the **search query** uses that pair (often cleaner than the filename alone). If only one of those fields exists, it can still **fill title/artist hints** for track matching without replacing the whole query. Many exports have **no** useful WAV tags, so the filename rules above still do most of the work.
 
-The **WAV → FLAC** tab links here after a flat-folder conversion; **Bulk Fix** also reads **`?dir=...`** from the URL to pre-fill the folder path.
+The **WAV → FLAC** tab links here after a flat-folder conversion with **`?dir=...`** and a **handoff** of **`batch_flac_paths`** when available; you can still open **`/bulk-fix?dir=...`** with optional **`offset`** / **`limit`** for ordinary folder paging.
 
 #### Filename search and tags
 
@@ -248,8 +256,9 @@ Example (see `config.json.example`):
 |--------|------|---------|
 | `GET` | `/api/browse-wav` | List `.wav` in a directory (WAV → FLAC). |
 | `POST` | `/api/convert-wav-to-flac` | Single WAV → FLAC; optional `output` `same` / `destination`. |
-| `POST` | `/api/convert-wav-bulk` | Bulk WAV → FLAC; `output` `same` / `destination` / `custom` + `target_dir` for flat output. Optional **`offset`**, **`limit`** for batch slices; response includes **`batch`** (`total_wavs`, `candidates_in_batch`, etc.). |
-| `GET` | `/api/bulk-fix/scan` | Paginated `.flac` list with **query**, **title_hint**, optional **wav_sibling** + **wav_tags** when a same-name `.wav` exists, plus **duplicate_basename**, **same_basename_count**, **same_basename_other_paths**, **duplicate_in_batch** when the same filename appears more than once under the scanned tree. Response includes **duplicates_in_batch** (rows in this page that share a name with another row). Filename rules: [Filename search and tags](#filename-search-and-tags). |
+| `POST` | `/api/convert-wav-bulk` | Bulk WAV → FLAC; `output` `same` / `destination` / `custom` + `target_dir` for flat output. Optional **`offset`**, **`limit`** for batch slices; response includes **`batch`** (`total_wavs`, `candidates_in_batch`, etc.) and, when any outputs were produced or skipped as existing FLACs in that batch, **`batch_flac_paths`** (ordered list of absolute `.flac` paths matching the WAV batch order). |
+| `GET` | `/api/bulk-fix/scan` | Paginated `.flac` list with **query**, **title_hint**, optional **wav_sibling** + **wav_tags** when a same-name `.wav` exists, plus **duplicate_basename**, **same_basename_count**, **same_basename_other_paths**, **duplicate_in_batch** when the same filename appears more than once under the scanned tree. Response includes **duplicates_in_batch** (rows in this page that share a name with another row). Filename rules: [Filename search and tags](#filename-search-and-tags). Listing order follows directory walk + sorted names — use **`scan-paths`** when order must match a convert batch. |
+| `POST` | `/api/bulk-fix/scan-paths` | Body: `{ "paths": ["/abs/a.flac", ...] }` (max 200). Same item shape as **`/api/bulk-fix/scan`** but **preserves the given path order**; response includes **`"order": "explicit_paths"`**. Used after **WAV → FLAC** flat-folder runs so Bulk Fix loads exactly the files from that batch. |
 | `POST` | `/api/bulk-fix/suggest` | Search results per file path (Apple + Discogs + Bandcamp). |
 | `POST` | `/api/bulk-fix/apply` | Apply metadata from chosen URLs to many files. |
 | `GET` | `/api/search` | iTunes + Discogs + Bandcamp search (used by Fix and Bulk Fix). |
@@ -267,7 +276,7 @@ pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
 
-Coverage includes: browse/convert WAV, bulk convert (including **offset/limit** and **custom** flat output + tags), **retag** rename, **bulk-fix** scan (including duplicate detection and WAV tag hints), **Bandcamp search** parsing (mocked HTML), **fetch-metadata** track hints, normalise API, and shared helpers. Tests that invoke **ffmpeg** skip automatically if it is missing. Network calls to live Discogs, Apple, or Bandcamp are **not** required in automated tests; bulk **suggest**/**apply** against real services are left to manual checks.
+Coverage includes: browse/convert WAV, bulk convert (including **offset/limit**, **`batch_flac_paths`**, and **custom** flat output + tags), **retag** rename, **bulk-fix** scan and **scan-paths** (including duplicate detection and WAV tag hints), **Bandcamp search** parsing (mocked HTML), **fetch-metadata** track hints, normalise API, and shared helpers. Tests that invoke **ffmpeg** skip automatically if it is missing. Network calls to live Discogs, Apple, or Bandcamp are **not** required in automated tests; bulk **suggest**/**apply** against real services are left to manual checks.
 
 ## Project structure
 
@@ -288,7 +297,7 @@ dj-meta-manager/
 │   ├── normalise.html / normalise.js
 │   ├── convert.html / convert.js   # WAV → FLAC
 │   ├── bulk-fix.html / bulk-fix.js # Bulk Fix metadata
-│   ├── path-persist.js             # Shared last folder (Fix + Inspect)
+│   ├── path-persist.js             # Last audio browse dir (Fix + Inspect) + `djmm.pageState` UI drafts
 │   ├── settings.html / settings.js
 │   └── style.css
 └── README.md

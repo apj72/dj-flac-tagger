@@ -1,5 +1,6 @@
 """Tests for /api/browse-wav and /api/convert-wav-to-flac."""
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -215,6 +216,52 @@ def test_convert_wav_bulk_custom_flat_target(client, app_module, tmp_path):
     assert t1["title"] == ["Test Title"]
     assert t2["artist"] == ["Other"]
     assert t2["title"] == ["Another Song"]
+    paths = j.get("batch_flac_paths") or []
+    assert len(paths) == 2
+    assert os.path.normpath(paths[0]) == os.path.normpath(str(f1))
+    assert os.path.normpath(paths[1]) == os.path.normpath(str(f2))
+
+
+def test_convert_wav_bulk_batch_flac_paths_order_differs_from_alpha_basename(client, app_module, tmp_path):
+    """Path-sorted WAV order can differ from Artist - Title.flac alphabetical order in flat out."""
+    try:
+        src = tmp_path / "src"
+        src.mkdir()
+        early = src / "a_early_folder"
+        late = src / "z_late_folder"
+        early.mkdir()
+        late.mkdir()
+        w_zed = early / "A01 - 128 - Zed Artist - Zoo.wav"
+        w_amy = late / "B01 - 128 - Amy Artist - Ant.wav"
+        _write_minimal_wav(w_zed)
+        _write_minimal_wav(w_amy)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pytest.skip("ffmpeg not available")
+
+    flat = tmp_path / "flat_out"
+    flat.mkdir()
+
+    r = client.post(
+        "/api/convert-wav-bulk",
+        json={
+            "root_dir": str(src),
+            "output": "custom",
+            "target_dir": str(flat),
+            "recursive": True,
+            "skip_if_flac_exists": True,
+        },
+    )
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j["summary"]["converted"] == 2
+    f_zed = flat / "Zed Artist - Zoo.flac"
+    f_amy = flat / "Amy Artist - Ant.flac"
+    assert f_zed.is_file()
+    assert f_amy.is_file()
+    paths = j.get("batch_flac_paths") or []
+    assert len(paths) == 2
+    assert os.path.normpath(paths[0]) == os.path.normpath(str(f_zed))
+    assert os.path.normpath(paths[1]) == os.path.normpath(str(f_amy))
 
 
 def test_convert_wav_to_flac_embeds_tags_from_filename(client, app_module, tmp_path):
@@ -261,6 +308,9 @@ def test_convert_wav_bulk_respects_offset_limit(client, app_module, tmp_path):
     assert j["summary"]["converted"] == 1
     have_flac = sum(1 for p in tmp_path.iterdir() if p.suffix.lower() == ".flac")
     assert have_flac == 1
+    bfp = j.get("batch_flac_paths") or []
+    assert len(bfp) == 1
+    assert bfp[0].lower().endswith(".flac")
 
 
 def test_convert_wav_bulk_requires_target_for_custom(client, app_module, tmp_path):

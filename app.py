@@ -3038,6 +3038,7 @@ def convert_wav_bulk():
     errors = []  # sample details; "errors" in summary = total count
     err_n = 0
     err_cap = 100
+    batch_flac_paths = []
     for wav in wav_queue:
         stem = Path(wav).stem
         if output_mode == "custom" and target_r is not None:
@@ -3046,6 +3047,7 @@ def convert_wav_bulk():
             candidate = os.path.join(target_r, base_fname)
             if skip and os.path.isfile(candidate):
                 skipped += 1
+                batch_flac_paths.append(os.path.normpath(candidate))
                 continue
             if os.path.isfile(candidate):
                 out = _unique_path_in_dir(target_r, base_fname)
@@ -3055,6 +3057,7 @@ def convert_wav_bulk():
             out = _bulk_flac_output_path(wav, root_r, output_mode, dest_resolved)
             if skip and os.path.isfile(out):
                 skipped += 1
+                batch_flac_paths.append(os.path.normpath(out))
                 continue
         try:
             _ffmpeg_wav_to_flac_file(wav, out)
@@ -3072,6 +3075,7 @@ def convert_wav_bulk():
                 errors.append({"source": wav, "error": f"Tags: {te}"[:500]})
             continue
         ok += 1
+        batch_flac_paths.append(os.path.normpath(out))
     j = {
         "root": root_r,
         "output": output_mode,
@@ -3090,7 +3094,82 @@ def convert_wav_bulk():
     }
     if target_r is not None:
         j["target_dir"] = target_r
+    if batch_flac_paths:
+        j["batch_flac_paths"] = batch_flac_paths
     return jsonify(j)
+
+
+@app.route("/api/bulk-fix/scan-paths", methods=["POST"])
+def bulk_fix_scan_paths():
+    """
+    Build the same scan payload as GET /api/bulk-fix/scan but for an explicit ordered list
+    of .flac paths (e.g. output order from a WAV→FLAC bulk run, which may differ from
+    folder listing order when flat renaming is used).
+    """
+    data = request.get_json() or {}
+    paths = data.get("paths") or []
+    if not isinstance(paths, list):
+        return jsonify({"error": "paths must be a list"}), 400
+    raw_list = [str(p).strip() for p in paths if (p or "").strip()]
+    if not raw_list:
+        return jsonify({"error": "paths must be a non-empty list"}), 400
+    if len(raw_list) > 200:
+        return jsonify({"error": "Maximum 200 paths per scan-paths request."}), 400
+    resolved = []
+    for p in raw_list:
+        try:
+            p_r = os.path.realpath(resolve(p))
+        except (OSError, TypeError):
+            continue
+        if not os.path.isfile(p_r) or not p_r.lower().endswith(".flac"):
+            continue
+        resolved.append(p_r)
+    resolved = list(dict.fromkeys(resolved))
+    if not resolved:
+        return jsonify({"error": "No valid .flac files found for the given paths."}), 404
+    by_basename = defaultdict(list)
+    for p in resolved:
+        by_basename[os.path.basename(p)].append(p)
+    batch_basenames = [os.path.basename(p) for p in resolved]
+    _bc = {}
+    for b in batch_basenames:
+        _bc[b] = _bc.get(b, 0) + 1
+    in_batch_dups = {b for b, c in _bc.items() if c > 1}
+    dup_row_count = sum(1 for b in batch_basenames if _bc.get(b, 0) > 1)
+    items = []
+    for p in resolved:
+        base = os.path.basename(p)
+        sibs = by_basename.get(base) or []
+        n = len(sibs)
+        other_paths = [x for x in sibs if x != p]
+        info = bulk_fix_search_info_for_flac(p)
+        items.append({
+            "filepath": p,
+            "basename": base,
+            "query": info["query"],
+            "title_hint": info.get("title_hint") or "",
+            "artist_hint": info.get("artist_hint") or "",
+            "pattern_matched": info.get("pattern_matched", False),
+            "wav_sibling": info.get("wav_sibling") or "",
+            "wav_tags": info.get("wav_tags"),
+            "duplicate_basename": n > 1,
+            "same_basename_count": n,
+            "same_basename_other_paths": other_paths[:12],
+            "duplicate_in_batch": base in in_batch_dups,
+        })
+    try:
+        root_hint = os.path.commonpath(resolved)
+    except ValueError:
+        root_hint = os.path.dirname(resolved[0])
+    return jsonify({
+        "root": root_hint,
+        "total": len(resolved),
+        "offset": 0,
+        "limit": len(resolved),
+        "items": items,
+        "duplicates_in_batch": dup_row_count,
+        "order": "explicit_paths",
+    })
 
 
 @app.route("/api/convert-wav-to-flac", methods=["POST"])

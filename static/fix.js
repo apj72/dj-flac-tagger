@@ -7,6 +7,80 @@ let artworkUrl = "";
 /** Paths in current file list (same order as .file-item data-idx). */
 let fixBrowseFilePaths = [];
 
+function collectFixPageState() {
+  const snap =
+    currentMeta && typeof currentMeta === "object"
+      ? { ...currentMeta }
+      : {};
+  delete snap.tracklist;
+  return {
+    v: 1,
+    fixDir: $("#fix-dir").value,
+    selectedFile,
+    title: $("#fix-title").value,
+    artist: $("#fix-artist").value,
+    albumartist: $("#fix-albumartist").value,
+    album: $("#fix-album").value,
+    date: $("#fix-date").value,
+    genre: $("#fix-genre").value,
+    label: $("#fix-label").value,
+    catno: $("#fix-catno").value,
+    comment: $("#fix-comment").value,
+    url: $("#fix-url").value,
+    renameToTags: $("#fix-rename-to-tags").checked,
+    artworkUrl,
+    currentTracklist,
+    currentMetaSnapshot: Object.keys(snap).length ? snap : null,
+  };
+}
+
+function scheduleFixPageSave() {
+  if (typeof djmmPageStateSchedule === "function") {
+    djmmPageStateSchedule("fix", collectFixPageState);
+  }
+}
+
+function applyFixFieldsOverlay(st) {
+  if (st.title != null) $("#fix-title").value = st.title;
+  if (st.artist != null) $("#fix-artist").value = st.artist;
+  if (st.albumartist != null) $("#fix-albumartist").value = st.albumartist;
+  if (st.album != null) $("#fix-album").value = st.album;
+  if (st.date != null) $("#fix-date").value = st.date;
+  if (st.genre != null) $("#fix-genre").value = st.genre;
+  if (st.label != null) $("#fix-label").value = st.label;
+  if (st.catno != null) $("#fix-catno").value = st.catno;
+  if (st.comment != null) $("#fix-comment").value = st.comment;
+  if (st.url != null) $("#fix-url").value = st.url;
+  if (st.renameToTags != null) $("#fix-rename-to-tags").checked = st.renameToTags;
+  if (st.artworkUrl != null) {
+    artworkUrl = st.artworkUrl;
+    if (artworkUrl) {
+      const proxyUrl = `/api/fetch-artwork?url=${encodeURIComponent(artworkUrl)}`;
+      $("#fix-artwork-preview").innerHTML = `<img src="${proxyUrl}" alt="Cover art" onerror="this.parentElement.innerHTML='<span>Failed to load</span>'" />`;
+    }
+  }
+}
+
+function wireFixPagePersistence() {
+  const ids = [
+    "fix-dir",
+    "fix-title",
+    "fix-artist",
+    "fix-albumartist",
+    "fix-album",
+    "fix-date",
+    "fix-genre",
+    "fix-label",
+    "fix-catno",
+    "fix-comment",
+    "fix-url",
+  ];
+  ids.forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", scheduleFixPageSave);
+  });
+  document.getElementById("fix-rename-to-tags")?.addEventListener("change", scheduleFixPageSave);
+}
+
 // ---- Filename helpers (e.g. Ableton: A06 - 139 - Artist - Title) ----
 /** Match app.py `strip_rekordbox_style_filename_affixes` (trailing key+BPM, then lead slot). */
 function stripRekordboxStyleFilenameAffixes(stem) {
@@ -150,6 +224,7 @@ async function browseAudio() {
   if (data.error) {
     $("#fix-file-list").innerHTML = `<div class="status">${data.error}</div>`;
     fixBrowseFilePaths = [];
+    scheduleFixPageSave();
     return null;
   }
 
@@ -161,6 +236,7 @@ async function browseAudio() {
   if (data.files.length === 0) {
     $("#fix-file-list").innerHTML = '<div class="status">No audio files found</div>';
     fixBrowseFilePaths = [];
+    scheduleFixPageSave();
     return data;
   }
 
@@ -180,6 +256,7 @@ async function browseAudio() {
   $("#fix-file-list").querySelectorAll(".file-item").forEach((el) => {
     el.addEventListener("click", () => selectFlacFile(el));
   });
+  scheduleFixPageSave();
   return data;
 }
 
@@ -216,6 +293,7 @@ async function selectFlacFile(el) {
 
   if (data.error) {
     tags.innerHTML = data.error;
+    scheduleFixPageSave();
     return;
   }
 
@@ -263,6 +341,7 @@ async function selectFlacFile(el) {
   }
   autoSearch(searchPayload);
   updateRenamePreview();
+  scheduleFixPageSave();
 }
 
 // ---- Auto-search from file tags ----
@@ -380,6 +459,7 @@ async function pickSearchResult(el, results) {
     status.classList.remove("hidden");
     status.textContent = meta._warning;
   }
+  scheduleFixPageSave();
 }
 
 // ---- Fetch metadata from URL ----
@@ -420,6 +500,7 @@ async function fetchMetadata() {
     status.classList.remove("hidden");
     status.textContent = meta._warning;
   }
+  scheduleFixPageSave();
 }
 
 function populateFromMeta(meta) {
@@ -438,6 +519,7 @@ function populateFromMeta(meta) {
     $("#fix-artwork-preview").innerHTML = `<img src="${proxyUrl}" alt="Cover art" onerror="this.parentElement.innerHTML='<span>Failed to load</span>'" />`;
   }
   updateRenamePreview();
+  scheduleFixPageSave();
 }
 
 // ---- Tracklist ----
@@ -477,6 +559,7 @@ function selectTrack(el, meta) {
   if (meta.catno) $("#fix-catno").value = meta.catno;
   $("#fix-comment").value = `${track.position} - ${meta.album || ""}`.trim();
   updateRenamePreview();
+  scheduleFixPageSave();
 }
 
 // ---- Rename preview (match server: Artist - Title.ext) ----
@@ -534,6 +617,7 @@ function clearAll() {
   artworkUrl = "";
   currentTracklist = [];
   currentMeta = {};
+  scheduleFixPageSave();
 }
 
 // ---- Save tags ----
@@ -605,6 +689,7 @@ async function saveTags() {
 
   btn.disabled = false;
   btn.textContent = "Save Tags & Artwork";
+  scheduleFixPageSave();
 }
 
 // ---- Event listeners ----
@@ -641,6 +726,8 @@ async function initFixPage() {
     window.__fixSearchOverrideFromUrl = q;
   }
   await loadSettings();
+  const st = !file && typeof djmmPageStateGetPage === "function" ? djmmPageStateGetPage("fix") : null;
+
   if (file) {
     const lastSlash = file.lastIndexOf("/");
     const dir = lastSlash > 0 ? file.slice(0, lastSlash) : "";
@@ -663,9 +750,24 @@ async function initFixPage() {
       }
     }
   } else {
+    if (st && st.v === 1 && st.fixDir != null) $("#fix-dir").value = st.fixDir;
     await browseAudio();
+    if (st && st.v === 1 && st.selectedFile) {
+      const item = findFileItemByPath(st.selectedFile);
+      if (item) await selectFlacFile(item);
+    }
+    if (st && st.v === 1) {
+      applyFixFieldsOverlay(st);
+      if (st.currentTracklist && st.currentTracklist.length > 1 && st.currentMetaSnapshot) {
+        currentTracklist = st.currentTracklist;
+        currentMeta = { ...st.currentMetaSnapshot };
+        showTracklist(currentMeta);
+      }
+    }
   }
   updateRenamePreview();
+  wireFixPagePersistence();
+  scheduleFixPageSave();
 }
 
 initFixPage();

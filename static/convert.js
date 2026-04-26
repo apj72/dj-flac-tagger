@@ -5,9 +5,14 @@ let folderModalPath = "";
 /** Which field the folder modal writes to: "convert-dir" | "convert-bulk-root" | "convert-bulk-target-dir" */
 let folderModalFieldId = "convert-dir";
 const BULK_TARGET_LS = "djmm.convertBulkTargetDir";
+/** Per resolved root: saved batch position after a successful limited bulk convert */
+const BULK_WAV_PROGRESS_LS = "djmm.bulkWavProgressByRoot";
 let settingsDestinationResolved = "";
 let settingsDestinationDisplay = "";
 let lastBulkScanCount = 0;
+let bulkWavRestoreTimer = null;
+const CONVERT_BULK_UI_LS = "djmm.convertBulkUi";
+let convertBulkSaveTimer = null;
 
 function getOutputMode() {
   return document.querySelector('input[name="convert-output"]:checked')?.value || "same";
@@ -35,6 +40,109 @@ function syncConvertBulkBatchFields() {
   const on = isConvertBulkBatchLimited();
   const wrap = document.getElementById("convert-bulk-batch-fields");
   if (wrap) wrap.classList.toggle("hidden", !on);
+}
+
+function saveConvertBulkUi() {
+  try {
+    const out = document.getElementById("convert-bulk-result");
+    const st = document.getElementById("convert-bulk-scan-status");
+    const nextBox = document.getElementById("convert-bulk-next-box");
+    const o = getBulkOutputMode();
+    localStorage.setItem(
+      CONVERT_BULK_UI_LS,
+      JSON.stringify({
+        v: 1,
+        bulkRoot: document.getElementById("convert-bulk-root")?.value ?? "",
+        recursive: document.getElementById("convert-bulk-recursive")?.checked ?? true,
+        skipFlac: document.getElementById("convert-bulk-skip")?.checked ?? true,
+        output: o,
+        targetDir: getBulkTargetDir(),
+        limited: isConvertBulkBatchLimited(),
+        limit: document.getElementById("convert-bulk-limit")?.value ?? "25",
+        offset: document.getElementById("convert-bulk-offset")?.value ?? "0",
+        lastBulkScanCount,
+        scanStatus: st?.textContent ?? "",
+        scanStatusHidden: st?.classList.contains("hidden") ?? true,
+        resultHtml: out && !out.classList.contains("hidden") ? out.innerHTML : "",
+        resultClass: out?.className ?? "result hidden",
+        resultHidden: out?.classList.contains("hidden") ?? true,
+        nextBoxHidden: nextBox?.classList.contains("hidden") ?? true,
+        nextOffset: nextBox?.dataset?.nextOffset ?? "",
+      }),
+    );
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+function scheduleSaveConvertBulkUi() {
+  if (convertBulkSaveTimer) clearTimeout(convertBulkSaveTimer);
+  convertBulkSaveTimer = setTimeout(() => {
+    convertBulkSaveTimer = null;
+    saveConvertBulkUi();
+  }, 400);
+}
+
+function restoreConvertBulkUi() {
+  try {
+    const raw = localStorage.getItem(CONVERT_BULK_UI_LS);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (!s || s.v !== 1) return;
+    const r = document.getElementById("convert-bulk-root");
+    if (r && s.bulkRoot != null) r.value = s.bulkRoot;
+    const rec = document.getElementById("convert-bulk-recursive");
+    if (rec) rec.checked = s.recursive !== false;
+    const sk = document.getElementById("convert-bulk-skip");
+    if (sk) sk.checked = s.skipFlac !== false;
+    const outMode = s.output;
+    const rid =
+      outMode === "same"
+        ? "convert-bulk-out-same"
+        : outMode === "destination"
+          ? "convert-bulk-out-dest"
+          : outMode === "custom"
+            ? "convert-bulk-out-custom"
+            : null;
+    if (rid) {
+      const radio = document.getElementById(rid);
+      if (radio) radio.checked = true;
+    }
+    if (outMode === "custom" && s.targetDir != null) {
+      const ti = document.getElementById("convert-bulk-target-dir");
+      if (ti) ti.value = s.targetDir;
+    }
+    syncBulkTargetRow();
+    const limC = document.getElementById("convert-bulk-limited");
+    if (limC) limC.checked = s.limited !== false;
+    syncConvertBulkBatchFields();
+    const limIn = document.getElementById("convert-bulk-limit");
+    const offIn = document.getElementById("convert-bulk-offset");
+    if (limIn && s.limit != null) limIn.value = String(s.limit);
+    if (offIn && s.offset != null) offIn.value = String(s.offset);
+    if (s.lastBulkScanCount != null) lastBulkScanCount = s.lastBulkScanCount;
+    const st = document.getElementById("convert-bulk-scan-status");
+    if (st) {
+      if (s.scanStatus != null && !s.scanStatusHidden) {
+        st.textContent = s.scanStatus;
+        st.classList.remove("hidden");
+      }
+    }
+    const out = document.getElementById("convert-bulk-result");
+    if (out && s.resultHtml && !s.resultHidden) {
+      out.innerHTML = s.resultHtml;
+      out.className = s.resultClass || "result";
+      out.classList.remove("hidden");
+    }
+    const nextBox = document.getElementById("convert-bulk-next-box");
+    if (nextBox && s.nextOffset) {
+      nextBox.dataset.nextOffset = String(s.nextOffset);
+      if (!s.nextBoxHidden) nextBox.classList.remove("hidden");
+    }
+    updateBulkRunEnabled();
+  } catch (_) {
+    /* ignore */
+  }
 }
 
 function setConvertBulkProgress(visible, label) {
@@ -89,6 +197,313 @@ function nth(n) {
     default:
       return "th";
   }
+}
+
+function getBulkWavProgressMap() {
+  try {
+    const raw = localStorage.getItem(BULK_WAV_PROGRESS_LS);
+    if (!raw) return {};
+    const o = JSON.parse(raw);
+    return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function setBulkWavProgressMap(map) {
+  try {
+    localStorage.setItem(BULK_WAV_PROGRESS_LS, JSON.stringify(map));
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+function persistBulkWavProgressFromConvertResponse(data, uiLimited) {
+  if (!data || data.error || !data.root) return;
+  if (!uiLimited) return;
+  const b = data.batch || {};
+  if (b.limit == null) return;
+  if (typeof b.offset !== "number" || typeof b.candidates_in_batch !== "number") return;
+  if (b.candidates_in_batch < 1) return;
+  const nextOffset = b.offset + b.candidates_in_batch;
+  const rec = document.getElementById("convert-bulk-recursive")?.checked !== false;
+  const sk = document.getElementById("convert-bulk-skip")?.checked !== false;
+  const outMode = getBulkOutputMode();
+  const entry = {
+    nextOffset,
+    limit: b.limit,
+    recursive: rec,
+    output: outMode,
+    targetDir: outMode === "custom" ? getBulkTargetDir() : "",
+    skipFlac: sk,
+    limited: true,
+    updatedAt: new Date().toISOString(),
+  };
+  const map = getBulkWavProgressMap();
+  map[String(data.root)] = entry;
+  setBulkWavProgressMap(map);
+}
+
+function clearBulkWavProgressForRoot(resolvedRoot) {
+  if (!resolvedRoot) return;
+  const map = getBulkWavProgressMap();
+  delete map[String(resolvedRoot)];
+  setBulkWavProgressMap(map);
+}
+
+async function resolveConvertBulkRootPath(raw) {
+  const t = (raw || "").trim();
+  if (!t) return null;
+  const resp = await fetch(`/api/browse-folders?path=${encodeURIComponent(t)}`);
+  const data = await resp.json();
+  if (data.error) return null;
+  return data.path || null;
+}
+
+/**
+ * Apply saved batch options for a resolved root. Returns a short status suffix or "".
+ */
+function tryApplyBulkWavProgressForResolvedRoot(resolvedRoot) {
+  if (!resolvedRoot) return "";
+  const entry = getBulkWavProgressMap()[String(resolvedRoot)];
+  if (!entry || !entry.limited) return "";
+  const recNow = document.getElementById("convert-bulk-recursive")?.checked !== false;
+  if (entry.recursive !== recNow) {
+    return ` Saved batch position on disk uses “subfolders” ${entry.recursive ? "on" : "off"} — turn it ${entry.recursive ? "on" : "off"} to restore offset ${entry.nextOffset}, or clear saved progress.`;
+  }
+  const limEl = document.getElementById("convert-bulk-limited");
+  if (limEl) limEl.checked = true;
+  syncConvertBulkBatchFields();
+  const offEl = document.getElementById("convert-bulk-offset");
+  const limNum = document.getElementById("convert-bulk-limit");
+  if (offEl) offEl.value = String(entry.nextOffset);
+  if (limNum) limNum.value = String(entry.limit);
+  const skipEl = document.getElementById("convert-bulk-skip");
+  if (skipEl) skipEl.checked = entry.skipFlac !== false;
+  const out = entry.output;
+  const rid =
+    out === "same"
+      ? "convert-bulk-out-same"
+      : out === "destination"
+        ? "convert-bulk-out-dest"
+        : out === "custom"
+          ? "convert-bulk-out-custom"
+          : null;
+  if (rid) {
+    const radio = document.getElementById(rid);
+    if (radio) radio.checked = true;
+  }
+  if (out === "custom") {
+    const ti = document.getElementById("convert-bulk-target-dir");
+    if (ti && entry.targetDir) ti.value = entry.targetDir;
+  }
+  syncBulkTargetRow();
+  updateBulkRunEnabled();
+  const when = entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : "";
+  return when
+    ? ` Restored saved batch position: offset ${entry.nextOffset}, ${entry.limit} per run (saved ${when}).`
+    : ` Restored saved batch position: offset ${entry.nextOffset}, ${entry.limit} per run.`;
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildBulkConvertConfirmHtml(limited, off, perRun, root) {
+  const pathBlock = `<div class="bulk-confirm-path mono">${escHtml(root)}</div>`;
+  if (limited) {
+    const scanHint = lastBulkScanCount
+      ? `Last scan: <strong>${lastBulkScanCount}</strong> WAV file(s) total.`
+      : "You have not scanned this session — the server still uses the same sorted file list.";
+    return (
+      pathBlock +
+      `<p style="margin:0 0 0.35rem">Convert up to <strong>${perRun}</strong> WAV file(s) in <strong>sorted</strong> order, starting at offset <strong>${off}</strong> (0-based).</p>` +
+      `<p class="hint" style="margin:0 0 0.5rem">${scanHint}</p>` +
+      `<p class="hint" style="margin:0">After this run, raise the offset or use <strong>Next offset</strong> until the tree is done.</p>`
+    );
+  }
+  const n = lastBulkScanCount || 0;
+  if (n > 50) {
+    return (
+      pathBlock +
+      `<p style="margin:0 0 0.35rem">Convert <strong>all ${n}</strong> WAV file(s) in <strong>one</strong> run. This may take a long time and load the machine heavily.</p>` +
+      `<p class="hint" style="margin:0">For large libraries, use <strong>Limit each run to a batch</strong> instead.</p>`
+    );
+  }
+  if (lastBulkScanCount) {
+    return (
+      pathBlock +
+      `<p style="margin:0 0 0.35rem">Convert every <code>.wav</code> under this tree (last scan: <strong>${lastBulkScanCount}</strong> file(s)).</p>` +
+      `<p class="hint" style="margin:0">This unlimited run processes the full sorted list in one go.</p>`
+    );
+  }
+  return (
+    pathBlock +
+    `<p style="margin:0 0 0.35rem">Convert every <code>.wav</code> under this tree.</p>` +
+    `<p class="hint" style="margin:0"><strong>Scan first</strong> to see how many files will be processed.</p>`
+  );
+}
+
+let bulkConvertConfirmHandler = null;
+
+function onBulkConfirmModalKeydown(e) {
+  if (e.key === "Escape") closeBulkConvertConfirmModal();
+}
+
+function closeBulkConvertConfirmModal() {
+  const ov = document.getElementById("convert-bulk-confirm-modal");
+  if (ov) ov.classList.add("hidden");
+  document.removeEventListener("keydown", onBulkConfirmModalKeydown);
+  bulkConvertConfirmHandler = null;
+}
+
+function openBulkConvertConfirmModal(title, innerHtml, onConfirm) {
+  const ov = document.getElementById("convert-bulk-confirm-modal");
+  const tEl = document.getElementById("convert-bulk-confirm-title");
+  const bEl = document.getElementById("convert-bulk-confirm-body");
+  if (tEl) tEl.textContent = title;
+  if (bEl) bEl.innerHTML = innerHtml;
+  bulkConvertConfirmHandler = onConfirm;
+  ov?.classList.remove("hidden");
+  document.addEventListener("keydown", onBulkConfirmModalKeydown);
+  document.getElementById("convert-bulk-confirm-ok")?.focus();
+}
+
+async function performBulkConvert(root, limited, off, perRun, outMode, rec, sk) {
+  document.getElementById("convert-bulk-next-box")?.classList.add("hidden");
+  const out = document.getElementById("convert-bulk-result");
+  out.classList.add("hidden");
+  const btn = document.getElementById("convert-bulk-run-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Converting…';
+  setConvertBulkProgress(true, "Converting WAVs to FLAC (server is processing the batch)…");
+  const body = {
+    root_dir: root,
+    output: outMode,
+    recursive: rec,
+    skip_if_flac_exists: sk,
+  };
+  if (outMode === "custom") {
+    body.target_dir = getBulkTargetDir();
+  }
+  if (limited) {
+    body.offset = off;
+    body.limit = perRun;
+  }
+  let data;
+  try {
+    const resp = await fetch("/api/convert-wav-bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    data = await resp.json();
+  } catch (e) {
+    setConvertBulkProgress(false);
+    out.classList.remove("hidden");
+    out.className = "result error";
+    out.innerHTML = `<div class="result-title">Error</div><div class="result-detail">${escHtml(String(e.message || e))}</div>`;
+    btn.disabled = false;
+    btn.textContent = "Run conversion";
+    updateBulkRunEnabled();
+    return;
+  }
+  setConvertBulkProgress(false);
+  out.classList.remove("hidden");
+  if (data.error) {
+    out.className = "result error";
+    out.innerHTML = `<div class="result-title">Error</div><div class="result-detail">${data.error}</div>`;
+    document.getElementById("convert-bulk-next-box")?.classList.add("hidden");
+  } else {
+    out.className = "result";
+    const s = data.summary || {};
+    const parts = [
+      `Converted: <strong>${s.converted ?? 0}</strong>`,
+      `Skipped (FLAC already there): <strong>${s.skipped ?? 0}</strong>`,
+      `Errors: <strong>${s.errors ?? 0}</strong>`,
+    ];
+    let errBlock = "";
+    if (data.errors && data.errors.length) {
+      const lines = data.errors
+        .slice(0, 30)
+        .map((e) => `• <span class="mono">${(e.source || "").split("/").pop()}</span>: ${(e.error || "").replace(/</g, "&lt;")}`)
+        .join("<br>");
+      errBlock = `<p class="hint" style="margin-top:0.5rem"><strong>First issue(s):</strong><br/>${lines}</p>`;
+      if (data.errors.length > 30) {
+        errBlock += `<p class="hint">… and ${data.errors.length - 30} more (see server log if needed).</p>`;
+      }
+    }
+    const b = data.batch || {};
+    let rangeNote = "";
+    if (b.total_wavs != null && typeof b.candidates_in_batch === "number") {
+      if (b.candidates_in_batch === 0) {
+        rangeNote = `<p class="hint" style="margin-top:0.4rem">No WAV paths in this offset/limit window (${b.total_wavs} total). Raise the offset or clear the range — or you may be finished.</p>`;
+      } else {
+        const fromN = b.offset + 1;
+        const toN = b.offset + b.candidates_in_batch;
+        rangeNote = `<p class="hint" style="margin-top:0.4rem">Sorted list: this run covered file <strong>${fromN}–${toN}</strong> of <strong>${b.total_wavs}</strong> WAV path(s) ${
+          limited && b.limit != null ? `(batch size ${b.limit})` : ""
+        }.</p>`;
+      }
+    }
+    let bulkFixCta = "";
+    if (outMode === "custom" && data.target_dir) {
+      try {
+        const paths = data.batch_flac_paths;
+        if (Array.isArray(paths) && paths.length) {
+          localStorage.setItem(
+            "djmm.bulkFixHandoff",
+            JSON.stringify({
+              v: 1,
+              targetDir: data.target_dir,
+              paths,
+            }),
+          );
+        } else {
+          localStorage.removeItem("djmm.bulkFixHandoff");
+        }
+      } catch (_) {
+        /* ignore */
+      }
+      const bf = new URL("/bulk-fix", window.location.origin);
+      bf.searchParams.set("dir", data.target_dir);
+      bulkFixCta = `<p style="margin-top:0.6rem" class="field-row">
+          <a class="btn btn-secondary" href="${escHtml(bf.href)}">Open Bulk Fix for this folder</a>
+          <span class="hint" style="margin:0 0.35rem 0 0.5rem">Opens Bulk Fix and loads this run’s FLACs in <strong>conversion order</strong> (not alphabetical folder order after flat rename).</span>
+        </p>`;
+    }
+    out.innerHTML = `<div class="result-title">Run finished</div><div class="result-detail">${parts.join(" · ")}</div>${rangeNote}${bulkFixCta}${errBlock}`;
+    updateConvertNextOffsetFromResponse(data);
+    persistBulkWavProgressFromConvertResponse(data, limited);
+  }
+  btn.disabled = false;
+  btn.textContent = "Run conversion";
+  updateBulkRunEnabled();
+  saveConvertBulkUi();
+}
+
+function scheduleTryApplyBulkWavProgressFromInput() {
+  if (bulkWavRestoreTimer) clearTimeout(bulkWavRestoreTimer);
+  bulkWavRestoreTimer = setTimeout(async () => {
+    bulkWavRestoreTimer = null;
+    const raw = document.getElementById("convert-bulk-root")?.value.trim();
+    if (!raw) return;
+    const resolved = await resolveConvertBulkRootPath(raw);
+    if (!resolved) return;
+    const suffix = tryApplyBulkWavProgressForResolvedRoot(resolved);
+    if (!suffix) return;
+    const st = document.getElementById("convert-bulk-scan-status");
+    if (!st) return;
+    if (st.textContent.includes("Scanning")) return;
+    st.classList.remove("hidden");
+    const base = st.textContent.trim();
+    st.textContent = base ? `${base}${suffix}` : suffix.trim();
+    scheduleSaveConvertBulkUi();
+  }, 450);
 }
 
 async function loadSettingsHints() {
@@ -328,7 +743,10 @@ async function runBulkScan() {
   }
   lastBulkScanCount = data.count;
   st.textContent = `Found ${data.count} WAV file(s) under ${data.root}`;
+  const restored = tryApplyBulkWavProgressForResolvedRoot(data.root);
+  if (restored) st.textContent += restored;
   updateBulkRunEnabled();
+  saveConvertBulkUi();
 }
 
 async function runBulkConvert() {
@@ -364,118 +782,12 @@ async function runBulkConvert() {
   if (Number.isNaN(perRun) || perRun < 1) perRun = 25;
   if (perRun > 500) perRun = 500;
 
-  let msg;
-  if (limited) {
-    msg = `Convert up to ${perRun} WAV file(s) in sorted order, starting at offset ${off}?\n\n${root}\n\n${
-      lastBulkScanCount
-        ? `Last scan: ${lastBulkScanCount} WAV file(s) total.`
-        : "Scan first to see how many files exist."
-    }\n\nYou can run again with a higher offset (use “Next offset”) until done.`;
-  } else {
-    const n = lastBulkScanCount || 0;
-    if (n > 50) {
-      msg = `Convert ALL ${n} WAV file(s) in one go?\n\n${root}\n\nThis is a long, heavy run. For large libraries, use “Limit each run to a batch” instead.`;
-    } else {
-      msg = lastBulkScanCount
-        ? `Run conversion on this tree?\n\n${root}\n\n(last scan: ${lastBulkScanCount} WAV file(s))`
-        : `Run conversion for every .wav under\n\n${root}\n\n(Scan first to count.)`;
-    }
-  }
-  if (!window.confirm(msg)) return;
-
-  document.getElementById("convert-bulk-next-box")?.classList.add("hidden");
-  const out = document.getElementById("convert-bulk-result");
-  out.classList.add("hidden");
-  const btn = document.getElementById("convert-bulk-run-btn");
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Converting…';
-  setConvertBulkProgress(true, "Converting WAVs to FLAC (server is processing the batch)…");
-  const rec = document.getElementById("convert-bulk-recursive")?.checked !== false;
-  const sk = document.getElementById("convert-bulk-skip")?.checked !== false;
-  const body = {
-    root_dir: root,
-    output: outMode,
-    recursive: rec,
-    skip_if_flac_exists: sk,
-  };
-  if (outMode === "custom") {
-    body.target_dir = getBulkTargetDir();
-  }
-  if (limited) {
-    body.offset = off;
-    body.limit = perRun;
-  }
-  let data;
-  try {
-    const resp = await fetch("/api/convert-wav-bulk", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    data = await resp.json();
-  } catch (e) {
-    setConvertBulkProgress(false);
-    out.classList.remove("hidden");
-    out.className = "result error";
-    out.innerHTML = `<div class="result-title">Error</div><div class="result-detail">${String(e.message || e)}</div>`;
-    btn.disabled = false;
-    btn.textContent = "Run conversion";
-    updateBulkRunEnabled();
-    return;
-  }
-  setConvertBulkProgress(false);
-  out.classList.remove("hidden");
-  if (data.error) {
-    out.className = "result error";
-    out.innerHTML = `<div class="result-title">Error</div><div class="result-detail">${data.error}</div>`;
-    document.getElementById("convert-bulk-next-box")?.classList.add("hidden");
-  } else {
-    out.className = "result";
-    const s = data.summary || {};
-    const parts = [
-      `Converted: <strong>${s.converted ?? 0}</strong>`,
-      `Skipped (FLAC already there): <strong>${s.skipped ?? 0}</strong>`,
-      `Errors: <strong>${s.errors ?? 0}</strong>`,
-    ];
-    let errBlock = "";
-    if (data.errors && data.errors.length) {
-      const lines = data.errors
-        .slice(0, 30)
-        .map((e) => `• <span class="mono">${(e.source || "").split("/").pop()}</span>: ${(e.error || "").replace(/</g, "&lt;")}`)
-        .join("<br>");
-      errBlock = `<p class="hint" style="margin-top:0.5rem"><strong>First issue(s):</strong><br/>${lines}</p>`;
-      if (data.errors.length > 30) {
-        errBlock += `<p class="hint">… and ${data.errors.length - 30} more (see server log if needed).</p>`;
-      }
-    }
-    const b = data.batch || {};
-    let rangeNote = "";
-    if (b.total_wavs != null && typeof b.candidates_in_batch === "number") {
-      if (b.candidates_in_batch === 0) {
-        rangeNote = `<p class="hint" style="margin-top:0.4rem">No WAV paths in this offset/limit window (${b.total_wavs} total). Raise the offset or clear the range — or you may be finished.</p>`;
-      } else {
-        const fromN = b.offset + 1;
-        const toN = b.offset + b.candidates_in_batch;
-        rangeNote = `<p class="hint" style="margin-top:0.4rem">Sorted list: this run covered file <strong>${fromN}–${toN}</strong> of <strong>${b.total_wavs}</strong> WAV path(s) ${
-          limited && b.limit != null ? `(batch size ${b.limit})` : ""
-        }.</p>`;
-      }
-    }
-    let bulkFixCta = "";
-    if (outMode === "custom" && data.target_dir) {
-      const bf = new URL("/bulk-fix", window.location.origin);
-      bf.searchParams.set("dir", data.target_dir);
-      bulkFixCta = `<p style="margin-top:0.6rem" class="field-row">
-          <a class="btn btn-secondary" href="${bf.href}">Open Bulk Fix for this folder</a>
-          <span class="hint" style="margin:0 0.35rem 0 0.5rem">Match Discogs/Apple metadata in small batches; same path is pre-filled.</span>
-        </p>`;
-    }
-    out.innerHTML = `<div class="result-title">Run finished</div><div class="result-detail">${parts.join(" · ")}</div>${rangeNote}${bulkFixCta}${errBlock}`;
-    updateConvertNextOffsetFromResponse(data);
-  }
-  btn.disabled = false;
-  btn.textContent = "Run conversion";
-  updateBulkRunEnabled();
+  const confirmHtml = buildBulkConvertConfirmHtml(limited, off, perRun, root);
+  openBulkConvertConfirmModal("Run bulk conversion?", confirmHtml, () => {
+    const rec = document.getElementById("convert-bulk-recursive")?.checked !== false;
+    const sk = document.getElementById("convert-bulk-skip")?.checked !== false;
+    void performBulkConvert(root, limited, off, perRun, outMode, rec, sk);
+  });
 }
 
 document.getElementById("convert-browse-btn").addEventListener("click", browseWav);
@@ -500,13 +812,28 @@ document.getElementById("convert-modal-select").addEventListener("click", () => 
         st.classList.add("hidden");
         st.textContent = "";
       }
+      const suffix = tryApplyBulkWavProgressForResolvedRoot(folderModalPath);
+      if (suffix && st) {
+        st.classList.remove("hidden");
+        st.textContent = suffix.trim();
+      }
     }
   }
   updateBulkRunEnabled();
+  scheduleSaveConvertBulkUi();
 });
 document.getElementById("convert-modal-cancel").addEventListener("click", closeFolderModal);
 document.getElementById("convert-folder-modal").addEventListener("click", (e) => {
   if (e.target && e.target.id === "convert-folder-modal") closeFolderModal();
+});
+document.getElementById("convert-bulk-confirm-ok")?.addEventListener("click", () => {
+  const fn = bulkConvertConfirmHandler;
+  closeBulkConvertConfirmModal();
+  if (fn) fn();
+});
+document.getElementById("convert-bulk-confirm-cancel")?.addEventListener("click", closeBulkConvertConfirmModal);
+document.getElementById("convert-bulk-confirm-modal")?.addEventListener("click", (e) => {
+  if (e.target && e.target.id === "convert-bulk-confirm-modal") closeBulkConvertConfirmModal();
 });
 document.getElementById("convert-run-btn").addEventListener("click", runConvert);
 document.getElementById("convert-bulk-scan-btn")?.addEventListener("click", runBulkScan);
@@ -533,8 +860,33 @@ document.getElementById("convert-apply-next-offset")?.addEventListener("click", 
   if (el) el.value = n;
 });
 document.getElementById("convert-bulk-root")?.addEventListener("input", updateBulkRunEnabled);
+document.getElementById("convert-bulk-root")?.addEventListener("blur", () => scheduleTryApplyBulkWavProgressFromInput());
 document.getElementById("convert-bulk-root")?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") runBulkScan();
+});
+document.getElementById("convert-bulk-clear-progress-btn")?.addEventListener("click", async () => {
+  const raw = document.getElementById("convert-bulk-root")?.value.trim();
+  const st = document.getElementById("convert-bulk-scan-status");
+  if (!raw) {
+    if (st) {
+      st.classList.remove("hidden");
+      st.textContent = "Set a root folder first.";
+    }
+    return;
+  }
+  const resolved = await resolveConvertBulkRootPath(raw);
+  if (!resolved) {
+    if (st) {
+      st.classList.remove("hidden");
+      st.textContent = "Could not resolve that path — fix the folder path and try again.";
+    }
+    return;
+  }
+  clearBulkWavProgressForRoot(resolved);
+  if (st) {
+    st.classList.remove("hidden");
+    st.textContent = `Cleared saved batch progress for ${resolved}.`;
+  }
 });
 document.getElementById("convert-bulk-target-dir")?.addEventListener("input", updateBulkRunEnabled);
 document.getElementById("convert-bulk-target-dir")?.addEventListener("keydown", (e) => {
@@ -544,7 +896,23 @@ document.querySelectorAll('input[name="convert-bulk-output"]').forEach((r) => {
   r.addEventListener("change", () => {
     syncBulkTargetRow();
     updateBulkRunEnabled();
+    scheduleSaveConvertBulkUi();
   });
+});
+[
+  "convert-bulk-root",
+  "convert-bulk-recursive",
+  "convert-bulk-skip",
+  "convert-bulk-limited",
+  "convert-bulk-limit",
+  "convert-bulk-offset",
+  "convert-bulk-target-dir",
+].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const ev =
+    id === "convert-bulk-recursive" || id === "convert-bulk-skip" || id === "convert-bulk-limited" ? "change" : "input";
+  el.addEventListener(ev, scheduleSaveConvertBulkUi);
 });
 loadSettingsHints().then(async () => {
   try {
@@ -554,6 +922,7 @@ loadSettingsHints().then(async () => {
   } catch (_) {
     /* ignore */
   }
+  restoreConvertBulkUi();
   syncConvertBulkBatchFields();
   syncBulkTargetRow();
   if ($("#convert-dir").value.trim()) {

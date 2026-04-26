@@ -1,5 +1,39 @@
 const $ = (sel) => document.querySelector(sel);
 
+function collectSettingsPageDraft() {
+  return {
+    v: 1,
+    source_dir: $("#cfg-source").value,
+    destination_dir: $("#cfg-dest").value,
+    extract_profile: $("#cfg-extract-profile").value,
+    platinum_notes_app: $("#cfg-pn-app").value,
+    pn_output_suffix: $("#cfg-pn-suffix").value,
+    target_lufs: $("#cfg-target-lufs").value,
+    target_true_peak: $("#cfg-target-tp").value,
+    loudness_verify_enabled: $("#cfg-loudness-verify").checked,
+  };
+}
+
+function scheduleSettingsPageSave() {
+  if (typeof djmmPageStateSchedule === "function") {
+    djmmPageStateSchedule("settings", collectSettingsPageDraft);
+  }
+}
+
+function applySettingsDraft(st) {
+  if (st.source_dir != null) $("#cfg-source").value = st.source_dir;
+  if (st.destination_dir != null) $("#cfg-dest").value = st.destination_dir;
+  if (st.extract_profile != null) {
+    const sel = $("#cfg-extract-profile");
+    if ([...sel.options].some((o) => o.value === st.extract_profile)) sel.value = st.extract_profile;
+  }
+  if (st.platinum_notes_app != null) $("#cfg-pn-app").value = st.platinum_notes_app;
+  if (st.pn_output_suffix != null) $("#cfg-pn-suffix").value = st.pn_output_suffix;
+  if (st.target_lufs != null) $("#cfg-target-lufs").value = st.target_lufs;
+  if (st.target_true_peak != null) $("#cfg-target-tp").value = st.target_true_peak;
+  if (st.loudness_verify_enabled != null) $("#cfg-loudness-verify").checked = st.loudness_verify_enabled;
+}
+
 function fillExtractProfileSelect(cfg) {
   const sel = $("#cfg-extract-profile");
   const profiles = cfg.extract_profiles || [];
@@ -26,6 +60,8 @@ async function loadSettings() {
       ? String(cfg.target_true_peak)
       : "-1";
   $("#cfg-loudness-verify").checked = cfg.loudness_verify_enabled !== false;
+  const draft = typeof djmmPageStateGetPage === "function" ? djmmPageStateGetPage("settings") : null;
+  if (draft && draft.v === 1) applySettingsDraft(draft);
 }
 
 async function saveSettings() {
@@ -45,10 +81,33 @@ async function saveSettings() {
   });
   await resp.json();
 
+  if (typeof djmmPageStateSetPage === "function") {
+    djmmPageStateSetPage("settings", null);
+  }
+
   const status = $("#settings-status");
   status.classList.remove("hidden");
   setTimeout(() => status.classList.add("hidden"), 2000);
 }
 
+function wireSettingsPersistence() {
+  [
+    "cfg-source",
+    "cfg-dest",
+    "cfg-extract-profile",
+    "cfg-pn-app",
+    "cfg-pn-suffix",
+    "cfg-target-lufs",
+    "cfg-target-tp",
+  ].forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", scheduleSettingsPageSave);
+    document.getElementById(id)?.addEventListener("change", scheduleSettingsPageSave);
+  });
+  document.getElementById("cfg-loudness-verify")?.addEventListener("change", scheduleSettingsPageSave);
+}
+
 $("#save-settings-btn").addEventListener("click", saveSettings);
-loadSettings();
+loadSettings().then(() => {
+  wireSettingsPersistence();
+  scheduleSettingsPageSave();
+});

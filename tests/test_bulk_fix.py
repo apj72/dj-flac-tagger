@@ -131,6 +131,27 @@ def test_fetch_metadata_uses_track_hint_for_discogs_tracklist(client, app_module
     assert r.get_json().get("title") == "Beta"
 
 
+def test_bulk_fix_scan_paths_preserves_order(client, tmp_path):
+    d = tmp_path / "flat"
+    d.mkdir()
+    p_a = d / "A Artist - A Title.flac"
+    p_z = d / "Z Artist - Z Title.flac"
+    p_a.write_bytes(b"x")
+    p_z.write_bytes(b"y")
+    r = client.post(
+        "/api/bulk-fix/scan-paths",
+        json={"paths": [str(p_z), str(p_a)]},
+    )
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j.get("order") == "explicit_paths"
+    assert j["total"] == 2
+    assert [it["filepath"] for it in j["items"]] == [
+        os.path.normpath(str(p_z)),
+        os.path.normpath(str(p_a)),
+    ]
+
+
 def test_bulk_fix_page_serves(client):
     r = client.get("/bulk-fix")
     assert r.status_code == 200

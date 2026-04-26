@@ -3,6 +3,21 @@ const $ = (sel) => document.querySelector(sel);
 let selectedFile = null;
 let currentLoudnormParams = null;
 
+function collectNormalisePageState() {
+  return {
+    v: 1,
+    normDir: $("#norm-dir").value,
+    normSuffix: $("#norm-suffix").value,
+    selectedFile,
+  };
+}
+
+function scheduleNormalisePageSave() {
+  if (typeof djmmPageStateSchedule === "function") {
+    djmmPageStateSchedule("normalise", collectNormalisePageState);
+  }
+}
+
 function updateNormTargetLabels(cfg) {
   const lu = cfg.target_lufs != null ? cfg.target_lufs : -14;
   const tp = cfg.target_true_peak != null ? cfg.target_true_peak : -1;
@@ -32,6 +47,7 @@ async function browseAudio() {
 
   if (data.error) {
     $("#norm-file-list").innerHTML = `<div class="status">${data.error}</div>`;
+    scheduleNormalisePageSave();
     return;
   }
 
@@ -40,6 +56,7 @@ async function browseAudio() {
   const audio = data.files || [];
   if (audio.length === 0) {
     $("#norm-file-list").innerHTML = '<div class="status">No supported audio files in this folder</div>';
+    scheduleNormalisePageSave();
     return;
   }
 
@@ -56,6 +73,7 @@ async function browseAudio() {
   $("#norm-file-list").querySelectorAll(".file-item").forEach((el) => {
     el.addEventListener("click", () => selectFile(el));
   });
+  scheduleNormalisePageSave();
 }
 
 async function selectFile(el) {
@@ -166,6 +184,7 @@ async function runAnalysis(filepath) {
 
   $("#norm-level-verdict").innerHTML = verdict;
   $("#norm-run-btn").disabled = false;
+  scheduleNormalisePageSave();
 }
 
 function setMeter(meterId, valueId, value, min, max, label) {
@@ -227,12 +246,32 @@ async function runNormalise() {
   const cfgResp = await fetch("/api/settings");
   const cfg = await cfgResp.json();
   updateNormTargetLabels(cfg);
+  scheduleNormalisePageSave();
 }
 
 $("#norm-browse-btn").addEventListener("click", browseAudio);
 $("#norm-dir").addEventListener("keydown", (e) => {
   if (e.key === "Enter") browseAudio();
 });
+$("#norm-dir").addEventListener("input", scheduleNormalisePageSave);
+$("#norm-suffix").addEventListener("input", scheduleNormalisePageSave);
 $("#norm-run-btn").addEventListener("click", runNormalise);
 
-loadSettings().then(() => browseAudio());
+loadSettings().then(async () => {
+  const st = typeof djmmPageStateGetPage === "function" ? djmmPageStateGetPage("normalise") : null;
+  if (st && st.v === 1) {
+    if (st.normDir != null) $("#norm-dir").value = st.normDir;
+    if (st.normSuffix != null) $("#norm-suffix").value = st.normSuffix;
+  }
+  await browseAudio();
+  if (st && st.v === 1 && st.selectedFile) {
+    const items = document.querySelectorAll("#norm-file-list .file-item");
+    for (const el of items) {
+      if (el.dataset.path === st.selectedFile) {
+        await selectFile(el);
+        break;
+      }
+    }
+  }
+  scheduleNormalisePageSave();
+});

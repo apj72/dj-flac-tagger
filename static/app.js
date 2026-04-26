@@ -10,6 +10,100 @@ let selectedFile = null;
 let currentTracklist = [];
 let currentLoudnormParams = null;
 
+function collectExtractPageState() {
+  return {
+    v: 1,
+    dirInput: $("#dir-input").value,
+    retagDir: $("#retag-dir").value,
+    selectedFile,
+    meta: {
+      title: $("#meta-title").value,
+      artist: $("#meta-artist").value,
+      albumartist: $("#meta-albumartist").value,
+      album: $("#meta-album").value,
+      date: $("#meta-date").value,
+      genre: $("#meta-genre").value,
+      comment: $("#meta-comment").value,
+      label: $("#meta-label").value,
+      catno: $("#meta-catno").value,
+    },
+    trackUrl: $("#track-url").value,
+    trackName: $("#track-name").value,
+    artworkUrl: $("#artwork-url").value,
+    normalise: $("#normalise").checked,
+    deleteSource: $("#delete-source").checked,
+    openPlatinumNotes: $("#open-platinum-notes").checked,
+    watchPnRepair: $("#watch-pn-repair").checked,
+    currentTracklist,
+    metaForTracklist: {
+      artist: $("#meta-artist").value,
+      album: $("#meta-album").value,
+      albumartist: $("#meta-albumartist").value,
+      date: $("#meta-date").value,
+      genre: $("#meta-genre").value,
+      label: $("#meta-label").value,
+      catno: $("#meta-catno").value,
+    },
+    historyOpen: !$("#history-body").classList.contains("hidden"),
+  };
+}
+
+function scheduleExtractPageSave() {
+  if (typeof djmmPageStateSchedule === "function") {
+    djmmPageStateSchedule("extract", collectExtractPageState);
+  }
+}
+
+function applyExtractPageStateFields(st) {
+  if (st.dirInput != null) $("#dir-input").value = st.dirInput;
+  if (st.retagDir != null) $("#retag-dir").value = st.retagDir;
+  if (st.meta) {
+    const m = st.meta;
+    if (m.title != null) $("#meta-title").value = m.title;
+    if (m.artist != null) $("#meta-artist").value = m.artist;
+    if (m.albumartist != null) $("#meta-albumartist").value = m.albumartist;
+    if (m.album != null) $("#meta-album").value = m.album;
+    if (m.date != null) $("#meta-date").value = m.date;
+    if (m.genre != null) $("#meta-genre").value = m.genre;
+    if (m.comment != null) $("#meta-comment").value = m.comment;
+    if (m.label != null) $("#meta-label").value = m.label;
+    if (m.catno != null) $("#meta-catno").value = m.catno;
+  }
+  if (st.trackUrl != null) $("#track-url").value = st.trackUrl;
+  if (st.trackName != null) $("#track-name").value = st.trackName;
+  if (st.artworkUrl != null) $("#artwork-url").value = st.artworkUrl;
+  if (st.normalise != null) $("#normalise").checked = st.normalise;
+  if (st.deleteSource != null) $("#delete-source").checked = st.deleteSource;
+  if (st.openPlatinumNotes != null) $("#open-platinum-notes").checked = st.openPlatinumNotes;
+  if (st.watchPnRepair != null) $("#watch-pn-repair").checked = st.watchPnRepair;
+}
+
+function wireExtractPagePersistence() {
+  const ids = [
+    "dir-input",
+    "retag-dir",
+    "track-url",
+    "track-name",
+    "meta-title",
+    "meta-artist",
+    "meta-albumartist",
+    "meta-album",
+    "meta-date",
+    "meta-genre",
+    "meta-comment",
+    "meta-label",
+    "meta-catno",
+    "artwork-url",
+  ];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", scheduleExtractPageSave);
+  });
+  ["normalise", "delete-source", "open-platinum-notes", "watch-pn-repair"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("change", scheduleExtractPageSave);
+  });
+}
+
 // ---- Load paths from Settings (configured on /settings tab) ----
 async function loadExtractPrefs() {
   const resp = await fetch("/api/settings");
@@ -28,6 +122,7 @@ async function browseFiles() {
 
   if (data.error) {
     $("#file-list").innerHTML = `<div class="status">${data.error}</div>`;
+    scheduleExtractPageSave();
     return;
   }
 
@@ -35,6 +130,7 @@ async function browseFiles() {
 
   if (data.files.length === 0) {
     $("#file-list").innerHTML = `<div class="status">No video files found</div>`;
+    scheduleExtractPageSave();
     return;
   }
 
@@ -51,6 +147,7 @@ async function browseFiles() {
   document.querySelectorAll(".file-item").forEach((el) => {
     el.addEventListener("click", () => selectFile(el));
   });
+  scheduleExtractPageSave();
 }
 
 async function selectFile(el) {
@@ -73,6 +170,7 @@ async function selectFile(el) {
 
   if (data.error) {
     probe.innerHTML = data.error;
+    scheduleExtractPageSave();
     return;
   }
 
@@ -85,6 +183,7 @@ async function selectFile(el) {
   `;
 
   runAnalysis(selectedFile);
+  scheduleExtractPageSave();
 }
 
 function formatDuration(secs) {
@@ -188,6 +287,7 @@ function clearAllFields() {
   $("#fetch-status").classList.add("hidden");
   $("#result").classList.add("hidden");
   currentTracklist = [];
+  scheduleExtractPageSave();
 }
 
 function populateFields(meta) {
@@ -209,6 +309,7 @@ function populateFields(meta) {
   }
 
   updateExtractButton();
+  scheduleExtractPageSave();
 }
 
 // ---- Tracklist ----
@@ -258,6 +359,7 @@ function selectTrack(el, meta) {
   $("#meta-comment").value = `${track.position} - ${meta.album || ""}`.trim();
 
   updateExtractButton();
+  scheduleExtractPageSave();
 }
 
 // ---- Fetch metadata ----
@@ -296,6 +398,7 @@ async function fetchMetadata() {
     status.classList.remove("hidden");
     status.textContent = meta._warning;
   }
+  scheduleExtractPageSave();
 }
 
 // ---- Artwork preview ----
@@ -406,6 +509,7 @@ async function extractAndTag() {
 
   btn.disabled = false;
   btn.textContent = "Extract & Apply Tags";
+  scheduleExtractPageSave();
 }
 
 function updateExtractButton() {
@@ -428,6 +532,7 @@ $("#track-name").addEventListener("keydown", (e) => {
 
 $("#preview-art-btn").addEventListener("click", () => {
   loadArtworkPreview($("#artwork-url").value.trim());
+  scheduleExtractPageSave();
 });
 
 $("#extract-btn").addEventListener("click", extractAndTag);
@@ -547,7 +652,10 @@ function showRetagStatus(msg, isError) {
   setTimeout(() => el.classList.add("hidden"), 5000);
 }
 
-$("#history-toggle").addEventListener("click", toggleHistory);
+$("#history-toggle").addEventListener("click", () => {
+  toggleHistory();
+  scheduleExtractPageSave();
+});
 $("#retag-selected-btn").addEventListener("click", retagSelected);
 $("#retag-all-btn").addEventListener("click", retagAll);
 
@@ -606,4 +714,28 @@ async function pollAndRepairPn(baseFlacPath, logIndex, copiedTo) {
 }
 
 // ---- Init ----
-loadExtractPrefs().then(() => browseFiles());
+loadExtractPrefs().then(async () => {
+  const st = typeof djmmPageStateGetPage === "function" ? djmmPageStateGetPage("extract") : null;
+  if (st && st.v === 1) applyExtractPageStateFields(st);
+  await browseFiles();
+  if (st && st.v === 1 && st.selectedFile) {
+    const items = document.querySelectorAll("#file-list .file-item");
+    for (const el of items) {
+      if (el.dataset.path === st.selectedFile) {
+        await selectFile(el);
+        break;
+      }
+    }
+  }
+  if (st && st.v === 1 && st.currentTracklist && st.currentTracklist.length > 1) {
+    currentTracklist = st.currentTracklist;
+    showTracklist(st.currentTracklist, st.metaForTracklist || {});
+  }
+  if (st && st.v === 1 && st.historyOpen) {
+    $("#history-body").classList.remove("hidden");
+    $("#history-arrow").classList.add("open");
+    loadHistory();
+  }
+  wireExtractPagePersistence();
+  scheduleExtractPageSave();
+});

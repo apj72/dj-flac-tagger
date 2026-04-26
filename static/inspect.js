@@ -2,6 +2,20 @@ const $ = (sel) => document.querySelector(sel);
 
 let selectedFile = null;
 
+function collectInspectPageState() {
+  return {
+    v: 1,
+    insDir: $("#ins-dir").value,
+    selectedFile,
+  };
+}
+
+function scheduleInspectPageSave() {
+  if (typeof djmmPageStateSchedule === "function") {
+    djmmPageStateSchedule("inspect", collectInspectPageState);
+  }
+}
+
 function esc(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
@@ -101,6 +115,7 @@ async function browseFiles() {
 
   if (data.error) {
     $("#ins-file-list").innerHTML = `<div class="status">${data.error}</div>`;
+    scheduleInspectPageSave();
     return;
   }
 
@@ -111,6 +126,7 @@ async function browseFiles() {
 
   if (data.files.length === 0) {
     $("#ins-file-list").innerHTML = '<div class="status">No audio files found</div>';
+    scheduleInspectPageSave();
     return;
   }
 
@@ -127,6 +143,7 @@ async function browseFiles() {
   $("#ins-file-list").querySelectorAll(".file-item").forEach((el) => {
     el.addEventListener("click", () => selectFile(el));
   });
+  scheduleInspectPageSave();
 }
 
 async function selectFile(el) {
@@ -155,6 +172,7 @@ async function selectFile(el) {
   renderFileInfo(data);
   renderMetadata(data);
   renderArtwork(data);
+  scheduleInspectPageSave();
 }
 
 function renderFileInfo(data) {
@@ -282,13 +300,31 @@ document.getElementById("ins-folder-modal").addEventListener("click", (e) => {
   if (e.target && e.target.id === "ins-folder-modal") closeInsFolderModal();
 });
 $("#ins-dir").addEventListener("keydown", (e) => { if (e.key === "Enter") browseFiles(); });
+$("#ins-dir").addEventListener("input", scheduleInspectPageSave);
 
 // ---- Init ----
 async function initInspect() {
   await loadSettings();
   const params = new URLSearchParams(window.location.search);
   const d = (params.get("dir") || "").trim();
-  if (d) $("#ins-dir").value = d;
+  if (d) {
+    $("#ins-dir").value = d;
+  } else {
+    const st = typeof djmmPageStateGetPage === "function" ? djmmPageStateGetPage("inspect") : null;
+    if (st && st.v === 1 && st.insDir != null) $("#ins-dir").value = st.insDir;
+  }
   await browseFiles();
+  const st2 = !d && typeof djmmPageStateGetPage === "function" ? djmmPageStateGetPage("inspect") : null;
+  if (st2 && st2.v === 1 && st2.selectedFile) {
+    const want = st2.selectedFile;
+    const items = document.querySelectorAll("#ins-file-list .file-item");
+    for (const el of items) {
+      if (el.dataset.path === want) {
+        await selectFile(el);
+        break;
+      }
+    }
+  }
+  scheduleInspectPageSave();
 }
 initInspect();

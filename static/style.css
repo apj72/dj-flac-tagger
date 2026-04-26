@@ -416,6 +416,22 @@ label {
 }
 .modal-actions .btn { flex: 0 0 auto; }
 
+.modal-card--confirm {
+  max-width: min(34rem, calc(100vw - 2rem));
+  max-height: min(90vh, 40rem);
+}
+.bulk-confirm-body {
+  margin: 0.15rem 0 0.25rem;
+  line-height: 1.5;
+}
+.bulk-confirm-path {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg);
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.1));
+  border-radius: var(--radius-sm);
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
