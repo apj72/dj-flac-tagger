@@ -84,7 +84,7 @@ Copy **A + B + the section below** into one generation request per icon.
 
 ## After generation
 
-1. Save files into `static/icons/tabs/` as **`extract.png`** (or `.svg`), **`fix-metadata.svg`**, **`inspect.svg`**, **`normalise.svg`**, **`convert.svg`**, **`bulk-fix.svg`**, **`settings.svg`** — **PNG with alpha** is fine (see `extract.png`). Point `mask-image` in `static/style.css` under each `.tab-icon-*` at the file you use.
+1. Save into `static/icons/tabs/` as **`extract.png`**, **`fix-metadata.png`**, **`inspect.png`**, **`normalise.png`**, **`convert.png`** (WAV→FLAC), **`bulk-fix.png`**, **`settings.png`** — **PNG with alpha**. Resize large exports (e.g. `sips -Z 256`) before committing. `mask-image` URLs live in `static/style.css` under `.tab-icon-*`.
 2. For **mask** compatibility, artwork should be **filled** or **closed strokes** that read as a **solid silhouette**; very thin hairlines may break when scaled down.
 
 ---

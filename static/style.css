@@ -269,7 +269,7 @@ header h1 {
 .tab-link:hover { color: var(--text); background: var(--surface-hover); }
 .tab-link.active { color: var(--text-on-accent); background: var(--accent); }
 
-/* Monoline icons (mask); replace SVGs in /static/icons/tabs/ after generating assets */
+/* Tab icons: PNG masks in /static/icons/tabs/ (alpha → shape; tinted via currentColor) */
 .tab-icon {
   width: 1.125rem;
   height: 1.125rem;
@@ -289,28 +289,28 @@ header h1 {
   mask-image: url("/static/icons/tabs/extract.png");
 }
 .tab-icon-fix {
-  -webkit-mask-image: url("/static/icons/tabs/fix-metadata.svg");
-  mask-image: url("/static/icons/tabs/fix-metadata.svg");
+  -webkit-mask-image: url("/static/icons/tabs/fix-metadata.png");
+  mask-image: url("/static/icons/tabs/fix-metadata.png");
 }
 .tab-icon-inspect {
-  -webkit-mask-image: url("/static/icons/tabs/inspect.svg");
-  mask-image: url("/static/icons/tabs/inspect.svg");
+  -webkit-mask-image: url("/static/icons/tabs/inspect.png");
+  mask-image: url("/static/icons/tabs/inspect.png");
 }
 .tab-icon-normalise {
-  -webkit-mask-image: url("/static/icons/tabs/normalise.svg");
-  mask-image: url("/static/icons/tabs/normalise.svg");
+  -webkit-mask-image: url("/static/icons/tabs/normalise.png");
+  mask-image: url("/static/icons/tabs/normalise.png");
 }
 .tab-icon-convert {
-  -webkit-mask-image: url("/static/icons/tabs/convert.svg");
-  mask-image: url("/static/icons/tabs/convert.svg");
+  -webkit-mask-image: url("/static/icons/tabs/convert.png");
+  mask-image: url("/static/icons/tabs/convert.png");
 }
 .tab-icon-bulk-fix {
-  -webkit-mask-image: url("/static/icons/tabs/bulk-fix.svg");
-  mask-image: url("/static/icons/tabs/bulk-fix.svg");
+  -webkit-mask-image: url("/static/icons/tabs/bulk-fix.png");
+  mask-image: url("/static/icons/tabs/bulk-fix.png");
 }
 .tab-icon-settings {
-  -webkit-mask-image: url("/static/icons/tabs/settings.svg");
-  mask-image: url("/static/icons/tabs/settings.svg");
+  -webkit-mask-image: url("/static/icons/tabs/settings.png");
+  mask-image: url("/static/icons/tabs/settings.png");
 }
 
 .card {
