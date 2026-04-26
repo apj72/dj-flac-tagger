@@ -304,6 +304,10 @@ dj-meta-manager/
 └── README.md
 ```
 
+## Appearance
+
+**Dark** and **light** themes use CSS variables aligned with the **Obsidian Flux** (dark) and **Luminous Glass** (light) palettes in **`design/UI/`** (local reference images). Choose **Settings → Appearance** (stored in the browser as `djmm.themePreference`: dark, light, or match system). Tab icons live under **`static/icons/tabs/`**; prompts for generating replacements are in **`docs/TAB_ICON_PROMPTS.md`**.
+
 ## HTML user guide
 
 A modular, print-friendly guide (separate pages + shared CSS) lives in **`docs/user-guide/`**. Open **`docs/user-guide/index.html`** in a browser. Screenshot filenames and a capture checklist are in **`docs/user-guide/assets/images/README.md`**.

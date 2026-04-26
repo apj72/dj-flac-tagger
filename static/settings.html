@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Settings — DJ MetaManager</title>
+  <script src="/static/theme-init.js"></script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -12,13 +13,13 @@
       <h1>DJ MetaManager</h1>
       <p class="subtitle">Multi-format audio &middot; Tag &middot; Artwork</p>
       <nav class="tab-nav">
-        <a href="/" class="tab-link">Extract</a>
-        <a href="/fix" class="tab-link">Fix Metadata</a>
-        <a href="/inspect" class="tab-link">Inspect</a>
-        <a href="/normalise" class="tab-link">Normalise</a>
-        <a href="/convert" class="tab-link">WAV → FLAC</a>
-        <a href="/bulk-fix" class="tab-link">Bulk Fix</a>
-        <a href="/settings" class="tab-link active">Settings</a>
+        <a href="/" class="tab-link"><span class="tab-icon tab-icon-extract" aria-hidden="true"></span>Extract</a>
+        <a href="/fix" class="tab-link"><span class="tab-icon tab-icon-fix" aria-hidden="true"></span>Fix Metadata</a>
+        <a href="/inspect" class="tab-link"><span class="tab-icon tab-icon-inspect" aria-hidden="true"></span>Inspect</a>
+        <a href="/normalise" class="tab-link"><span class="tab-icon tab-icon-normalise" aria-hidden="true"></span>Normalise</a>
+        <a href="/convert" class="tab-link"><span class="tab-icon tab-icon-convert" aria-hidden="true"></span>WAV → FLAC</a>
+        <a href="/bulk-fix" class="tab-link"><span class="tab-icon tab-icon-bulk-fix" aria-hidden="true"></span>Bulk Fix</a>
+        <a href="/settings" class="tab-link active"><span class="tab-icon tab-icon-settings" aria-hidden="true"></span>Settings</a>
       </nav>
     </header>
 
@@ -27,6 +28,15 @@
         <h2><span class="step-alt">&#9881;</span> Settings</h2>
         <p class="hint">Paths, extract format (FLAC / MP3 / AAC), and loudness targets apply across Extract, Fix, Inspect, and Normalise. Save after changes.</p>
 
+        <div class="field-row">
+          <label for="cfg-theme">Appearance</label>
+          <select id="cfg-theme">
+            <option value="dark">Dark (Obsidian Flux)</option>
+            <option value="light">Light (Luminous Glass)</option>
+            <option value="system">Match system</option>
+          </select>
+          <p class="hint" style="margin-top:0.35rem">Stored in this browser only. Colours follow the references in <code class="mono">design/UI</code> (darkmode.jpg / lightmode.jpg).</p>
+        </div>
         <div class="field-row">
           <label for="cfg-extract-profile">Extract &amp; normalise output format</label>
           <select id="cfg-extract-profile"></select>

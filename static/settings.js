@@ -90,6 +90,17 @@ async function saveSettings() {
   setTimeout(() => status.classList.add("hidden"), 2000);
 }
 
+function wireThemeControl() {
+  const sel = document.getElementById("cfg-theme");
+  if (!sel || typeof djmmGetThemePreference !== "function") return;
+  sel.value = djmmGetThemePreference();
+  sel.addEventListener("change", () => {
+    if (typeof djmmApplyThemePreference === "function") {
+      djmmApplyThemePreference(sel.value);
+    }
+  });
+}
+
 function wireSettingsPersistence() {
   [
     "cfg-source",
@@ -108,6 +119,7 @@ function wireSettingsPersistence() {
 
 $("#save-settings-btn").addEventListener("click", saveSettings);
 loadSettings().then(() => {
+  wireThemeControl();
   wireSettingsPersistence();
   scheduleSettingsPageSave();
 });
