@@ -18,6 +18,7 @@ Use these with your image model (e.g. Google **Imagen / Gemini** image features)
 - **Colour:** **Pure black (#000000)** lines on **fully transparent** background (or solid white silhouette if the tool cannot do strokes—then black on transparent preferred).
 - **Framing:** **No** circle, **no** square plate, **no** drop shadow—**glyph only** (the app puts icons in tabs itself).
 - **Mood:** **Precise, utility, audio engineering**—similar to **SF Symbols** or **Material Symbols** (outlined), not playful stickers.
+- **Exception — WAV → FLAC (§5) only:** You may use a **playful, music-flavoured** line character (bouncier curves, a tiny note or waveform flourish) as described there—still **monoline**, still **no letters or words** in the glyph.
 
 ---
 
@@ -61,7 +62,7 @@ Copy **A + B + the section below** into one generation request per icon.
 
 **Tab label:** WAV → FLAC  
 **Function:** User converts **WAV files** to **lossless FLAC** (single file or **bulk** with folder options); source WAVs stay on disk.  
-**Icon concept:** **Format conversion**—e.g. **two small badges** or labels **“W” and “F”** with an **arrow between** (keep letters **minimal and geometric**, not a logo), or **waveform → compressed archive** metaphor. Must read as *WAV in, FLAC out*.
+**Icon concept (music + playful, still pro):** This icon should feel **DJ- and studio-adjacent**—clearly about **sound**, not generic “files.” Use **playful expression**: lively curves, a slight **bounce** or **asymmetry**, maybe a **tiny eighth-note**, **headphone cup**, or **compact waveform** merged with a **directional arrow** or **two linked bubbles** (suggesting *raw capture → tidy lossless library*)—**without** spelling “W,” “F,” or any letters (see §B). Think **friendly boutique audio tool**, not corporate clip-art: **one bold readable silhouette**, **single stroke weight**, **rounded joins**, like a **mini party for your library** that still fits a technical app. The story in one glance: **music in, polished lossless audio out**.
 
 ---
 
