@@ -765,17 +765,35 @@ HEADERS = {
 DISCOGS_HEADERS = {"User-Agent": "DJMetaManager/1.0 +https://github.com/apj72/dj-meta-manager"}
 
 
+def _response_text_utf8(resp: requests.Response) -> str:
+    """
+    Decode HTML (or other text) body as UTF-8. Many sites omit charset or default to
+    ISO-8859-1 in requests, which mojibakes non-ASCII (e.g. André → AndrÃ©).
+    """
+    return (resp.content or b"").decode("utf-8", errors="replace")
+
+
+def _ld_json_script_text(tag) -> str:
+    """Raw JSON-LD string from a script tag (BeautifulSoup .string can be None on some trees)."""
+    if tag is None:
+        return ""
+    s = tag.string
+    if s is not None and str(s).strip():
+        return str(s).strip()
+    return (tag.get_text() or "").strip()
+
+
 def scrape_bandcamp(url):
     resp = requests.get(url, headers=HEADERS, timeout=15)
     resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "lxml")
+    soup = BeautifulSoup(_response_text_utf8(resp), "lxml")
 
     meta = {}
 
     ld_json = soup.find("script", type="application/ld+json")
     if ld_json:
         try:
-            data = json.loads(ld_json.string)
+            data = json.loads(_ld_json_script_text(ld_json))
             if isinstance(data, list):
                 data = data[0]
 
@@ -834,7 +852,7 @@ def apple_music_hires_artwork(url):
 def scrape_apple_music(url):
     resp = requests.get(url, headers=HEADERS, timeout=15)
     resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "lxml")
+    soup = BeautifulSoup(_response_text_utf8(resp), "lxml")
 
     meta = {}
     is_album = "/album/" in url
@@ -843,7 +861,7 @@ def scrape_apple_music(url):
     ld_json = soup.find("script", type="application/ld+json")
     if ld_json:
         try:
-            data = json.loads(ld_json.string)
+            data = json.loads(_ld_json_script_text(ld_json))
             meta["title"] = data.get("name", "")
 
             if "datePublished" in data:
@@ -978,7 +996,8 @@ def _itunes_lookup_album(album_id):
             f"https://itunes.apple.com/lookup?id={album_id}&country=us",
             timeout=10,
         )
-        data = resp.json()
+        resp.raise_for_status()
+        data = json.loads(resp.content.decode("utf-8", errors="replace"))
         for r in data.get("results", []):
             if r.get("wrapperType") == "collection":
                 return r
@@ -997,7 +1016,8 @@ def _itunes_lookup_songs(song_ids):
             f"https://itunes.apple.com/lookup?id={ids_str}&country=us",
             timeout=15,
         )
-        data = resp.json()
+        resp.raise_for_status()
+        data = json.loads(resp.content.decode("utf-8", errors="replace"))
         for r in data.get("results", []):
             if r.get("wrapperType") == "track":
                 dur_ms = r.get("trackTimeMillis", 0)
@@ -1023,7 +1043,7 @@ def scrape_spotify(url):
     """Scrape metadata from a Spotify track or album URL."""
     resp = requests.get(url, headers=SPOTIFY_HEADERS, timeout=15)
     resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "lxml")
+    soup = BeautifulSoup(_response_text_utf8(resp), "lxml")
 
     meta = {}
     is_album = "/album/" in url
@@ -1209,7 +1229,7 @@ def fetch_discogs(url):
 def scrape_generic(url):
     resp = requests.get(url, headers=HEADERS, timeout=15)
     resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "lxml")
+    soup = BeautifulSoup(_response_text_utf8(resp), "lxml")
 
     meta = {}
     for prop, key in [("og:title", "title"), ("og:image", "artwork_url"),
@@ -1338,7 +1358,7 @@ def search_bandcamp(query, limit=6):
             timeout=18,
         )
         resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(_response_text_utf8(resp), "lxml")
         for li in soup.find_all("li"):
             if len(results) >= limit:
                 break

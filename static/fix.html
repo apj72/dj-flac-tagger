@@ -17,7 +17,7 @@
         <a href="/inspect" class="tab-link">Inspect</a>
         <a href="/normalise" class="tab-link">Normalise</a>
         <a href="/convert" class="tab-link">WAV → FLAC</a>
-        <a href="/bulk-fix" class="tab-link">Bulk fix</a>
+        <a href="/bulk-fix" class="tab-link">Bulk Fix</a>
         <a href="/settings" class="tab-link">Settings</a>
       </nav>
     </header>
@@ -32,7 +32,7 @@
           <button type="button" id="fix-choose-folder-btn" class="btn btn-secondary" title="Open folder navigator">Choose folder…</button>
           <button type="button" id="fix-default-dir-btn" class="btn btn-secondary" title="Path from Settings → destination folder">Default</button>
         </div>
-        <p class="hint" style="margin:0 0 0.75rem">“Choose folder” lists folders on the server; “Default” uses your Settings destination (music / FLACs folder). <strong>Tip:</strong> for Ableton-style names like <code>Slot - BPM - Artist - Title</code>, the app can guess a <strong>search query</strong> (artist + title) when there are no tags. Use <a href="/convert">WAV → FLAC</a> → <em>Open in Fix Metadata</em> to switch here with a file pre-selected, or <code class="mono">/fix?file=…&amp;q=…</code> in the address bar.</p>
+        <p class="hint" style="margin:0 0 0.75rem">“Choose folder” lists folders on the server; “Default” uses your Settings destination (music / FLACs folder). The last folder you list here is remembered when you open <a href="/inspect">Inspect</a> (and vice versa). <strong>Tip:</strong> for Ableton-style names like <code>Slot - BPM - Artist - Title</code>, the app can guess a <strong>search query</strong> (artist + title) when there are no tags. Use <a href="/convert">WAV → FLAC</a> → <em>Open in Fix Metadata</em> to switch here with a file pre-selected, or <code class="mono">/fix?file=…&amp;q=…</code> in the address bar.</p>
         <div id="fix-file-list" class="file-list"></div>
         <div id="fix-current-tags" class="probe-info hidden"></div>
       </section>
@@ -147,6 +147,7 @@
     </div>
   </div>
 
+  <script src="/static/path-persist.js"></script>
   <script src="/static/fix.js"></script>
 </body>
 </html>

@@ -134,7 +134,7 @@ def test_fetch_metadata_uses_track_hint_for_discogs_tracklist(client, app_module
 def test_bulk_fix_page_serves(client):
     r = client.get("/bulk-fix")
     assert r.status_code == 200
-    assert b"Bulk fix" in r.data or b"bulk-fix.js" in r.data
+    assert b"Bulk Fix" in r.data or b"bulk-fix.js" in r.data
 
 
 def test_bulk_fix_apply_rejects_empty_items(client):

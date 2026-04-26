@@ -14,6 +14,8 @@ A local web tool for DJs to turn recordings into a clean, tagged library in **mu
 | **`master`** | Stable release; multi-format extract, tag, and normalise as documented below. |
 | **`v2`** | Active development; new features land here first, then merge to `master` when ready. |
 
+**On branch `v2` today:** **Bulk Fix** (batch FLAC metadata, Bandcamp search, duplicate-name warnings, optional sibling `.wav` hints), batch **WAV → FLAC** with offsets, **Inspect** folder picker, last browsed folder remembered between **Fix Metadata** and **Inspect**, and **UTF-8–safe** HTML/JSON scraping so accented titles (e.g. Apple Music) write correctly to tags.
+
 ## Recording
 
 This workflow assumes you capture mixes or vinyl rips as **video recordings** (often `.mkv`) using **[OBS Studio](https://obsproject.com/)** with a virtual audio device such as **[BlackHole](https://existential.audio/blackhole/)** on macOS. **OBS** is a practical choice because it is **free and open source**, can **record video** when you want a visual timeline or camera view, and supports **streaming** as well as local capture — one familiar tool for several setups.
@@ -22,7 +24,7 @@ OBS is still primarily a **video** app: even when you only care about audio, it 
 
 ## What It Does
 
-Seven pages, via tabs at the top (order: **Extract → Fix Metadata → Inspect → Normalise → WAV → FLAC → Bulk fix → Settings**):
+Seven pages, via tabs at the top (order: **Extract → Fix Metadata → Inspect → Normalise → WAV → FLAC → Bulk Fix → Settings**):
 
 ### Extract (main workflow)
 
@@ -41,11 +43,13 @@ Paths, loudness targets, and Platinum Notes options live on the **Settings** tab
 
 Browse audio files (multiple formats), auto-search iTunes, Discogs, and Bandcamp, fetch from URLs, edit fields, **save tags and artwork**. The **URL field** is saved into the file and into the **processing log** (when you used a URL or artwork URL) so you can trace the source. **Saved metadata URL** appears on **Inspect** for FLAC/OGG/MP3 where supported.
 
-When a file has no useful tags, the **suggested search** string is derived from the **filename** using the same rules as **WAV → FLAC** tags and **Bulk fix** (see [Filename search and tags](#filename-search-and-tags) below).
+When a file has no useful tags, the **suggested search** string is derived from the **filename** using the same rules as **WAV → FLAC** tags and **Bulk Fix** (see [Filename search and tags](#filename-search-and-tags) below).
+
+**Folder path:** The last folder you successfully listed in **Fix** or **Inspect** is remembered in the browser (alongside **Default** from Settings), so switching between those tabs keeps the same directory.
 
 ### Inspect
 
-Full tag table, artwork preview, **Fix artwork dimensions** for **FLAC** (Rekordbox-friendly; other formats unchanged here). Shows **Saved metadata URL** when present.
+Full tag table, artwork preview, **Fix artwork dimensions** for **FLAC** (Rekordbox-friendly; other formats unchanged here). Shows **Saved metadata URL** when present. Pick a folder with **Choose folder…** (server-side navigator), **Default** (Settings destination), then **List files** — useful for reviewing a flat **Converted WAVs** tree after bulk conversion. Deep link: **`/inspect?dir=/path/to/folder`**.
 
 ### Normalise
 
@@ -82,11 +86,11 @@ Convert **WAV** recordings to **FLAC** (ffmpeg, compression level 12). Source WA
   - **Next to each WAV** — write `<name>.flac` beside the source.
   - **Mirror under destination** — preserve subfolders under your **Settings** destination (avoids name collisions across BPM folders).
   - **One flat folder** — e.g. all converted files into a single Rekordbox-style directory; filenames use **`Slot - BPM - Artist - Title`** when the WAV name matches that pattern; many DJ exports instead use a **flat** name with a lead slot and trailing key + BPM (see [Filename search and tags](#filename-search-and-tags)).
-- **Tags from filename** — after each encode, **artist** and **title** Vorbis tags are set when the stem can be parsed (see below; aligned with **Fix Metadata** and **Bulk fix**).
+- **Tags from filename** — after each encode, **artist** and **title** Vorbis tags are set when the stem can be parsed (see below; aligned with **Fix Metadata** and **Bulk Fix**).
 - **Batching (recommended for large trees)** — by default, each run only processes a **batch** of WAVs in **sorted path order** using **offset** and **limit** (e.g. 25 per run). Use **Next offset** to step through hundreds of files safely; keep **skip if FLAC exists** on to resume. Uncheck “limit each run” only if you intentionally want one run for the whole tree (you’ll get a stronger warning when the scan count is high).
-- After a successful **flat-folder** run, the UI offers **Open Bulk fix for this folder** (or use **Bulk fix** with `?dir=/path/to/folder`).
+- After a successful **flat-folder** run, the UI offers **Open Bulk Fix for this folder** (or use **Bulk Fix** with `?dir=/path/to/folder`).
 
-### Bulk fix (metadata in batches)
+### Bulk Fix (metadata in batches)
 
 For a **folder of FLACs** (often the same flat folder as **WAV → FLAC** output), review and apply **Discogs, Apple Music, or Bandcamp** (and other) metadata without doing one file at a time on **Fix Metadata**.
 
@@ -97,7 +101,7 @@ For a **folder of FLACs** (often the same flat folder as **WAV → FLAC** output
 
 **Optional same-name `.wav`:** If `SomeTrack.wav` sits in the **same folder** as `SomeTrack.flac`, the server reads **embedded WAV tags** (when mutagen can see them — e.g. some BWF/RIFF metadata). If **both** artist and title are present in the WAV, the **search query** uses that pair (often cleaner than the filename alone). If only one of those fields exists, it can still **fill title/artist hints** for track matching without replacing the whole query. Many exports have **no** useful WAV tags, so the filename rules above still do most of the work.
 
-The **WAV → FLAC** tab links here after a flat-folder conversion; **Bulk fix** also reads **`?dir=...`** from the URL to pre-fill the folder path.
+The **WAV → FLAC** tab links here after a flat-folder conversion; **Bulk Fix** also reads **`?dir=...`** from the URL to pre-fill the folder path.
 
 #### Filename search and tags
 
@@ -119,7 +123,7 @@ DJs often export or convert tracks with **extra text in the filename** that is n
 | `A02 Christian Loeffler All Comes (Mind Against Remix) 2A 120` | `Christian Loeffler All Comes (Mind Against Remix)` |
 | `A02 Ripperton Unfold 2A 119` | `Ripperton Unfold` |
 
-These rules apply to **Bulk fix** (scan query and title hint), **Fix Metadata** (suggested search from the filename), and **WAV → FLAC** embedding when a classic pattern does not match.
+These rules apply to **Bulk Fix** (scan query and title hint), **Fix Metadata** (suggested search from the filename), and **WAV → FLAC** embedding when a classic pattern does not match.
 
 ## Recording Setup
 
@@ -220,6 +224,8 @@ Normalisation uses **two-pass EBU R128** with your configured **I** and **TP** t
 
 **Inspect: Fix artwork dimensions** applies to **FLAC** only (other formats skip this).
 
+**Unicode:** Metadata scraped from Apple Music, Bandcamp, Spotify, and generic pages is decoded as **UTF-8** so accented titles (e.g. **André**) are not mangled when written to tags.
+
 ## Configuration (`config.json`)
 
 Example (see `config.json.example`):
@@ -246,7 +252,7 @@ Example (see `config.json.example`):
 | `GET` | `/api/bulk-fix/scan` | Paginated `.flac` list with **query**, **title_hint**, optional **wav_sibling** + **wav_tags** when a same-name `.wav` exists, plus **duplicate_basename**, **same_basename_count**, **same_basename_other_paths**, **duplicate_in_batch** when the same filename appears more than once under the scanned tree. Response includes **duplicates_in_batch** (rows in this page that share a name with another row). Filename rules: [Filename search and tags](#filename-search-and-tags). |
 | `POST` | `/api/bulk-fix/suggest` | Search results per file path (Apple + Discogs + Bandcamp). |
 | `POST` | `/api/bulk-fix/apply` | Apply metadata from chosen URLs to many files. |
-| `GET` | `/api/search` | iTunes + Discogs + Bandcamp search (used by Fix and Bulk fix). |
+| `GET` | `/api/search` | iTunes + Discogs + Bandcamp search (used by Fix and Bulk Fix). |
 | `POST` | `/api/fetch-metadata` | Full metadata from a URL; optional **`track_name`** / **`track_name_hint`** to pick a track on multi-track releases. |
 | `POST` | `/api/retag` | Save tags/artwork/rename for one file (Fix Metadata). |
 | `GET` | `/api/browse-folders` | Server-side folder picker for paths the browser cannot read. |
@@ -281,7 +287,8 @@ dj-meta-manager/
 │   ├── inspect.html / inspect.js    # Inspect
 │   ├── normalise.html / normalise.js
 │   ├── convert.html / convert.js   # WAV → FLAC
-│   ├── bulk-fix.html / bulk-fix.js # Bulk metadata fix
+│   ├── bulk-fix.html / bulk-fix.js # Bulk Fix metadata
+│   ├── path-persist.js             # Shared last folder (Fix + Inspect)
 │   ├── settings.html / settings.js
 │   └── style.css
 └── README.md

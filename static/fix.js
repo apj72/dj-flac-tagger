@@ -53,7 +53,8 @@ function parseAbletonStyleFilename(stem) {
 async function loadSettings() {
   const resp = await fetch("/api/settings");
   const cfg = await resp.json();
-  $("#fix-dir").value = cfg.destination_dir || "";
+  const last = typeof djmmGetLastAudioBrowseDir === "function" ? djmmGetLastAudioBrowseDir().trim() : "";
+  $("#fix-dir").value = last || cfg.destination_dir || "";
 }
 
 async function resetFixDirToDefault() {
@@ -153,6 +154,9 @@ async function browseAudio() {
   }
 
   $("#fix-dir").value = data.directory;
+  if (typeof djmmSetLastAudioBrowseDir === "function") {
+    djmmSetLastAudioBrowseDir(data.directory);
+  }
 
   if (data.files.length === 0) {
     $("#fix-file-list").innerHTML = '<div class="status">No audio files found</div>';

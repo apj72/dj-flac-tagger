@@ -17,7 +17,7 @@
         <a href="/inspect" class="tab-link active">Inspect</a>
         <a href="/normalise" class="tab-link">Normalise</a>
         <a href="/convert" class="tab-link">WAV → FLAC</a>
-        <a href="/bulk-fix" class="tab-link">Bulk fix</a>
+        <a href="/bulk-fix" class="tab-link">Bulk Fix</a>
         <a href="/settings" class="tab-link">Settings</a>
       </nav>
     </header>
@@ -27,9 +27,12 @@
       <section class="card">
         <h2>Select Audio File</h2>
         <div class="dir-bar">
-          <input type="text" id="ins-dir" placeholder="~/Music/DJ-library" />
-          <button id="ins-browse-btn" class="btn btn-secondary">Browse</button>
+          <input type="text" id="ins-dir" placeholder="~/Music/FLACs/Converted WAVs" />
+          <button type="button" id="ins-browse-btn" class="btn btn-secondary">List files</button>
+          <button type="button" id="ins-choose-folder-btn" class="btn btn-secondary" title="Open folder navigator on the server">Choose folder…</button>
+          <button type="button" id="ins-default-dir-btn" class="btn btn-secondary" title="Settings → destination folder">Default</button>
         </div>
+        <p class="hint" style="margin:0 0 0.75rem"><strong>Choose folder</strong> picks a directory on the machine running the app (e.g. a flat <strong>Converted WAVs</strong> output from <a href="/convert">WAV → FLAC</a>). <strong>Default</strong> fills Settings → destination. The last folder you list here is remembered when you open <a href="/fix">Fix Metadata</a> (and vice versa). Then <strong>List files</strong> or press Enter. You can also open <code class="mono">/inspect?dir=/path/to/folder</code>.</p>
         <div id="ins-file-list" class="file-list"></div>
       </section>
 
@@ -53,6 +56,22 @@
     </main>
   </div>
 
+  <div id="ins-folder-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ins-folder-modal-title">
+    <div class="modal-card">
+      <h3 id="ins-folder-modal-title">Choose folder</h3>
+      <div class="modal-path mono" id="ins-modal-path"></div>
+      <div class="modal-nav">
+        <button type="button" id="ins-modal-up" class="btn btn-secondary btn-sm">Enclosing folder</button>
+      </div>
+      <div id="ins-modal-dir-list" class="modal-dir-list"></div>
+      <div class="modal-actions">
+        <button type="button" id="ins-modal-select" class="btn btn-primary">Use this folder</button>
+        <button type="button" id="ins-modal-cancel" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/path-persist.js"></script>
   <script src="/static/inspect.js"></script>
 </body>
 </html>

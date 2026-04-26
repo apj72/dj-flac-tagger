@@ -31,12 +31,17 @@ def test_search_bandcamp_parses_search_page(app_module, monkeypatch):
     """
 
     class Resp:
-        text = html
+        def __init__(self, body):
+            self._body = body.encode("utf-8")
+
+        @property
+        def content(self):
+            return self._body
 
         def raise_for_status(self):
             return None
 
-    monkeypatch.setattr(app_module.requests, "get", lambda *a, **k: Resp())
+    monkeypatch.setattr(app_module.requests, "get", lambda *a, **k: Resp(html))
     out = app_module.search_bandcamp("query", limit=5)
     assert len(out) == 1
     assert out[0]["source"] == "bandcamp"

@@ -1,10 +1,40 @@
 """Unit tests for small pure helpers (no ffmpeg)."""
 
+import json
 import os
 import subprocess
 from pathlib import Path
 
 import pytest
+import requests
+
+
+def test_response_text_utf8_avoids_latin1_mojibake(app_module):
+    r = requests.Response()
+    r.status_code = 200
+    r._content = "Run Slowly (André Lodemann Remix)".encode("utf-8")
+    r.headers["Content-Type"] = "text/html"
+    r.encoding = "ISO-8859-1"
+    t = app_module._response_text_utf8(r)
+    assert "André" in t
+    assert "Ã©" not in t
+
+
+def test_ld_json_script_text_roundtrip_unicode(app_module):
+    from bs4 import BeautifulSoup
+
+    html = '<script type="application/ld+json">{"name": "André Test"}</script>'
+    soup = BeautifulSoup(html, "lxml")
+    tag = soup.find("script", type="application/ld+json")
+    raw = app_module._ld_json_script_text(tag)
+    assert json.loads(raw)["name"] == "André Test"
+
+
+def test_inspect_page_includes_folder_picker(client):
+    r = client.get("/inspect")
+    assert r.status_code == 200
+    assert b"ins-choose-folder-btn" in r.data
+    assert b"Choose folder" in r.data
 
 
 def test_infer_metadata_source_type(app_module):

@@ -15,7 +15,7 @@
   --success: #00b894;
   --radius: 10px;
   --radius-sm: 6px;
-  /* In-table links on dark UIs (bulk fix) */
+  /* In-table links on dark UIs (Bulk Fix) */
   --link-on-dark: #8ec4ff;
   --link-on-dark-hover: #c2e0ff;
   --bulk-match-cell-bg: #1f1f2c;
@@ -77,7 +77,7 @@ body {
   text-align: center;
 }
 
-/* Bulk fix: match + URL results (readable links on dark) */
+/* Bulk Fix: match + URL results (readable links on dark) */
 .page-bulk-fix .bulk-table th:nth-child(6),
 .page-bulk-fix .bulk-table td:nth-child(6) {
   background: var(--bulk-match-cell-bg);
@@ -99,7 +99,7 @@ body {
   color: #d4c8ff;
 }
 
-/* Bulk fix: open links + full result URLs */
+/* Bulk Fix: open links + full result URLs */
 .bf-url-raw {
   font-size: 0.7rem;
   word-break: break-all;
@@ -112,7 +112,7 @@ body {
   margin-top: 0.15rem;
 }
 
-/* Bulk fix: duplicate filename warning */
+/* Bulk Fix: duplicate filename warning */
 .bf-td-file .bf-file-name {
   font-size: 0.8rem;
   word-break: break-all;

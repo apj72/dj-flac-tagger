@@ -466,7 +466,7 @@ async function runBulkConvert() {
       const bf = new URL("/bulk-fix", window.location.origin);
       bf.searchParams.set("dir", data.target_dir);
       bulkFixCta = `<p style="margin-top:0.6rem" class="field-row">
-          <a class="btn btn-secondary" href="${bf.href}">Open Bulk fix for this folder</a>
+          <a class="btn btn-secondary" href="${bf.href}">Open Bulk Fix for this folder</a>
           <span class="hint" style="margin:0 0.35rem 0 0.5rem">Match Discogs/Apple metadata in small batches; same path is pre-filled.</span>
         </p>`;
     }

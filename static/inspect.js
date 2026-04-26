@@ -2,10 +2,94 @@ const $ = (sel) => document.querySelector(sel);
 
 let selectedFile = null;
 
+function esc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 async function loadSettings() {
   const resp = await fetch("/api/settings");
   const cfg = await resp.json();
-  $("#ins-dir").value = cfg.destination_dir || "";
+  const last = typeof djmmGetLastAudioBrowseDir === "function" ? djmmGetLastAudioBrowseDir().trim() : "";
+  $("#ins-dir").value = last || cfg.destination_dir || "";
+}
+
+async function resetInspectDirToDefault() {
+  await loadSettings();
+  await browseFiles();
+}
+
+// ---- Server-side folder picker (same API as Fix / Bulk Fix) ----
+let insFolderModalPath = "";
+
+function closeInsFolderModal() {
+  const el = document.getElementById("ins-folder-modal");
+  if (el) el.classList.add("hidden");
+  document.removeEventListener("keydown", onInsFolderModalKeydown);
+}
+
+function onInsFolderModalKeydown(e) {
+  if (e.key === "Escape") closeInsFolderModal();
+}
+
+async function openInsFolderModal() {
+  let start = $("#ins-dir").value.trim();
+  if (!start) {
+    const resp = await fetch("/api/settings");
+    const cfg = await resp.json();
+    start = (cfg.destination_dir || "").trim();
+  }
+  if (!start) start = "~";
+  document.getElementById("ins-folder-modal").classList.remove("hidden");
+  document.addEventListener("keydown", onInsFolderModalKeydown);
+  await loadInsFolderInModal(start);
+}
+
+async function loadInsFolderInModal(path) {
+  const listEl = $("#ins-modal-dir-list");
+  const pathEl = $("#ins-modal-path");
+  const upBtn = $("#ins-modal-up");
+  listEl.innerHTML = '<div class="status">Loading…</div>';
+  upBtn.disabled = true;
+
+  const resp = await fetch(`/api/browse-folders?path=${encodeURIComponent(path)}`);
+  const data = await resp.json();
+  if (data.error) {
+    listEl.innerHTML = `<div class="status">${esc(data.error)}</div>`;
+    pathEl.textContent = path;
+    insFolderModalPath = path;
+    return;
+  }
+  insFolderModalPath = data.path;
+  pathEl.textContent = data.path;
+  if (data.parent) {
+    upBtn.disabled = false;
+    upBtn.onclick = () => loadInsFolderInModal(data.parent);
+  } else {
+    upBtn.disabled = true;
+    upBtn.onclick = null;
+  }
+
+  if (!data.directories || data.directories.length === 0) {
+    listEl.innerHTML = '<div class="status">No subfolders (you can still use this folder)</div>';
+    return;
+  }
+  const paths = data.directories.map((d) => d.path);
+  listEl.innerHTML = data.directories
+    .map(
+      (d, i) =>
+        `<button type="button" class="modal-dir-item" data-idx="${i}">${esc(d.name)}/</button>`
+    )
+    .join("");
+  listEl.querySelectorAll(".modal-dir-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const i = parseInt(btn.dataset.idx, 10);
+      if (!Number.isNaN(i) && paths[i]) loadInsFolderInModal(paths[i]);
+    });
+  });
 }
 
 async function browseFiles() {
@@ -21,6 +105,9 @@ async function browseFiles() {
   }
 
   $("#ins-dir").value = data.directory;
+  if (typeof djmmSetLastAudioBrowseDir === "function") {
+    djmmSetLastAudioBrowseDir(data.directory);
+  }
 
   if (data.files.length === 0) {
     $("#ins-file-list").innerHTML = '<div class="status">No audio files found</div>';
@@ -181,7 +268,27 @@ function renderArtwork(data) {
 
 // ---- Event listeners ----
 $("#ins-browse-btn").addEventListener("click", browseFiles);
+document.getElementById("ins-choose-folder-btn").addEventListener("click", openInsFolderModal);
+document.getElementById("ins-default-dir-btn").addEventListener("click", resetInspectDirToDefault);
+document.getElementById("ins-modal-select").addEventListener("click", () => {
+  if (insFolderModalPath) {
+    $("#ins-dir").value = insFolderModalPath;
+    closeInsFolderModal();
+    browseFiles();
+  }
+});
+document.getElementById("ins-modal-cancel").addEventListener("click", closeInsFolderModal);
+document.getElementById("ins-folder-modal").addEventListener("click", (e) => {
+  if (e.target && e.target.id === "ins-folder-modal") closeInsFolderModal();
+});
 $("#ins-dir").addEventListener("keydown", (e) => { if (e.key === "Enter") browseFiles(); });
 
 // ---- Init ----
-loadSettings().then(() => browseFiles());
+async function initInspect() {
+  await loadSettings();
+  const params = new URLSearchParams(window.location.search);
+  const d = (params.get("dir") || "").trim();
+  if (d) $("#ins-dir").value = d;
+  await browseFiles();
+}
+initInspect();
