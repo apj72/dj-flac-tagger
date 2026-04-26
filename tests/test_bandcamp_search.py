@@ -70,3 +70,48 @@ def test_api_search_includes_bandcamp_key(client, monkeypatch):
     kinds = {x["source"] for x in j["results"]}
     assert "bandcamp" in kinds
     assert "apple_music" in kinds
+
+
+def test_normalize_search_source(app_module):
+    assert app_module._normalize_search_source("Apple") == "apple_music"
+    assert app_module._normalize_search_source("itunes") == "apple_music"
+    assert app_module._normalize_search_source("discogs") == "discogs"
+    assert app_module._normalize_search_source("bandcamp") == "bandcamp"
+    assert app_module._normalize_search_source("") == ""
+    assert app_module._normalize_search_source("unknown") == ""
+
+
+def test_api_search_source_apple_respects_limit(client, monkeypatch):
+    calls = []
+
+    def fake_itunes(q, limit=8):
+        calls.append((q, limit))
+        return [{"title": "A", "artist": "B", "source": "apple_music", "url": "https://x"}]
+
+    monkeypatch.setattr("app.search_itunes", fake_itunes)
+    monkeypatch.setattr("app.search_discogs", lambda q, limit=5: [])
+    monkeypatch.setattr("app.search_bandcamp", lambda q, limit=6: [])
+
+    r = client.get("/api/search?q=foo&source=apple&limit=3")
+    assert r.status_code == 200
+    assert calls == [("foo", 3)]
+    j = r.get_json()
+    assert len(j["results"]) == 1
+    assert j["results"][0]["source"] == "apple_music"
+
+
+def test_api_search_source_discogs_only(client, monkeypatch):
+    monkeypatch.setattr("app.search_itunes", lambda q, limit=8: [])
+    monkeypatch.setattr(
+        "app.search_discogs",
+        lambda q, limit=5: [
+            {"title": "Rel", "source": "discogs", "url": "https://d/r/1", "album": "Rel"}
+        ],
+    )
+    monkeypatch.setattr("app.search_bandcamp", lambda q, limit=6: [])
+
+    r = client.get("/api/search?q=x&source=discogs&limit=2")
+    assert r.status_code == 200
+    j = r.get_json()
+    assert len(j["results"]) == 1
+    assert j["results"][0]["source"] == "discogs"

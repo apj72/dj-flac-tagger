@@ -42,6 +42,20 @@
         <h2><span class="step">2</span> Search Results</h2>
         <div id="fix-search-status" class="status hidden"></div>
         <div id="fix-search-results" class="search-results"></div>
+        <div id="fix-search-fallback" class="fix-search-fallback hidden">
+          <p class="hint" style="margin:0 0 0.65rem">No combined matches. Pick a catalogue, adjust the query, and search (top 3 hits).</p>
+          <div class="fix-search-manual-row">
+            <label class="sr-only" for="fix-search-site">Site</label>
+            <select id="fix-search-site" class="fix-search-site-select" aria-label="Site to search">
+              <option value="apple_music" selected>Apple Music</option>
+              <option value="discogs">Discogs</option>
+              <option value="bandcamp">Bandcamp</option>
+            </select>
+            <input type="text" id="fix-search-manual-q" class="fix-search-manual-input" placeholder="Artist and track name" autocomplete="off" />
+            <button type="button" id="fix-search-manual-btn" class="btn btn-primary">Search</button>
+          </div>
+          <div id="fix-search-manual-status" class="status hidden" style="margin-top:0.5rem"></div>
+        </div>
         <p class="hint" style="margin-top:0.75rem">Not what you're looking for? Paste a URL below instead.</p>
       </section>
 

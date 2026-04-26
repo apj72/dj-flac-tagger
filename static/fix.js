@@ -344,6 +344,106 @@ async function selectFlacFile(el) {
   scheduleFixPageSave();
 }
 
+function hideSearchFallback() {
+  const fb = document.getElementById("fix-search-fallback");
+  if (fb) fb.classList.add("hidden");
+  const ms = document.getElementById("fix-search-manual-status");
+  if (ms) {
+    ms.classList.add("hidden");
+    ms.textContent = "";
+  }
+}
+
+function showSearchFallback(prefillQuery) {
+  const fb = document.getElementById("fix-search-fallback");
+  if (!fb) return;
+  fb.classList.remove("hidden");
+  const site = document.getElementById("fix-search-site");
+  if (site) site.value = "apple_music";
+  const inp = document.getElementById("fix-search-manual-q");
+  if (inp && prefillQuery != null) inp.value = prefillQuery;
+  const ms = document.getElementById("fix-search-manual-status");
+  if (ms) {
+    ms.classList.add("hidden");
+    ms.textContent = "";
+  }
+}
+
+function searchResultCardsHtml(results) {
+  return results
+    .map((r, i) => {
+      const srcMap = {
+        discogs: { label: "Discogs", cls: "src-discogs" },
+        apple_music: { label: "Apple Music", cls: "src-apple" },
+        bandcamp: { label: "Bandcamp", cls: "src-bandcamp" },
+      };
+      const sm = srcMap[r.source] || { label: "Web", cls: "src-generic" };
+      const srcClass = sm.cls;
+      const srcLabel = sm.label;
+      const thumb = r.artwork_thumb
+        ? `<img class="search-thumb" src="${r.artwork_thumb}" alt="" />`
+        : `<div class="search-thumb"></div>`;
+      const detail = [r.artist, r.album, r.year].filter(Boolean).join(" · ");
+      const label = r.label ? ` · ${r.label}` : "";
+      return `<div class="search-item" data-index="${i}">
+        ${thumb}
+        <div class="search-info">
+          <div class="search-title">${r.title}</div>
+          <div class="search-detail">${detail}${label}</div>
+        </div>
+        <span class="search-source ${srcClass}">${srcLabel}</span>
+      </div>`;
+    })
+    .join("");
+}
+
+function paintFixSearchResults(container, results) {
+  if (!container) return;
+  if (!results || results.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML = searchResultCardsHtml(results);
+  container.querySelectorAll(".search-item").forEach((el) => {
+    el.addEventListener("click", () => pickSearchResult(el, results));
+  });
+}
+
+async function runFixManualSiteSearch() {
+  const qEl = document.getElementById("fix-search-manual-q");
+  const siteEl = document.getElementById("fix-search-site");
+  const status = document.getElementById("fix-search-manual-status");
+  const container = $("#fix-search-results");
+  const q = (qEl && qEl.value.trim()) || "";
+  const source = (siteEl && siteEl.value) || "apple_music";
+  if (!q) {
+    if (status) {
+      status.classList.remove("hidden");
+      status.textContent = "Enter a search query.";
+    }
+    return;
+  }
+  if (status) {
+    status.classList.remove("hidden");
+    status.innerHTML = '<span class="spinner"></span> Searching…';
+  }
+  const url = `/api/search?q=${encodeURIComponent(q)}&source=${encodeURIComponent(source)}&limit=3`;
+  const resp = await fetch(url);
+  const data = await resp.json();
+  const top = (data.results || []).slice(0, 3);
+  if (!top.length) {
+    if (status) {
+      status.classList.remove("hidden");
+      status.textContent =
+        "No results for this site. Try another catalogue or different words.";
+    }
+    if (container) container.innerHTML = "";
+    return;
+  }
+  if (status) status.classList.add("hidden");
+  paintFixSearchResults(container, top);
+}
+
 // ---- Auto-search from file tags ----
 async function autoSearch(tags) {
   const section = $("#fix-search-section");
@@ -375,10 +475,12 @@ async function autoSearch(tags) {
 
   if (!q) {
     section.classList.add("hidden");
+    hideSearchFallback();
     return;
   }
 
   section.classList.remove("hidden");
+  hideSearchFallback();
   status.classList.remove("hidden");
   status.innerHTML = '<span class="spinner"></span> Searching...';
   container.innerHTML = "";
@@ -388,43 +490,18 @@ async function autoSearch(tags) {
   status.classList.add("hidden");
 
   if (!data.results || data.results.length === 0) {
-    container.innerHTML = '<div class="status">No results found. Try a URL below.</div>';
+    container.innerHTML =
+      '<div class="status">No combined results from Apple Music, Discogs, or Bandcamp.</div>';
+    showSearchFallback(q);
     return;
   }
 
-  container.innerHTML = data.results
-    .map((r, i) => {
-      const srcMap = {
-        discogs: { label: "Discogs", cls: "src-discogs" },
-        apple_music: { label: "Apple Music", cls: "src-apple" },
-        bandcamp: { label: "Bandcamp", cls: "src-bandcamp" },
-      };
-      const sm = srcMap[r.source] || { label: "Web", cls: "src-generic" };
-      const srcClass = sm.cls;
-      const srcLabel = sm.label;
-      const thumb = r.artwork_thumb
-        ? `<img class="search-thumb" src="${r.artwork_thumb}" alt="" />`
-        : `<div class="search-thumb"></div>`;
-      const detail = [r.artist, r.album, r.year].filter(Boolean).join(" · ");
-      const label = r.label ? ` · ${r.label}` : "";
-      return `<div class="search-item" data-index="${i}">
-        ${thumb}
-        <div class="search-info">
-          <div class="search-title">${r.title}</div>
-          <div class="search-detail">${detail}${label}</div>
-        </div>
-        <span class="search-source ${srcClass}">${srcLabel}</span>
-      </div>`;
-    })
-    .join("");
-
-  container.querySelectorAll(".search-item").forEach((el) => {
-    el.addEventListener("click", () => pickSearchResult(el, data.results));
-  });
+  hideSearchFallback();
+  paintFixSearchResults(container, data.results);
 }
 
 async function pickSearchResult(el, results) {
-  container = $("#fix-search-results");
+  const container = $("#fix-search-results");
   container.querySelectorAll(".search-item").forEach((e) => e.classList.remove("selected"));
   el.classList.add("selected");
 
@@ -610,6 +687,7 @@ function clearAll() {
   $("#fix-artwork-preview").innerHTML = "<span>No artwork</span>";
   $("#fix-tracklist-section").classList.add("hidden");
   $("#fix-search-section").classList.add("hidden");
+  hideSearchFallback();
   $("#fix-fetch-status").classList.add("hidden");
   $("#fix-result").classList.add("hidden");
   $("#fix-rename-to-tags").checked = false;
@@ -710,6 +788,10 @@ document.getElementById("fix-folder-modal").addEventListener("click", (e) => {
 $("#fix-dir").addEventListener("keydown", (e) => { if (e.key === "Enter") browseAudio(); });
 $("#fix-fetch-btn").addEventListener("click", fetchMetadata);
 $("#fix-url").addEventListener("keydown", (e) => { if (e.key === "Enter") fetchMetadata(); });
+document.getElementById("fix-search-manual-btn")?.addEventListener("click", runFixManualSiteSearch);
+document.getElementById("fix-search-manual-q")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") runFixManualSiteSearch();
+});
 $("#fix-clear-btn").addEventListener("click", clearAll);
 $("#fix-save-btn").addEventListener("click", saveTags);
 $("#fix-rename-to-tags").addEventListener("change", updateRenamePreview);

@@ -1657,12 +1657,46 @@ def convert_wav_page():
     return app.send_static_file("convert.html")
 
 
+def _normalize_search_source(raw: str) -> str:
+    """Return apple_music | discogs | bandcamp, or '' for combined search."""
+    s = (raw or "").strip().lower()
+    if s in ("apple", "apple_music", "itunes"):
+        return "apple_music"
+    if s == "discogs":
+        return "discogs"
+    if s == "bandcamp":
+        return "bandcamp"
+    return ""
+
+
 @app.route("/api/search")
 def search():
-    """Search iTunes, Discogs, and Bandcamp for a track by query string."""
+    """Search iTunes, Discogs, and Bandcamp for a track by query string.
+
+    Query params:
+      q — search text (required for non-empty results)
+      source — optional: apple_music (aliases: apple, itunes), discogs, bandcamp.
+               When set, only that catalogue is queried.
+      limit — optional max hits per source (default 3 when source is set, else ignored for combined)
+    """
     q = request.args.get("q", "").strip()
     if not q:
         return jsonify({"results": []})
+
+    source_key = _normalize_search_source(request.args.get("source", ""))
+    if source_key:
+        try:
+            lim = int(request.args.get("limit", 3))
+        except (TypeError, ValueError):
+            lim = 3
+        lim = max(1, min(lim, 25))
+        if source_key == "apple_music":
+            results = search_itunes(q, limit=lim)
+        elif source_key == "discogs":
+            results = search_discogs(q, limit=lim)
+        else:
+            results = search_bandcamp(q, limit=lim)
+        return jsonify({"results": results})
 
     itunes = search_itunes(q, limit=8)
     discogs = search_discogs(q, limit=5)
