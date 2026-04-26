@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reference — DJ MetaManager</title>
+  <link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="guide-shell">
+    <div class="guide-nav-wrap">
+      <div class="guide-nav-inner">
+        <a class="guide-brand" href="index.html">DJ MetaManager — User Guide</a>
+        <nav class="guide-nav" aria-label="Guide pages">
+          <a href="index.html">Home</a>
+          <a href="install-and-setup.html">Install</a>
+          <a href="workflow-extract.html">Extract</a>
+          <a href="workflow-fix-and-inspect.html">Fix &amp; Inspect</a>
+          <a href="workflow-normalise.html">Normalise</a>
+          <a href="workflow-wav-to-flac.html">WAV → FLAC</a>
+          <a href="workflow-bulk-fix.html">Bulk Fix</a>
+          <a href="reference-config-and-formats.html" aria-current="page">Reference</a>
+        </nav>
+      </div>
+    </div>
+
+    <main id="main" class="guide-main">
+      <p class="breadcrumb"><a href="index.html">Home</a> · Reference</p>
+      <h1>Reference</h1>
+      <p class="lead">
+        Configuration keys, filename normalisation rules, supported formats, metadata sources, processing log concepts, selected HTTP API routes, and browser-side UI state. For the canonical technical spec, the repository <strong>README.md</strong> and source remain authoritative.
+      </p>
+
+      <h2>Configuration file (<code>config.json</code>)</h2>
+      <p>
+        Start from <code>config.json.example</code>. Typical keys include <code>source_dir</code>, <code>destination_dir</code>, <code>extract_profile</code> (<code>flac</code>, <code>mp3</code>, or <code>aac</code>/<code>m4a</code>), <code>platinum_notes_app</code>, <code>pn_output_suffix</code>, <code>target_lufs</code>, and <code>target_true_peak</code>. Positive LUFS input (e.g. <code>11.5</code>) is interpreted as negative integrated loudness where the app supports that shorthand.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/23-config-json-example.png" width="900" height="700" alt="Example config.json in an editor">
+        <figcaption><span class="fig-label">Figure.</span> Example configuration (redact secrets) (<code>23-config-json-example.png</code>).</figcaption>
+      </figure>
+
+      <h2>Filename search and tags</h2>
+      <p>
+        The app <strong>does not</strong> search on raw stems. It normalises DJ export noise first. Rules apply to <strong>Bulk Fix</strong> queries, <strong>Fix Metadata</strong> auto-search from filename, and <strong>WAV → FLAC</strong> tag embedding when the classic pattern does not match.
+      </p>
+      <ol>
+        <li>Strip a trailing <code>_PN</code> suffix (Platinum Notes), case-insensitive.</li>
+        <li>If the stem matches <code>[slot] - [BPM] - [artist] - [title]</code> (hyphen-separated Ableton-style), use artist and title from that pattern.</li>
+        <li>Otherwise strip Rekordbox-style noise: trailing Camelot key + BPM (e.g. <code>2A 120</code>), then a leading slot prefix (e.g. <code>A02 </code>).</li>
+      </ol>
+
+      <div class="guide-table-wrap">
+        <table class="guide-table">
+          <thead>
+            <tr>
+              <th>Example stem (no extension)</th>
+              <th>Search / tag string</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>A06 - 139 - Members Of Mayday - 10 In 01</code></td>
+              <td>Artist + title from the four-part pattern</td>
+            </tr>
+            <tr>
+              <td><code>A02 Christian Loeffler All Comes (Mind Against Remix) 2A 120</code></td>
+              <td><code>Christian Loeffler All Comes (Mind Against Remix)</code></td>
+            </tr>
+            <tr>
+              <td><code>A02 Ripperton Unfold 2A 119</code></td>
+              <td><code>Ripperton Unfold</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Metadata sources</h2>
+      <div class="guide-table-wrap">
+        <table class="guide-table">
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Typical use</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Discogs</td>
+              <td>Release metadata, artwork, tracklists; API token recommended</td>
+            </tr>
+            <tr>
+              <td>Bandcamp</td>
+              <td>Track/album pages; search via public HTML</td>
+            </tr>
+            <tr>
+              <td>Apple Music</td>
+              <td>iTunes Search API + catalogue pages</td>
+            </tr>
+            <tr>
+              <td>Spotify</td>
+              <td>Metadata and artwork when fetching from Spotify URLs</td>
+            </tr>
+            <tr>
+              <td>Generic URL</td>
+              <td>Open Graph title/image where available</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        <strong>Fix search API:</strong> <code>GET /api/search?q=…</code> merges Apple + Discogs + Bandcamp. Optional <code>source=apple_music|discogs|bandcamp</code> and <code>limit</code> restrict to one catalogue (used by Fix Metadata fallback UI).
+      </p>
+
+      <h2>Supported file roles</h2>
+      <div class="guide-table-wrap">
+        <table class="guide-table">
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th>Formats</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Extract &amp; Normalise output</td>
+              <td>FLAC, MP3, AAC (M4A) per Settings</td>
+            </tr>
+            <tr>
+              <td>Fix &amp; Inspect</td>
+              <td>FLAC (Vorbis + pictures), MP3 (ID3v2 + APIC), M4A/AAC/MP4 (iTunes atoms), OGG (Vorbis comments + METADATA_BLOCK_PICTURE)</td>
+            </tr>
+            <tr>
+              <td>Inspect artwork resize</td>
+              <td>FLAC only (Rekordbox-friendly dimensions)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        <strong>Unicode:</strong> Scraped metadata is handled as UTF-8 so accented characters survive into tags.
+      </p>
+
+      <h2>Metadata source URL in files</h2>
+      <p>
+        The app stores the fetching URL in a dedicated tag field (e.g. <code>DJMETAMANAGER_SOURCE_URL</code> in Vorbis comments / MP3 TXXX). Older files may still show a legacy key name; the reader accepts both for compatibility.
+      </p>
+
+      <h2>Processing log</h2>
+      <p>
+        JSON log on disk records extract/fix activity including <code>metadata_source_url</code>, <code>metadata_source_type</code>, <code>kind</code> (extract vs fix), profile, and loudness targets when relevant. Use it to <strong>re-tag</strong> after external renames (e.g. Platinum Notes) via the workflows described in the README.
+      </p>
+
+      <h2>Batch re-tag API</h2>
+      <p>
+        <code>POST /api/retag-batch</code> applies log-derived metadata to many files in a folder. Details and request shape are in <code>app.py</code> and the README.
+      </p>
+
+      <h2>Selected HTTP routes (automation integrators)</h2>
+      <p>
+        The UI is a thin client over Flask JSON endpoints. Examples:
+      </p>
+      <ul>
+        <li><code>GET /api/browse</code>, <code>GET /api/browse-audio</code>, <code>GET /api/browse-wav</code>, <code>GET /api/browse-folders</code> — list paths</li>
+        <li><code>POST /api/probe</code>, <code>POST /api/analyse</code> — audio metrics</li>
+        <li><code>POST /api/extract</code> — extract from video</li>
+        <li><code>POST /api/fetch-metadata</code> — full metadata from URL; optional track hints</li>
+        <li><code>POST /api/retag</code> — save one file from Fix</li>
+        <li><code>POST /api/normalise</code> / <code>POST /api/normalise-flac</code> — loudness encode</li>
+        <li><code>POST /api/convert-wav-to-flac</code>, <code>POST /api/convert-wav-bulk</code> — WAV batching</li>
+        <li><code>GET /api/bulk-fix/scan</code>, <code>POST /api/bulk-fix/scan-paths</code>, <code>POST /api/bulk-fix/suggest</code>, <code>POST /api/bulk-fix/apply</code></li>
+      </ul>
+      <p>Full table: see repository README.</p>
+
+      <h2>UI state in the browser</h2>
+      <p>
+        <strong><code>djmm.pageState</code></strong> in <code>localStorage</code> holds debounced drafts for Extract, Fix, Inspect, Normalise, and Settings. Settings clears its draft after a successful save so the next load matches the server. <strong>WAV → FLAC</strong> and <strong>Bulk Fix</strong> use additional keys (batch offsets, <code>djmm.bulkFixHandoff</code>, etc.). Nothing is synced to the cloud by the stock app.
+      </p>
+
+      <h2>Branches</h2>
+      <p>
+        Feature development may track branch <code>v2</code> before merging to <code>master</code>. Verify which build your guide documents when distributing binaries or PDF exports.
+      </p>
+    </main>
+
+    <footer class="guide-footer">
+      <p>DJ MetaManager user guide</p>
+    </footer>
+  </div>
+</body>
+</html>

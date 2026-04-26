@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Extract workflow — DJ MetaManager</title>
+  <link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="guide-shell">
+    <div class="guide-nav-wrap">
+      <div class="guide-nav-inner">
+        <a class="guide-brand" href="index.html">DJ MetaManager — User Guide</a>
+        <nav class="guide-nav" aria-label="Guide pages">
+          <a href="index.html">Home</a>
+          <a href="install-and-setup.html">Install</a>
+          <a href="workflow-extract.html" aria-current="page">Extract</a>
+          <a href="workflow-fix-and-inspect.html">Fix &amp; Inspect</a>
+          <a href="workflow-normalise.html">Normalise</a>
+          <a href="workflow-wav-to-flac.html">WAV → FLAC</a>
+          <a href="workflow-bulk-fix.html">Bulk Fix</a>
+          <a href="reference-config-and-formats.html">Reference</a>
+        </nav>
+      </div>
+    </div>
+
+    <main id="main" class="guide-main">
+      <p class="breadcrumb"><a href="index.html">Home</a> · Extract</p>
+      <h1>Extract workflow</h1>
+      <p class="lead">
+        The <strong>Extract</strong> tab is the primary path from <strong>video recordings</strong> (typically <code>.mkv</code> from OBS) to a <strong>single tagged audio file</strong> in your chosen format. Video is discarded; audio is analysed, optionally loudness-normalised, tagged, and copied to your destination folder.
+      </p>
+
+      <h2>Typical recording setup</h2>
+      <p>
+        Many users capture vinyl or mixer output through <strong>OBS Studio</strong> with a virtual audio device such as <strong>BlackHole</strong> on macOS. OBS often records <strong>MKV</strong> even when only audio matters. DJ MetaManager strips the audio stream and writes a clean library file.
+      </p>
+      <ul>
+        <li>Recommended: <strong>48 kHz</strong> sample rate in OBS if you target club playback systems.</li>
+        <li>Lossless in-container codecs (e.g. FLAC inside MKV) preserve quality before extract.</li>
+      </ul>
+
+      <h2>Step-by-step</h2>
+      <ol>
+        <li>Set <strong>source</strong> and <strong>destination</strong> in <a href="install-and-setup.html">Settings</a> (Extract can browse from the configured source).</li>
+        <li>On <strong>Extract</strong>, list recordings and select a video file.</li>
+        <li>Review <strong>integrated LUFS</strong>, <strong>true peak</strong>, and mean meters—healthy ranges are documented in the project README.</li>
+        <li>Optional: enable <strong>normalise</strong> for two-pass <strong>EBU R128</strong> loudness to your Settings targets.</li>
+        <li>Paste a <strong>track or release URL</strong> (Bandcamp, Discogs, Apple Music, Spotify, or other supported pages) and <strong>fetch metadata</strong>. The source URL is stored in tags and the <strong>processing log</strong> for traceability.</li>
+        <li>Run <strong>Extract</strong>. The app writes the output file, embeds artwork when available, and optionally moves the source recording to the <strong>Finder Bin</strong>.</li>
+      </ol>
+
+      <figure class="guide-figure">
+        <img src="assets/images/03-extract-file-list-meters.png" width="1000" height="800" alt="Extract tab with file list and loudness meters">
+        <figcaption><span class="fig-label">Figure.</span> File selection and level analysis (<code>03-extract-file-list-meters.png</code>).</figcaption>
+      </figure>
+
+      <figure class="guide-figure">
+        <img src="assets/images/04-extract-metadata-url.png" width="1000" height="700" alt="Extract metadata URL and extract actions">
+        <figcaption><span class="fig-label">Figure.</span> Metadata URL, fetch, and extract controls (<code>04-extract-metadata-url.png</code>).</figcaption>
+      </figure>
+
+      <h2>Processing log and re-tagging</h2>
+      <p>
+        Each extract can create a <strong>processing log</strong> entry with metadata source type and URL. If you later run external tools (e.g. Platinum Notes) that rename files, you can use <strong>Re-tag</strong> workflows described in the README to re-apply log entries to files in a folder.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/05-extract-processing-log.png" width="1000" height="600" alt="Processing log panel on Extract">
+        <figcaption><span class="fig-label">Figure.</span> Processing log (if shown on this tab in your version) (<code>05-extract-processing-log.png</code>).</figcaption>
+      </figure>
+
+      <h2>Platinum Notes integration (optional)</h2>
+      <p>
+        In Settings, set the <strong>exact macOS application name</strong> for Platinum Notes and the <strong>output suffix</strong> (e.g. <code>_PN</code>). From Extract you can open the extracted file in Platinum Notes and let the app <strong>watch for the derivative</strong>. When it appears, tags and artwork from the same log entry can be re-applied, and the processed file can be copied next to your library copy when applicable.
+      </p>
+      <div class="callout">
+        <strong>Format alignment.</strong> Configure Platinum Notes to <strong>match input format</strong> and avoid “replace original” modes that break the expected <code>&lt;title&gt;&lt;suffix&gt;.&lt;ext&gt;</code> naming pattern. See the README for full detail.
+      </div>
+
+      <h2>Related chapters</h2>
+      <p><a href="workflow-normalise.html">Normalise</a> for existing files; <a href="workflow-fix-and-inspect.html">Fix Metadata</a> for manual corrections; <a href="reference-config-and-formats.html">Reference</a> for formats and tag fields.</p>
+    </main>
+
+    <footer class="guide-footer">
+      <p>DJ MetaManager user guide</p>
+    </footer>
+  </div>
+</body>
+</html>

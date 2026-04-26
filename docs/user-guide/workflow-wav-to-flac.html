@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WAV → FLAC — DJ MetaManager</title>
+  <link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="guide-shell">
+    <div class="guide-nav-wrap">
+      <div class="guide-nav-inner">
+        <a class="guide-brand" href="index.html">DJ MetaManager — User Guide</a>
+        <nav class="guide-nav" aria-label="Guide pages">
+          <a href="index.html">Home</a>
+          <a href="install-and-setup.html">Install</a>
+          <a href="workflow-extract.html">Extract</a>
+          <a href="workflow-fix-and-inspect.html">Fix &amp; Inspect</a>
+          <a href="workflow-normalise.html">Normalise</a>
+          <a href="workflow-wav-to-flac.html" aria-current="page">WAV → FLAC</a>
+          <a href="workflow-bulk-fix.html">Bulk Fix</a>
+          <a href="reference-config-and-formats.html">Reference</a>
+        </nav>
+      </div>
+    </div>
+
+    <main id="main" class="guide-main">
+      <p class="breadcrumb"><a href="index.html">Home</a> · WAV → FLAC</p>
+      <h1>WAV → FLAC</h1>
+      <p class="lead">
+        Convert <strong>WAV</strong> masters or exports to <strong>FLAC</strong> using FFmpeg (high compression level). Source WAVs are <strong>never deleted</strong>. Tags can be embedded from filename patterns aligned with <strong>Fix Metadata</strong> and <strong>Bulk Fix</strong> (see <a href="reference-config-and-formats.html">Reference → Filename rules</a>).
+      </p>
+
+      <h2>Single file</h2>
+      <p>
+        Browse a folder, pick one <code>.wav</code>, choose whether the FLAC is written <strong>next to the WAV</strong> or under your <strong>Settings destination</strong>, then convert.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/15-wav-flac-single.png" width="1000" height="700" alt="WAV to FLAC single file mode">
+        <figcaption><span class="fig-label">Figure.</span> Single-file conversion (<code>15-wav-flac-single.png</code>).</figcaption>
+      </figure>
+
+      <h2>Bulk conversion</h2>
+      <p>
+        Scan a <strong>root folder</strong> recursively (optional). Output modes:
+      </p>
+      <ul>
+        <li><strong>Next to each WAV</strong> — <code>.flac</code> beside each source.</li>
+        <li><strong>Mirror under destination</strong> — preserve subfolders under your music root (reduces collisions when multiple BPM folders share structure).</li>
+        <li><strong>One flat folder</strong> — all FLACs into a single directory; filenames may follow <code>Slot - BPM - Artist - Title</code> when the WAV name matches DJ export conventions.</li>
+      </ul>
+
+      <h2>Batching and safety</h2>
+      <p>
+        Large trees should use <strong>offset</strong> and <strong>limit</strong> (e.g. 25 files per run) with <strong>skip if FLAC already exists</strong> for resumable jobs. The app can persist the next offset in the browser between runs. A strong <strong>in-page confirmation</strong> appears before very large unrestricted batches.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/16-wav-flac-bulk-options.png" width="1000" height="900" alt="WAV to FLAC bulk options">
+        <figcaption><span class="fig-label">Figure.</span> Bulk options and batching (<code>16-wav-flac-bulk-options.png</code>).</figcaption>
+      </figure>
+
+      <figure class="guide-figure">
+        <img src="assets/images/17-wav-flac-confirm-modal.png" width="900" height="550" alt="Bulk convert confirmation modal">
+        <figcaption><span class="fig-label">Figure.</span> Confirmation modal (<code>17-wav-flac-confirm-modal.png</code>).</figcaption>
+      </figure>
+
+      <h2>Handoff to Bulk Fix</h2>
+      <p>
+        After a successful <strong>flat-folder</strong> batch, the API returns <strong><code>batch_flac_paths</code></strong>: output paths in <strong>conversion order</strong>. Folder listings are often alphabetical by renamed file, which may not match your BPM-tree order. <strong>Open Bulk Fix</strong> passes a short-lived handoff so <strong>Bulk Fix</strong> can load exactly those paths via <code>POST /api/bulk-fix/scan-paths</code>.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/18-wav-flac-open-bulk-fix.png" width="1000" height="650" alt="Open Bulk Fix after conversion">
+        <figcaption><span class="fig-label">Figure.</span> Open in Bulk Fix (<code>18-wav-flac-open-bulk-fix.png</code>).</figcaption>
+      </figure>
+
+      <p>Continue to <a href="workflow-bulk-fix.html">Bulk Fix</a> for batch metadata.</p>
+    </main>
+
+    <footer class="guide-footer">
+      <p>DJ MetaManager user guide</p>
+    </footer>
+  </div>
+</body>
+</html>

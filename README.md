@@ -282,6 +282,7 @@ Coverage includes: browse/convert WAV, bulk convert (including **offset/limit**,
 
 ```
 dj-meta-manager/
+├── docs/user-guide/       # Modular HTML user guide (see index.html)
 ├── app.py                 # Flask API — ffmpeg, scrapers, mutagen
 ├── config.json            # Local settings (not in repo)
 ├── config.json.example
@@ -302,6 +303,10 @@ dj-meta-manager/
 │   └── style.css
 └── README.md
 ```
+
+## HTML user guide
+
+A modular, print-friendly guide (separate pages + shared CSS) lives in **`docs/user-guide/`**. Open **`docs/user-guide/index.html`** in a browser. Screenshot filenames and a capture checklist are in **`docs/user-guide/assets/images/README.md`**.
 
 ## License
 

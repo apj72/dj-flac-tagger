@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DJ MetaManager — User Guide</title>
+  <meta name="description" content="Comprehensive guide to DJ MetaManager: extract, tag, normalise, and batch-fix DJ libraries locally.">
+  <link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="guide-shell">
+    <div class="guide-nav-wrap">
+      <div class="guide-nav-inner">
+        <a class="guide-brand" href="index.html">DJ MetaManager — User Guide</a>
+        <nav class="guide-nav" aria-label="Guide pages">
+          <a href="index.html" aria-current="page">Home</a>
+          <a href="install-and-setup.html">Install</a>
+          <a href="workflow-extract.html">Extract</a>
+          <a href="workflow-fix-and-inspect.html">Fix &amp; Inspect</a>
+          <a href="workflow-normalise.html">Normalise</a>
+          <a href="workflow-wav-to-flac.html">WAV → FLAC</a>
+          <a href="workflow-bulk-fix.html">Bulk Fix</a>
+          <a href="reference-config-and-formats.html">Reference</a>
+        </nav>
+      </div>
+    </div>
+
+    <main id="main" class="guide-main">
+      <h1>DJ MetaManager — User Guide</h1>
+      <p class="lead">
+        DJ MetaManager is a <strong>local web application</strong> for DJs and music librarians who work with recordings, club edits, and large format libraries. It helps you <strong>extract audio</strong> from video captures, <strong>measure and normalise loudness</strong>, <strong>fetch metadata and artwork</strong> from major music services, and <strong>write professional tags</strong>—without handing your library to a cloud service you do not control.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/01-nav-all-tabs.png" width="1100" height="620" alt="Application header showing all main tabs">
+        <figcaption><span class="fig-label">Figure 1.</span> The main navigation: every major workflow is one click away. Add your screenshot as <code>assets/images/01-nav-all-tabs.png</code> (see <code>assets/images/README.md</code>).</figcaption>
+      </figure>
+
+      <h2>Who this guide is for</h2>
+      <p>
+        This guide is written for <strong>DJs, collectors, and technical users</strong> who manage FLAC, MP3, M4A/AAC, or WAV sources; who record via <strong>OBS</strong> or similar; and who want <strong>repeatable, documented</strong> tagging and loudness workflows. It is also suitable as <strong>customer-facing documentation</strong> if you distribute a packaged build—subject to your own licensing and support terms.
+      </p>
+
+      <h2>How the guide is organised (modular updates)</h2>
+      <p>
+        Chapters are <strong>separate HTML files</strong> in this folder. They share one stylesheet, <code>assets/guide.css</code>. To add a feature: edit the relevant chapter, add a figure under <code>assets/images/</code>, and register the filename in <code>assets/images/README.md</code>. The navigation block is duplicated at the top of each page; when you add a new chapter, copy the nav from <code>partials/nav.inc.html</code> and insert a new link in every file.
+      </p>
+
+      <h2>Contents</h2>
+      <div class="toc-grid">
+        <a class="toc-card" href="install-and-setup.html">
+          <h2>Install &amp; first run</h2>
+          <p>macOS requirements, Python, ffmpeg, configuration, starting the server.</p>
+        </a>
+        <a class="toc-card" href="workflow-extract.html">
+          <h2>Extract</h2>
+          <p>From MKV/MP4/MOV to library-ready audio: meters, metadata, normalise, Platinum Notes.</p>
+        </a>
+        <a class="toc-card" href="workflow-fix-and-inspect.html">
+          <h2>Fix Metadata &amp; Inspect</h2>
+          <p>Per-file tagging, combined search, per-site fallback, deep inspection of tags.</p>
+        </a>
+        <a class="toc-card" href="workflow-normalise.html">
+          <h2>Normalise</h2>
+          <p>EBU R128 loudness targets, re-encode to your global extract format.</p>
+        </a>
+        <a class="toc-card" href="workflow-wav-to-flac.html">
+          <h2>WAV → FLAC</h2>
+          <p>Single and bulk conversion, batching, flat-folder handoff to Bulk Fix.</p>
+        </a>
+        <a class="toc-card" href="workflow-bulk-fix.html">
+          <h2>Bulk Fix</h2>
+          <p>Batch metadata for many FLACs: scan, suggest, apply, duplicates, WAV hints.</p>
+        </a>
+        <a class="toc-card" href="reference-config-and-formats.html">
+          <h2>Reference</h2>
+          <p>Filename rules, formats, metadata sources, processing log, API overview, UI state.</p>
+        </a>
+      </div>
+
+      <h2>Product positioning (distribution)</h2>
+      <p>
+        The open-source project is released under the <strong>MIT License</strong> (see the repository). If you offer DJ MetaManager—or a derivative—as a <strong>paid product</strong>, you remain responsible for compliance with that license, for <strong>third-party terms</strong> (e.g. Discogs API rules, store policies), and for how you describe features and support. This guide is factual documentation, not legal or commercial advice.
+      </p>
+
+      <div class="callout">
+        <strong>Privacy.</strong> The application runs on your machine. Metadata requests go to the services you query (e.g. Apple Music search APIs, Discogs, Bandcamp pages). Audio files stay under paths you configure unless you explicitly copy or move them.
+      </div>
+    </main>
+
+    <footer class="guide-footer">
+      <p>DJ MetaManager user guide · Modular HTML in <code>docs/user-guide/</code></p>
+    </footer>
+  </div>
+</body>
+</html>

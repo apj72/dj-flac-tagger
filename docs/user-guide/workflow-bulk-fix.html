@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bulk Fix — DJ MetaManager</title>
+  <link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="guide-shell">
+    <div class="guide-nav-wrap">
+      <div class="guide-nav-inner">
+        <a class="guide-brand" href="index.html">DJ MetaManager — User Guide</a>
+        <nav class="guide-nav" aria-label="Guide pages">
+          <a href="index.html">Home</a>
+          <a href="install-and-setup.html">Install</a>
+          <a href="workflow-extract.html">Extract</a>
+          <a href="workflow-fix-and-inspect.html">Fix &amp; Inspect</a>
+          <a href="workflow-normalise.html">Normalise</a>
+          <a href="workflow-wav-to-flac.html">WAV → FLAC</a>
+          <a href="workflow-bulk-fix.html" aria-current="page">Bulk Fix</a>
+          <a href="reference-config-and-formats.html">Reference</a>
+        </nav>
+      </div>
+    </div>
+
+    <main id="main" class="guide-main">
+      <p class="breadcrumb"><a href="index.html">Home</a> · Bulk Fix</p>
+      <h1>Bulk Fix (batch metadata)</h1>
+      <p class="lead">
+        <strong>Bulk Fix</strong> applies online metadata to <strong>many FLAC files</strong> in one workflow. It is ideal after <strong>WAV → FLAC</strong> bulk conversion or for any flat or tree-shaped library slice. The server builds a <strong>search query per filename</strong>, fetches combined Apple + Discogs + Bandcamp suggestions with gentle rate limiting, and lets you review before apply.
+      </p>
+
+      <h2>Step 1 — Load a batch</h2>
+      <p>
+        Choose a root directory, page size, and offset (same mental model as WAV batching). The scan returns each file’s <strong>parsed query</strong>, <strong>title/artist hints</strong> for track matching, and duplicate-name diagnostics when the same basename appears more than once in the tree or batch.
+      </p>
+      <p>
+        <strong>Explicit paths:</strong> after WAV→FLAC flat output, prefer the handoff that calls <code>/api/bulk-fix/scan-paths</code> so row order matches conversion order. You can still open <code>/bulk-fix?dir=…</code> with offset/limit for ordinary folder paging.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/19-bulk-fix-step1-load.png" width="1100" height="800" alt="Bulk Fix load batch">
+        <figcaption><span class="fig-label">Figure.</span> Loading a batch (<code>19-bulk-fix-step1-load.png</code>).</figcaption>
+      </figure>
+
+      <h2>Step 2 — Build the table</h2>
+      <p>
+        Rows list files, queries, and controls to paste URLs or prepare for suggest. Duplicate warnings help you avoid tagging the wrong duplicate in a large library.
+      </p>
+
+      <h2>Step 3 — Fetch online matches</h2>
+      <p>
+        <strong>Fetch online matches</strong> runs the same search stack as Fix Metadata, one file at a time on the server. Each row gets a <strong>Match</strong> dropdown with shortcuts to open Apple, Discogs, or Bandcamp in the browser. After results return, a <strong>best guess</strong> is pre-selected using filename hints and light source tie-breaks—you can accept or change per row.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/20-bulk-fix-step3-suggest.png" width="1200" height="850" alt="Bulk Fix after fetch matches">
+        <figcaption><span class="fig-label">Figure.</span> Suggestions and match dropdown (<code>20-bulk-fix-step3-suggest.png</code>).</figcaption>
+      </figure>
+
+      <h2>Same-folder WAV hints</h2>
+      <p>
+        If <code>Track.wav</code> sits beside <code>Track.flac</code>, the server may read embedded WAV tags. When both artist and title exist in the WAV, the <strong>search query</strong> can prefer that pair; partial tags can still refine <strong>track matching</strong> on multi-track Discogs releases without replacing the whole query.
+      </p>
+
+      <h2>Step 4 — Apply</h2>
+      <p>
+        Check the rows to update, optionally enable <strong>rename to Artist - Title.flac</strong>, and run apply. The server fetches full metadata, matches tracks using title hints when needed, embeds tags and artwork, and can log entries depending on options.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/21-bulk-fix-apply.png" width="1100" height="750" alt="Bulk Fix apply section">
+        <figcaption><span class="fig-label">Figure.</span> Apply controls (<code>21-bulk-fix-apply.png</code>).</figcaption>
+      </figure>
+
+      <h2>Browser state</h2>
+      <p>
+        Bulk Fix keeps its own <code>localStorage</code> keys for large batches and handoff from convert. See <a href="reference-config-and-formats.html">Reference</a>.
+      </p>
+    </main>
+
+    <footer class="guide-footer">
+      <p>DJ MetaManager user guide</p>
+    </footer>
+  </div>
+</body>
+</html>

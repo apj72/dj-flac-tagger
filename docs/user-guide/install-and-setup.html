@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Install &amp; first run — DJ MetaManager</title>
+  <link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="guide-shell">
+    <div class="guide-nav-wrap">
+      <div class="guide-nav-inner">
+        <a class="guide-brand" href="index.html">DJ MetaManager — User Guide</a>
+        <nav class="guide-nav" aria-label="Guide pages">
+          <a href="index.html">Home</a>
+          <a href="install-and-setup.html" aria-current="page">Install</a>
+          <a href="workflow-extract.html">Extract</a>
+          <a href="workflow-fix-and-inspect.html">Fix &amp; Inspect</a>
+          <a href="workflow-normalise.html">Normalise</a>
+          <a href="workflow-wav-to-flac.html">WAV → FLAC</a>
+          <a href="workflow-bulk-fix.html">Bulk Fix</a>
+          <a href="reference-config-and-formats.html">Reference</a>
+        </nav>
+      </div>
+    </div>
+
+    <main id="main" class="guide-main">
+      <p class="breadcrumb"><a href="index.html">Home</a> · Install &amp; first run</p>
+      <h1>Install &amp; first run</h1>
+      <p class="lead">
+        DJ MetaManager is a <strong>Flask</strong> application that serves a browser UI on your computer. It expects <strong>macOS</strong> for Finder integration (moving recordings to Bin). <strong>ffmpeg</strong> and <strong>ffprobe</strong> are required for almost every audio operation.
+      </p>
+
+      <h2>Requirements</h2>
+      <ul>
+        <li><strong>macOS</strong> (for “move recording to Bin” on Extract).</li>
+        <li><strong>Python 3.10+</strong>.</li>
+        <li><strong>ffmpeg</strong> and <strong>ffprobe</strong> on your <code>PATH</code> (e.g. <code>brew install ffmpeg</code>).</li>
+        <li>Optional: <strong>flac</strong> CLI for smaller FLAC output on Normalise (<code>brew install flac</code>).</li>
+      </ul>
+
+      <h2>Clone and virtual environment</h2>
+      <pre><code>git clone https://github.com/apj72/dj-meta-manager.git
+cd dj-meta-manager
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp config.json.example config.json</code></pre>
+      <p>Edit <code>config.json</code> or use the <strong>Settings</strong> tab after first launch.</p>
+
+      <h2>Starting the server</h2>
+      <p><strong>Foreground</strong> (development and troubleshooting):</p>
+      <pre><code>source venv/bin/activate
+python app.py</code></pre>
+      <p><strong>Background</strong> (project helpers):</p>
+      <pre><code>./start.sh    # logs to server.log
+./stop.sh</code></pre>
+      <p>Default URL: <strong>http://127.0.0.1:5123</strong> (or <code>localhost</code>).</p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/22-terminal-start-script.png" width="900" height="400" alt="Terminal showing server start command">
+        <figcaption><span class="fig-label">Figure.</span> Optional: document how you start the app (<code>22-terminal-start-script.png</code>).</figcaption>
+      </figure>
+
+      <h2>Initial configuration</h2>
+      <p>
+        Open <strong>Settings</strong> and set at least <strong>source</strong> and <strong>destination</strong> folders. Choose <strong>extract format</strong> (FLAC, MP3, or AAC/M4A)—this format is also used when you <strong>Normalise</strong> a file. Set <strong>LUFS</strong> and <strong>true peak</strong> targets to match your mastering chain (e.g. streaming reference vs. louder club material).
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/02-settings-full-page.png" width="1000" height="900" alt="Settings page with paths and audio options">
+        <figcaption><span class="fig-label">Figure.</span> Settings overview — save after changes (<code>02-settings-full-page.png</code>).</figcaption>
+      </figure>
+
+      <h2>Third-party services</h2>
+      <p>
+        Search and metadata use public APIs and pages (Apple Music search API, Discogs API with an identifying User-Agent, Bandcamp HTML). <strong>Rate limits</strong> or site changes can affect results; see current Discogs and Apple developer terms if you rely on this tool commercially.
+      </p>
+
+      <div class="callout warn">
+        <strong>Security.</strong> Do not commit real <code>config.json</code> or tokens to a public repository. Treat the processing log as <strong>local operational data</strong>, not a public artefact.
+      </div>
+
+      <h2>Next steps</h2>
+      <p>Continue to <a href="workflow-extract.html">Extract</a> for the main capture-to-library workflow, or <a href="workflow-fix-and-inspect.html">Fix Metadata</a> if you already have files to tag.</p>
+    </main>
+
+    <footer class="guide-footer">
+      <p>DJ MetaManager user guide</p>
+    </footer>
+  </div>
+</body>
+</html>

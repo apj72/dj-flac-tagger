@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Normalise — DJ MetaManager</title>
+  <link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="guide-shell">
+    <div class="guide-nav-wrap">
+      <div class="guide-nav-inner">
+        <a class="guide-brand" href="index.html">DJ MetaManager — User Guide</a>
+        <nav class="guide-nav" aria-label="Guide pages">
+          <a href="index.html">Home</a>
+          <a href="install-and-setup.html">Install</a>
+          <a href="workflow-extract.html">Extract</a>
+          <a href="workflow-fix-and-inspect.html">Fix &amp; Inspect</a>
+          <a href="workflow-normalise.html" aria-current="page">Normalise</a>
+          <a href="workflow-wav-to-flac.html">WAV → FLAC</a>
+          <a href="workflow-bulk-fix.html">Bulk Fix</a>
+          <a href="reference-config-and-formats.html">Reference</a>
+        </nav>
+      </div>
+    </div>
+
+    <main id="main" class="guide-main">
+      <p class="breadcrumb"><a href="index.html">Home</a> · Normalise</p>
+      <h1>Normalise</h1>
+      <p class="lead">
+        The <strong>Normalise</strong> tab measures an existing audio file, then applies <strong>two-pass EBU R128</strong> loudness correction toward your <strong>Settings</strong> integrated LUFS and true-peak targets. Output is written in the <strong>same extract format</strong> as Settings (FLAC, MP3, or AAC/M4A), with tags and artwork copied from the source.
+      </p>
+
+      <h2>Why normalise?</h2>
+      <p>
+        DJ libraries often mix material mastered at different levels. Consistent <strong>perceived loudness</strong> reduces surprise gain rides in a set. DJ MetaManager uses industry-standard <strong>loudnorm</strong> measurements rather than simple peak normalisation.
+      </p>
+
+      <h2>FLAC output specifics</h2>
+      <p>
+        When output is FLAC, the app prefers the <strong>official <code>flac</code> encoder</strong> if installed for best compression; otherwise it uses FFmpeg’s FLAC encoder. Outputs are <strong>16-bit</strong> at the source sample rate and channel layout (e.g. stereo 48 kHz stays 48 kHz). A normalised file can be <strong>larger</strong> than the source at the same bit depth because reshaping the waveform can reduce encoder efficiency—that is expected and still lossless.
+      </p>
+
+      <h2>MP3 and AAC</h2>
+      <p>
+        Lossy formats are <strong>re-encoded</strong> after loudness processing. Choose targets that match how you want your library to behave in loudness-aware DJ software.
+      </p>
+
+      <h2>Workflow</h2>
+      <ol>
+        <li>Browse to a folder and select a supported file (same family as Fix/Inspect).</li>
+        <li>Run <strong>analyse</strong> to view integrated LUFS and peak.</li>
+        <li>Set an output suffix if desired (default resembles <code>_LUFS14</code> style).</li>
+        <li>Run <strong>Normalise</strong> and confirm the new file beside the source (or as documented in the UI).</li>
+      </ol>
+
+      <figure class="guide-figure">
+        <img src="assets/images/13-normalise-analyse.png" width="1000" height="700" alt="Normalise tab with analysis">
+        <figcaption><span class="fig-label">Figure.</span> Analysis readout (<code>13-normalise-analyse.png</code>).</figcaption>
+      </figure>
+
+      <figure class="guide-figure">
+        <img src="assets/images/14-normalise-suffix-output.png" width="1000" height="600" alt="Normalise suffix and action">
+        <figcaption><span class="fig-label">Figure.</span> Suffix and normalise action (<code>14-normalise-suffix-output.png</code>).</figcaption>
+      </figure>
+
+      <p><a href="workflow-extract.html">Extract</a> can also normalise during capture. <a href="reference-config-and-formats.html">Reference</a> lists supported formats.</p>
+    </main>
+
+    <footer class="guide-footer">
+      <p>DJ MetaManager user guide</p>
+    </footer>
+  </div>
+</body>
+</html>

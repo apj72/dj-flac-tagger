@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fix Metadata &amp; Inspect — DJ MetaManager</title>
+  <link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="guide-shell">
+    <div class="guide-nav-wrap">
+      <div class="guide-nav-inner">
+        <a class="guide-brand" href="index.html">DJ MetaManager — User Guide</a>
+        <nav class="guide-nav" aria-label="Guide pages">
+          <a href="index.html">Home</a>
+          <a href="install-and-setup.html">Install</a>
+          <a href="workflow-extract.html">Extract</a>
+          <a href="workflow-fix-and-inspect.html" aria-current="page">Fix &amp; Inspect</a>
+          <a href="workflow-normalise.html">Normalise</a>
+          <a href="workflow-wav-to-flac.html">WAV → FLAC</a>
+          <a href="workflow-bulk-fix.html">Bulk Fix</a>
+          <a href="reference-config-and-formats.html">Reference</a>
+        </nav>
+      </div>
+    </div>
+
+    <main id="main" class="guide-main">
+      <p class="breadcrumb"><a href="index.html">Home</a> · Fix Metadata &amp; Inspect</p>
+      <h1>Fix Metadata &amp; Inspect</h1>
+      <p class="lead">
+        <strong>Fix Metadata</strong> is the per-file editor: browse audio on the server, search online catalogues, paste URLs, edit fields, embed artwork, and save—optionally renaming the file to <code>Artist - Title</code>. <strong>Inspect</strong> is read-focused: a full tag table, artwork preview, Rekordbox-friendly FLAC artwork sizing, and deep links by folder.
+      </p>
+
+      <h2>Fix Metadata — selecting a file</h2>
+      <p>
+        Enter a folder path or use <strong>Browse</strong>, <strong>Choose folder…</strong> (server-side navigator), or <strong>Default</strong> (Settings destination). The app lists supported audio files. Selecting a file loads current tags into the editor and triggers an <strong>automatic combined search</strong> when it can derive a query from tags or filename.
+      </p>
+      <p>
+        <strong>Deep links:</strong> <code>/fix?file=/absolute/path/to/track.flac</code> with optional <code>&amp;q=search+terms</code> to override the search query.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/06-fix-step1-folder-files.png" width="1000" height="750" alt="Fix Metadata step 1 folder and file list">
+        <figcaption><span class="fig-label">Figure.</span> Folder and file list (<code>06-fix-step1-folder-files.png</code>).</figcaption>
+      </figure>
+
+      <h2>Step 2 — Search results</h2>
+      <p>
+        The server queries <strong>Apple Music (iTunes Search API)</strong>, <strong>Discogs</strong>, and <strong>Bandcamp</strong> (public search page), then merges results. Click a row to <strong>fetch full metadata</strong> for that URL. If the release has multiple tracks, a tracklist appears so you can pick the correct cut.
+      </p>
+      <p>
+        When <strong>combined search returns no hits</strong>, the UI shows a <strong>fallback panel</strong>: choose <strong>Apple Music</strong> (default), <strong>Discogs</strong>, or <strong>Bandcamp</strong>, refine the query, and click <strong>Search</strong>. The app shows up to <strong>three</strong> results from that catalogue only; pick one to fetch metadata.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/07-fix-step2-combined-results.png" width="1000" height="700" alt="Fix Metadata combined search results">
+        <figcaption><span class="fig-label">Figure.</span> Combined catalogue results (<code>07-fix-step2-combined-results.png</code>).</figcaption>
+      </figure>
+
+      <figure class="guide-figure">
+        <img src="assets/images/08-fix-step2-manual-site-search.png" width="1000" height="650" alt="Fix Metadata per-site search fallback">
+        <figcaption><span class="fig-label">Figure.</span> Per-site fallback search (<code>08-fix-step2-manual-site-search.png</code>).</figcaption>
+      </figure>
+
+      <h2>Fetch from URL</h2>
+      <p>
+        You can always paste a <strong>Bandcamp, Discogs, Apple Music, or Spotify</strong> link (or other supported URLs) and click <strong>Fetch Metadata</strong> without using search.
+      </p>
+
+      <h2>Step 3 — Edit and artwork</h2>
+      <p>
+        Adjust title, artist, album, year, genre, label, catalogue number, and comment. Artwork preview loads via the app’s artwork proxy when a remote URL is present.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/09-fix-step3-metadata-artwork.png" width="1000" height="800" alt="Fix Metadata fields and artwork">
+        <figcaption><span class="fig-label">Figure.</span> Metadata and artwork (<code>09-fix-step3-metadata-artwork.png</code>).</figcaption>
+      </figure>
+
+      <h2>Step 4 — Save and optional rename</h2>
+      <p>
+        <strong>Save Tags &amp; Artwork</strong> writes embedded tags and art. Optional: <strong>rename on disk</strong> to <code>Artist - Title</code> in the same folder, stripping DJ-style filename clutter. The metadata source URL is stored in the file (Vorbis comment / ID3 TXXX per format) and may appear on Inspect.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/10-fix-step4-save-rename.png" width="1000" height="500" alt="Fix Metadata save and rename options">
+        <figcaption><span class="fig-label">Figure.</span> Save and rename (<code>10-fix-step4-save-rename.png</code>).</figcaption>
+      </figure>
+
+      <h2>Inspect</h2>
+      <p>
+        Inspect is for <strong>verification</strong>: list files, select one, and read every tag the app exposes, plus embedded artwork. <strong>Fix artwork dimensions</strong> (FLAC only) can rewrite cover art to dimensions friendly for Rekordbox. <strong>Saved metadata URL</strong> displays when the file records which page was used for tagging.
+      </p>
+      <p>
+        <strong>Deep link:</strong> <code>/inspect?dir=/path/to/folder</code>. The last browsed folder is shared with Fix Metadata in the browser for convenience.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/11-inspect-folder-list.png" width="1000" height="700" alt="Inspect folder and file list">
+        <figcaption><span class="fig-label">Figure.</span> Inspect file listing (<code>11-inspect-folder-list.png</code>).</figcaption>
+      </figure>
+
+      <figure class="guide-figure">
+        <img src="assets/images/12-inspect-tag-table-artwork.png" width="1100" height="900" alt="Inspect tag table and artwork">
+        <figcaption><span class="fig-label">Figure.</span> Tag table and artwork (<code>12-inspect-tag-table-artwork.png</code>).</figcaption>
+      </figure>
+
+      <h2>UI state in the browser</h2>
+      <p>
+        Fix and Inspect remember drafts in <code>localStorage</code> (<code>djmm.pageState</code>) so returning to the tab restores folders and fields where possible. This is not cookie-based and does not sync across browsers. See <a href="reference-config-and-formats.html">Reference</a>.
+      </p>
+    </main>
+
+    <footer class="guide-footer">
+      <p>DJ MetaManager user guide</p>
+    </footer>
+  </div>
+</body>
+</html>
