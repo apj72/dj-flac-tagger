@@ -1,5 +1,16 @@
 const $ = (sel) => document.querySelector(sel);
 
+function escHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Directory from the last successful Extract browse (server-normalized path). */
+let currentBrowseDirectory = "";
+
 /** Fallback extension when API omits filename (matches Settings extract format). */
 function extensionForExtractProfile(profileKey) {
   const m = { flac: ".flac", mp3_320: ".mp3", aac_256: ".m4a" };
@@ -127,6 +138,7 @@ async function browseFiles() {
   }
 
   $("#dir-input").value = data.directory;
+  currentBrowseDirectory = data.directory;
 
   if (data.files.length === 0) {
     $("#file-list").innerHTML = `<div class="status">No video files found</div>`;
@@ -137,16 +149,243 @@ async function browseFiles() {
   $("#file-list").innerHTML = data.files
     .map(
       (f) =>
-        `<div class="file-item" data-path="${f.path}">
-          <span class="file-name">${f.name}</span>
-          <span class="file-size">${f.size_mb} MB</span>
-        </div>`
+        `<div class="file-item" data-path="${escHtml(f.path)}">
+          <span class="file-item-main file-name">${escHtml(f.name)}</span>
+          <span class="file-item-meta">
+            <span class="file-size">${f.size_mb} MB</span>
+            <span class="file-item-actions">
+              <button type="button" class="btn btn-secondary file-rename-btn" data-path="${escHtml(f.path)}" title="Rename recording (same folder)">Rename</button>
+              <button type="button" class="btn btn-secondary file-delete-btn" data-path="${escHtml(f.path)}" title="Move to Bin (macOS)">Delete</button>
+            </span>
+          </span>
+        </div>`,
     )
     .join("");
 
   document.querySelectorAll(".file-item").forEach((el) => {
     el.addEventListener("click", () => selectFile(el));
   });
+  document.querySelectorAll(".file-rename-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void onRenameSourceRecording(btn.dataset.path);
+    });
+  });
+  document.querySelectorAll(".file-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void onDeleteSourceRecording(btn.dataset.path);
+    });
+  });
+  scheduleExtractPageSave();
+}
+
+// ---- In-app dialogs (match main UI; avoid native prompt/alert/confirm) ----
+function extractShowAlert(title, message) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("extract-alert-modal");
+    const ok = document.getElementById("extract-alert-ok");
+    document.getElementById("extract-alert-title").textContent = title;
+    document.getElementById("extract-alert-body").textContent = message;
+    let done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      modal.classList.add("hidden");
+      ok.removeEventListener("click", onOk);
+      document.removeEventListener("keydown", onDocKey);
+      modal.removeEventListener("click", onOverlay);
+      resolve();
+    }
+    function onOk() {
+      finish();
+    }
+    function onDocKey(e) {
+      if (e.key === "Escape") finish();
+    }
+    function onOverlay(e) {
+      if (e.target === modal) finish();
+    }
+    ok.addEventListener("click", onOk);
+    document.addEventListener("keydown", onDocKey);
+    modal.addEventListener("click", onOverlay);
+    modal.classList.remove("hidden");
+    requestAnimationFrame(() => ok.focus());
+  });
+}
+
+function extractShowConfirm(title, message, okText, destructive) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("extract-confirm-modal");
+    const okBtn = document.getElementById("extract-confirm-ok");
+    const cancelBtn = document.getElementById("extract-confirm-cancel");
+    document.getElementById("extract-confirm-title").textContent = title;
+    document.getElementById("extract-confirm-body").textContent = message;
+    okBtn.textContent = okText;
+    okBtn.className = destructive ? "btn btn-danger" : "btn btn-primary";
+    let done = false;
+    function finish(val) {
+      if (done) return;
+      done = true;
+      modal.classList.add("hidden");
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onDocKey);
+      modal.removeEventListener("click", onOverlay);
+      resolve(val);
+    }
+    function onOk() {
+      finish(true);
+    }
+    function onCancel() {
+      finish(false);
+    }
+    function onDocKey(e) {
+      if (e.key === "Escape") onCancel();
+    }
+    function onOverlay(e) {
+      if (e.target === modal) onCancel();
+    }
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onDocKey);
+    modal.addEventListener("click", onOverlay);
+    modal.classList.remove("hidden");
+    requestAnimationFrame(() => okBtn.focus());
+  });
+}
+
+function extractShowRenameDialog(displayName, initialStem) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("extract-rename-modal");
+    const inp = document.getElementById("extract-rename-input");
+    const submitBtn = document.getElementById("extract-rename-submit");
+    const cancelBtn = document.getElementById("extract-rename-cancel");
+    document.getElementById("extract-rename-current").textContent = `Current file: ${displayName}`;
+    inp.value = initialStem;
+    let done = false;
+    function close(result) {
+      if (done) return;
+      done = true;
+      modal.classList.add("hidden");
+      inp.onkeydown = null;
+      submitBtn.removeEventListener("click", onSubmit);
+      cancelBtn.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onDocKey);
+      modal.removeEventListener("click", onOverlay);
+      resolve(result);
+    }
+    function onSubmit() {
+      const v = inp.value.trim();
+      if (!v) {
+        inp.focus();
+        return;
+      }
+      close(v);
+    }
+    function onCancel() {
+      close(null);
+    }
+    function onDocKey(e) {
+      if (e.key === "Escape") onCancel();
+    }
+    function onOverlay(e) {
+      if (e.target === modal) onCancel();
+    }
+    inp.onkeydown = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        onSubmit();
+      }
+    };
+    submitBtn.addEventListener("click", onSubmit);
+    cancelBtn.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onDocKey);
+    modal.addEventListener("click", onOverlay);
+    modal.classList.remove("hidden");
+    requestAnimationFrame(() => {
+      inp.focus();
+      inp.select();
+    });
+  });
+}
+
+function clearFileSelection() {
+  document.querySelectorAll("#file-list .file-item").forEach((e) => e.classList.remove("selected"));
+  selectedFile = null;
+  currentLoudnormParams = null;
+  $("#probe-info").classList.add("hidden");
+  $("#analysis-panel").classList.add("hidden");
+  updateExtractButton();
+  scheduleExtractPageSave();
+}
+
+async function onRenameSourceRecording(filepath) {
+  const base = currentBrowseDirectory;
+  if (!base) {
+    await extractShowAlert(
+      "Browse first",
+      "Use Browse so the folder matches this list, then try again.",
+    );
+    return;
+  }
+  const name = filepath.split("/").pop() || "";
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const newStem = await extractShowRenameDialog(name, stem);
+  if (!newStem) return;
+  const resp = await fetch("/api/source-recording/rename", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filepath, base_dir: base, new_stem: newStem }),
+  });
+  const data = await resp.json();
+  if (data.error) {
+    await extractShowAlert("Could not rename", data.error);
+    return;
+  }
+  const prevSel = selectedFile;
+  await browseFiles();
+  if (prevSel === filepath && data.path) {
+    const items = document.querySelectorAll("#file-list .file-item");
+    for (const el of items) {
+      if (el.dataset.path === data.path) {
+        await selectFile(el);
+        break;
+      }
+    }
+  }
+  scheduleExtractPageSave();
+}
+
+async function onDeleteSourceRecording(filepath) {
+  if (!currentBrowseDirectory) {
+    await extractShowAlert(
+      "Browse first",
+      "Use Browse so the folder matches this list, then try again.",
+    );
+    return;
+  }
+  const name = filepath.split("/").pop() || "file";
+  const ok = await extractShowConfirm(
+    "Move to Bin?",
+    `“${name}” will be moved to the Bin. You can restore it from Finder on macOS.`,
+    "Move to Bin",
+    true,
+  );
+  if (!ok) return;
+  const resp = await fetch("/api/source-recording/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filepath, base_dir: currentBrowseDirectory }),
+  });
+  const data = await resp.json();
+  if (data.error) {
+    await extractShowAlert("Could not delete", data.error);
+    return;
+  }
+  if (selectedFile === filepath) clearFileSelection();
+  await browseFiles();
   scheduleExtractPageSave();
 }
 

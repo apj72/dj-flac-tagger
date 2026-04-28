@@ -269,10 +269,49 @@ header h1 {
 .tab-link:hover { color: var(--text); background: var(--surface-hover); }
 .tab-link.active { color: var(--text-on-accent); background: var(--accent); }
 
-/* Tab icons: PNG masks in /static/icons/tabs/ (alpha → shape; tinted via currentColor) */
+.tab-link--icon-only {
+  position: relative;
+  gap: 0;
+  padding: 0.45rem 0.65rem;
+}
+
+/* Hover / keyboard focus label (native `title` is slow and stacks awkwardly) */
+.tab-link--icon-only::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  translate: -50% 0;
+  margin-bottom: 6px;
+  padding: 0.28rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  z-index: 50;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  transition-delay: 0s;
+}
+
+.tab-link--icon-only:hover::after,
+.tab-link--icon-only:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0.22s;
+}
+
+/* Tab icons: PNG masks (transparent plate + opaque glyph); tinted via currentColor */
 .tab-icon {
-  width: 1.125rem;
-  height: 1.125rem;
+  height: 1.85rem;
+  width: calc(1.85rem * 256 / 143);
   flex-shrink: 0;
   background: currentColor;
   opacity: 0.92;
@@ -282,6 +321,8 @@ header h1 {
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
   mask-position: center;
+  mask-mode: alpha;
+  -webkit-mask-mode: alpha;
 }
 .tab-link.active .tab-icon { opacity: 1; }
 .tab-icon-extract {
@@ -497,6 +538,49 @@ label {
 }
 .modal-actions .btn { flex: 0 0 auto; }
 
+.extract-modal-current {
+  margin: 0 0 0.65rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.extract-modal-body {
+  margin: 0 0 1rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.extract-modal-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  color: var(--text-muted);
+}
+.modal-field-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  margin-bottom: 0.15rem;
+}
+.modal-field-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 28%, transparent);
+}
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+
 .modal-card--confirm {
   max-width: min(34rem, calc(100vw - 2rem));
   max-height: min(90vh, 40rem);
@@ -556,6 +640,7 @@ label {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.55rem 0.75rem;
   background: var(--bg);
   border-radius: var(--radius-sm);
@@ -566,12 +651,46 @@ label {
 .file-item:hover { background: var(--surface-hover); }
 .file-item.selected { background: var(--accent); color: var(--text-on-accent); }
 
+.file-item-main {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.file-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.file-item-actions .btn {
+  padding: 0.25rem 0.45rem;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
 .file-size {
   font-size: 0.78rem;
   color: var(--text-muted);
   flex-shrink: 0;
 }
 .file-item.selected .file-size { color: rgba(255,255,255,0.7); }
+.file-item.selected .file-item-actions .btn {
+  background: rgba(255,255,255,0.2);
+  border-color: rgba(255,255,255,0.35);
+  color: var(--text-on-accent);
+}
+.file-item.selected .file-item-actions .btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.3);
+}
 
 /* Probe info */
 .probe-info {

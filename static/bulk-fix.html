@@ -13,13 +13,13 @@
       <h1>DJ MetaManager</h1>
       <p class="subtitle">Multi-format audio &middot; Tag &middot; Artwork</p>
       <nav class="tab-nav">
-        <a href="/" class="tab-link"><span class="tab-icon tab-icon-extract" aria-hidden="true"></span>Extract</a>
-        <a href="/fix" class="tab-link"><span class="tab-icon tab-icon-fix" aria-hidden="true"></span>Fix Metadata</a>
-        <a href="/inspect" class="tab-link"><span class="tab-icon tab-icon-inspect" aria-hidden="true"></span>Inspect</a>
-        <a href="/normalise" class="tab-link"><span class="tab-icon tab-icon-normalise" aria-hidden="true"></span>Normalise</a>
-        <a href="/convert" class="tab-link"><span class="tab-icon tab-icon-convert" aria-hidden="true"></span>WAV → FLAC</a>
-        <a href="/bulk-fix" class="tab-link active"><span class="tab-icon tab-icon-bulk-fix" aria-hidden="true"></span>Bulk Fix</a>
-        <a href="/settings" class="tab-link"><span class="tab-icon tab-icon-settings" aria-hidden="true"></span>Settings</a>
+        <a href="/" class="tab-link tab-link--icon-only" data-tooltip="Extract" aria-label="Extract"><span class="tab-icon tab-icon-extract" aria-hidden="true"></span></a>
+        <a href="/fix" class="tab-link tab-link--icon-only" data-tooltip="Fix Metadata" aria-label="Fix Metadata"><span class="tab-icon tab-icon-fix" aria-hidden="true"></span></a>
+        <a href="/inspect" class="tab-link tab-link--icon-only" data-tooltip="Inspect" aria-label="Inspect"><span class="tab-icon tab-icon-inspect" aria-hidden="true"></span></a>
+        <a href="/normalise" class="tab-link tab-link--icon-only" data-tooltip="Normalise" aria-label="Normalise"><span class="tab-icon tab-icon-normalise" aria-hidden="true"></span></a>
+        <a href="/convert" class="tab-link tab-link--icon-only" data-tooltip="WAV → FLAC" aria-label="WAV to FLAC"><span class="tab-icon tab-icon-convert" aria-hidden="true"></span></a>
+        <a href="/bulk-fix" class="tab-link tab-link--icon-only active" data-tooltip="Bulk Fix" aria-label="Bulk Fix"><span class="tab-icon tab-icon-bulk-fix" aria-hidden="true"></span></a>
+        <a href="/settings" class="tab-link tab-link--icon-only" data-tooltip="Settings" aria-label="Settings"><span class="tab-icon tab-icon-settings" aria-hidden="true"></span></a>
       </nav>
     </header>
 
@@ -31,6 +31,7 @@
           <input type="text" id="bf-dir" placeholder="~/Music/FLACs/Converted WAVs" />
           <button type="button" id="bf-choose-btn" class="btn btn-secondary" title="Server folder list">Choose folder…</button>
           <button type="button" id="bf-default-btn" class="btn btn-secondary" title="Settings → destination">Default</button>
+          <button type="button" id="bf-reset-form-btn" class="btn btn-secondary" title="Clear all fields, the batch table, and saved Bulk Fix data in this browser (including WAV→FLAC handoff)">Reset form</button>
         </div>
         <div class="field-row" style="margin:0.5rem 0 0.35rem; flex-wrap:wrap; gap:0.75rem 1.25rem">
           <label class="inline" style="display:inline-flex;align-items:center;gap:0.35rem">

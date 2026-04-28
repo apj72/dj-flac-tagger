@@ -81,27 +81,28 @@ function wireFixPagePersistence() {
   document.getElementById("fix-rename-to-tags")?.addEventListener("change", scheduleFixPageSave);
 }
 
-// ---- Filename helpers (e.g. Ableton: A06 - 139 - Artist - Title) ----
+// ---- Filename helpers (Ableton export / performance sample names; Rekordbox uses tags+DB) ----
 /** Match app.py `strip_rekordbox_style_filename_affixes` (trailing key+BPM, then lead slot). */
 function stripRekordboxStyleFilenameAffixes(stem) {
   let t = (stem || "").trim();
   if (!t) return t;
+  t = t.replace(/\s*-\s*\d{1,2}[AB]\s*-\s*\d{2,3}\s*$/i, "").trim();
   t = t.replace(/\s+\d{1,2}[AB]\s+\d{2,3}$/i, "").trim();
   t = t.replace(/^[A-Za-z]\d{1,2}\s+/i, "").trim();
   return t;
 }
 
 /**
- * If the stem looks like: [slot]-[BPM]-[artist]-[title], return a search string and
- * suggested title/artist for empty tags. Otherwise fall back to a looser string from the whole stem.
- * Rekordbox flat exports: "A02 Artist 2A 120" are normalized after the hyphenated form is ruled out.
+ * Parse Ableton-style stems: (1) BPM in 2nd field, (2) performance layout key–artist–title–key–BPM, else loose.
+ * Rekordbox does not use these filename rules; it uses metadata + its database—names like this are common for Ableton sample sets.
  */
 function parseAbletonStyleFilename(stem) {
-  const t0 = (stem || "").replace(/_PN$/i, "").trim();
+  let t0 = (stem || "").replace(/_PN$/i, "").trim();
+  t0 = t0.replace(/_pn(?=\s*-)/gi, "").trim();
   if (!t0) {
     return { searchQuery: "", suggestedTitle: "", suggestedArtist: "" };
   }
-  // E.g. A06 - 139 - Members Of Mayday - 10 In 01
+  // E.g. A06 - 139 - Members Of Mayday - 10 In 01 (BPM in second field)
   const m4 = t0.match(
     /^(?:[A-Za-z]?\d+|Track\s*\d+|\d+)\s*-\s*\d{2,3}\s*-\s*(.+?)\s*-\s*(.+)$/i
   );
@@ -113,6 +114,40 @@ function parseAbletonStyleFilename(stem) {
       suggestedTitle: title,
       suggestedArtist: artist,
     };
+  }
+  // E.g. A01 - Artist - Title - 1A - 126 (leading key + trailing key + BPM; Ableton performance / browser)
+  const mPerf = t0.match(/^(.+)\s*-\s*([0-9]{1,2}[ABab])\s*-\s*([0-9]{2,3})\s*$/i);
+  if (mPerf) {
+    const body = mPerf[1].trim();
+    const mHead = body.match(/^([A-Za-z]?\d{1,2})\s*-\s*(.+)$/i);
+    if (mHead) {
+      const rest = mHead[2].trim();
+      const sep = " - ";
+      const i = rest.indexOf(sep);
+      let artist, title;
+      if (i > 0) {
+        artist = rest
+          .slice(0, i)
+          .trim()
+          .replace(/[, ]+$/g, "")
+          .replace(/,\s*$/g, "");
+        title = rest.slice(i + sep.length).trim();
+      } else {
+        const m1 = rest.match(/^(.+?),\s*-\s*(.+)$/i);
+        const m2 = m1 || rest.match(/^(.+?),\s+(.+)$/);
+        if (m2) {
+          artist = m2[1].trim().replace(/[, ]+$/g, "");
+          title = m2[2].trim();
+        }
+      }
+      if (artist && title) {
+        return {
+          searchQuery: [artist, title].join(" ").replace(/\s+/g, " ").trim(),
+          suggestedTitle: title,
+          suggestedArtist: artist,
+        };
+      }
+    }
   }
   const t = stripRekordboxStyleFilenameAffixes(t0);
   if (!t) {

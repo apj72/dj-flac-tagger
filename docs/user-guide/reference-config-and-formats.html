@@ -104,6 +104,14 @@
               <td>Metadata and artwork when fetching from Spotify URLs</td>
             </tr>
             <tr>
+              <td>SoundCloud</td>
+              <td>Track pages — embedded hydration JSON (<code>/user/slug</code> track URLs)</td>
+            </tr>
+            <tr>
+              <td>Beatport</td>
+              <td>Track pages — Next.js <code>__NEXT_DATA__</code> (<code>/track/…</code> URLs)</td>
+            </tr>
+            <tr>
               <td>Generic URL</td>
               <td>Open Graph title/image where available</td>
             </tr>
@@ -111,7 +119,7 @@
         </table>
       </div>
       <p>
-        <strong>Fix search API:</strong> <code>GET /api/search?q=…</code> merges Apple + Discogs + Bandcamp. Optional <code>source=apple_music|discogs|bandcamp</code> and <code>limit</code> restrict to one catalogue (used by Fix Metadata fallback UI).
+        <strong>Fix search API:</strong> <code>GET /api/search?q=…</code> merges Apple + Discogs + Bandcamp. Optional <code>source=apple_music|discogs|bandcamp</code> and <code>limit</code> restrict to one catalogue (used by Fix Metadata fallback UI). For <strong>SoundCloud</strong> or <strong>Beatport</strong>, paste full track URLs into <strong>Fetch from URL</strong> / Bulk Fix rows — those hosts are not in the combined text search endpoint.
       </p>
 
       <h2>Supported file roles</h2>
@@ -163,7 +171,7 @@
         The UI is a thin client over Flask JSON endpoints. Examples:
       </p>
       <ul>
-        <li><code>GET /api/browse</code>, <code>GET /api/browse-audio</code>, <code>GET /api/browse-wav</code>, <code>GET /api/browse-folders</code> — list paths</li>
+        <li><code>GET /api/browse</code>, <code>POST /api/source-recording/rename</code>, <code>POST /api/source-recording/delete</code>, <code>GET /api/browse-audio</code>, <code>GET /api/browse-wav</code>, <code>GET /api/browse-folders</code> — list paths / manage source recordings</li>
         <li><code>POST /api/probe</code>, <code>POST /api/analyse</code> — audio metrics</li>
         <li><code>POST /api/extract</code> — extract from video</li>
         <li><code>POST /api/fetch-metadata</code> — full metadata from URL; optional track hints</li>

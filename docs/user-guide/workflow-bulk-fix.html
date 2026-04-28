@@ -37,6 +37,9 @@
         Choose a root directory, page size, and offset (same mental model as WAV batching). The scan returns each file’s <strong>parsed query</strong>, <strong>title/artist hints</strong> for track matching, and duplicate-name diagnostics when the same basename appears more than once in the tree or batch.
       </p>
       <p>
+        <strong>Reset form</strong> clears this tab’s saved state in the browser (folder, batch, offset, handoff from WAV→FLAC) so you can start fresh without hunting <code>localStorage</code> keys manually.
+      </p>
+      <p>
         <strong>Explicit paths:</strong> after WAV→FLAC flat output, prefer the handoff that calls <code>/api/bulk-fix/scan-paths</code> so row order matches conversion order. You can still open <code>/bulk-fix?dir=…</code> with offset/limit for ordinary folder paging.
       </p>
 

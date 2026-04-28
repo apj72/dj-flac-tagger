@@ -160,6 +160,30 @@ def test_parse_ableton_wav_stem(app_module):
     assert p["title"] == "10 In 01"
 
 
+def test_parse_ableton_performance_sample_stem_key_artist_title_key_bpm(app_module):
+    """Ableton performance / sample browser: leading key - artist - title - key - BPM (hyphen-separated)."""
+    s = "A01 - Pleasurekraft - One Last High (Tiger Stripes Remix) - 1A - 126"
+    p = app_module.parse_ableton_style_wav_stem(s)
+    assert p["matched"] is True
+    assert p["artist"] == "Pleasurekraft"
+    assert p["title"] == "One Last High (Tiger Stripes Remix)"
+    s2 = "A08 - Alex Niggemann - Street Therapy - 8A - 118"
+    p2 = app_module.parse_ableton_style_wav_stem(s2)
+    assert p2["matched"] is True
+    assert p2["artist"] == "Alex Niggemann"
+    assert p2["title"] == "Street Therapy"
+    s3 = "A01 - Pleasurekraft,- One Last High (Tiger Stripes Remix) - 1A - 126"
+    p3 = app_module.parse_ableton_style_wav_stem(s3)
+    assert p3["matched"] is True
+    assert p3["artist"] == "Pleasurekraft"
+    assert "One Last High" in p3["title"]
+    s4 = "A02 - Oliver Huntemann - Vienna (Original Mix)_pn - 2A - 126"
+    p4 = app_module.parse_ableton_style_wav_stem(s4)
+    assert p4["matched"] is True
+    assert p4["artist"] == "Oliver Huntemann"
+    assert "Vienna" in p4["title"] and "Original Mix" in p4["title"]
+
+
 def test_parse_ableton_rekordbox_slot_key_bpm_strips(app_module):
     """Rekordbox flat exports: lead slot and trailing Camelot + BPM, not the hyphenated Ableton form."""
     s = "A02 Christian Loeffler All Comes (Mind Against Remix) 2A 120"

@@ -181,6 +181,10 @@ def infer_metadata_source_type(url):
         return "apple_music"
     if "spotify.com" in u or "spotify.link" in u:
         return "spotify"
+    if "soundcloud.com" in u:
+        return "soundcloud"
+    if "beatport.com" in u:
+        return "beatport"
     try:
         host = urlparse(url).netloc.lower()
         if host:
@@ -1151,6 +1155,156 @@ def _spotify_oembed_tracklist(song_urls):
     return tracklist
 
 
+def _soundcloud_hydration_list(html: str):
+    """Parse ``window.__sc_hydration = [...]`` from a SoundCloud track page."""
+    marker = "window.__sc_hydration = "
+    i = html.find(marker)
+    if i < 0:
+        return None
+    j = i + len(marker)
+    while j < len(html) and html[j] in " \t\r\n":
+        j += 1
+    try:
+        data, _end = json.JSONDecoder().raw_decode(html, j)
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, list) else None
+
+
+def _soundcloud_artwork_hires(url: str) -> str:
+    if not url:
+        return ""
+    return re.sub(r"-large\.(jpg|jpeg|png)(\?[^#]*)?$", r"-t500x500.\1", url, flags=re.I)
+
+
+def scrape_soundcloud(url: str) -> dict:
+    """Metadata from a public SoundCloud track URL (embedded ``__sc_hydration`` JSON)."""
+    resp = requests.get(url, headers=HEADERS, timeout=15)
+    resp.raise_for_status()
+    html = _response_text_utf8(resp)
+    blob = _soundcloud_hydration_list(html)
+    meta: dict = {"source": "soundcloud"}
+    sound = None
+    if blob:
+        for item in blob:
+            if not isinstance(item, dict) or item.get("hydratable") != "sound":
+                continue
+            d = item.get("data")
+            if isinstance(d, dict) and (d.get("title") or "").strip():
+                sound = d
+                break
+    if not sound:
+        soup = BeautifulSoup(html, "lxml")
+        tw = soup.find("meta", attrs={"property": "twitter:title"})
+        if tw and tw.get("content"):
+            meta["title"] = tw["content"].strip()
+        og = soup.find("meta", property="og:image")
+        if og and og.get("content"):
+            meta["artwork_url"] = _soundcloud_artwork_hires(og["content"].strip())
+        return meta
+
+    meta["title"] = (sound.get("title") or "").strip()
+    pm = sound.get("publisher_metadata") if isinstance(sound.get("publisher_metadata"), dict) else {}
+    user = sound.get("user") if isinstance(sound.get("user"), dict) else {}
+    meta["artist"] = (
+        (pm.get("artist") or user.get("username") or user.get("full_name") or "")
+    ).strip()
+    album_title = pm.get("album_title")
+    if album_title:
+        meta["album"] = str(album_title).strip()
+    g = (sound.get("genre") or "").strip()
+    if not g:
+        tl = sound.get("tag_list")
+        if isinstance(tl, str) and tl.strip():
+            g = tl.strip()
+    if g:
+        meta["genre"] = g
+    rd = sound.get("release_date") or sound.get("created_at") or ""
+    ym = re.search(r"(\d{4})", str(rd))
+    if ym:
+        meta["date"] = ym.group(1)
+    au = sound.get("artwork_url") or ""
+    if au:
+        meta["artwork_url"] = _soundcloud_artwork_hires(str(au).strip())
+    return meta
+
+
+def _beatport_next_track(html: str):
+    m = re.search(
+        r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    if not m:
+        return None
+    try:
+        data = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return None
+    tr = (data.get("props") or {}).get("pageProps") or {}
+    tr = tr.get("track")
+    return tr if isinstance(tr, dict) else None
+
+
+def scrape_beatport(url: str) -> dict:
+    """Metadata from a Beatport track page (Next.js ``__NEXT_DATA__``)."""
+    if "/track/" not in url.lower():
+        return {}
+    resp = requests.get(url, headers=HEADERS, timeout=20)
+    resp.raise_for_status()
+    html = _response_text_utf8(resp)
+    tr = _beatport_next_track(html)
+    meta: dict = {"source": "beatport"}
+    if not tr:
+        return meta
+
+    name = (tr.get("name") or "").strip()
+    mix = (tr.get("mix_name") or "").strip()
+    if mix and mix.lower() not in ("original mix", "original"):
+        meta["title"] = f"{name} ({mix})"
+    else:
+        meta["title"] = name
+
+    artists = tr.get("artists") or []
+    names = []
+    if isinstance(artists, list):
+        for a in artists:
+            if isinstance(a, dict) and (a.get("name") or "").strip():
+                names.append(a["name"].strip())
+    meta["artist"] = " / ".join(names)
+
+    rel = tr.get("release") if isinstance(tr.get("release"), dict) else {}
+    if rel.get("name"):
+        meta["album"] = str(rel["name"]).strip()
+    lab = rel.get("label") if isinstance(rel.get("label"), dict) else {}
+    if lab.get("name"):
+        meta["label"] = str(lab["name"]).strip()
+
+    art_url = ""
+    rim = rel.get("image") if isinstance(rel.get("image"), dict) else {}
+    if rim.get("dynamic_uri"):
+        art_url = str(rim["dynamic_uri"]).replace("{w}x{h}", "1400x1400")
+    elif rim.get("uri"):
+        art_url = str(rim["uri"])
+    if not art_url:
+        img = tr.get("image") if isinstance(tr.get("image"), dict) else {}
+        if img.get("dynamic_uri"):
+            art_url = str(img["dynamic_uri"]).replace("{w}x{h}", "1400x1400")
+        elif img.get("uri"):
+            art_url = str(img["uri"])
+    if art_url:
+        meta["artwork_url"] = art_url
+
+    g = tr.get("genre") if isinstance(tr.get("genre"), dict) else {}
+    if g.get("name"):
+        meta["genre"] = str(g["name"]).strip()
+    pd = tr.get("publish_date") or ""
+    ym = re.search(r"(\d{4})", str(pd))
+    if ym:
+        meta["date"] = ym.group(1)
+    return meta
+
+
 def parse_discogs_url(url):
     m = re.search(r"discogs\.com/(master|release)/(\d+)", url)
     if m:
@@ -1424,15 +1578,24 @@ def search_bandcamp(query, limit=6):
 
 def strip_rekordbox_style_filename_affixes(stem: str) -> str:
     """
-    Remove common DJ library export noise from a file stem:
-    - Leading slot / deck (e.g. A02, B12)
-    - Trailing Camelot key + BPM (e.g. 2A 120, 12A 98)
+    Remove common noise from an **Ableton / DAW export** stem so search uses artist/title only.
 
-    So bulk metadata search can use the artist/title string only.
+    **Rekordbox** itself does not define a filename scheme: it keys tracks on embedded
+    metadata and its internal database. Filenames like ``A01 - Artist - Title - 1A - 126``
+    are a **convention people use with Ableton Live** (and similar tools) when exporting
+    or collecting **samples for a set**—hyphens separate fields for quick visual scanning
+    in the browser. Those files are often **also** present in a Rekordbox collection, but
+    the pattern is Ableton-oriented, not Rekordbox-native.
+
+    Strips:
+    - Trailing Camelot key + BPM (e.g. ``2A 120``, ``12A 98``)
+    - Leading key/slot token (e.g. ``A02``, ``B12``)
     """
     t = (stem or "").strip()
     if not t:
         return t
+    # e.g. " - 8A - 118" (hyphens between key and BPM) as well as " 8A 118"
+    t = re.sub(r"(?i)\s*-\s*\d{1,2}[AB]\s*-\s*\d{2,3}\s*$", "", t).strip()
     t = re.sub(r"(?i)\s+\d{1,2}[AB]\s+\d{2,3}$", "", t).strip()
     t = re.sub(r"(?i)^[A-Za-z]\d{1,2}\s+", "", t).strip()
     return t
@@ -1599,6 +1762,10 @@ def _metadata_from_url(url: str) -> dict:
             meta = scrape_apple_music(url)
         elif "spotify.com" in url or "spotify.link" in url:
             meta = scrape_spotify(url)
+        elif "soundcloud.com" in url.lower():
+            meta = scrape_soundcloud(url)
+        elif "beatport.com" in url.lower() and "/track/" in url.lower():
+            meta = scrape_beatport(url)
         else:
             meta = scrape_generic(url)
     except Exception as e:
@@ -2083,6 +2250,34 @@ def update_settings():
     return jsonify(cfg)
 
 
+# Video files listed on Extract (step 1); rename/delete must stay in the browsed folder.
+VIDEO_SOURCE_EXTENSIONS = (".mkv", ".mp4", ".mov", ".avi", ".webm")
+
+
+def _normalize_resolved_path(p):
+    return os.path.normpath(os.path.abspath(resolve(p)))
+
+
+def _assert_browse_dir_video_file(filepath, base_dir):
+    """Ensure filepath is a real video recording sitting directly in base_dir (same rules as /api/browse)."""
+    if not filepath or not base_dir:
+        return False, "Missing path or folder"
+    try:
+        fp = _normalize_resolved_path(filepath)
+        bd = _normalize_resolved_path(base_dir)
+    except (OSError, TypeError, ValueError):
+        return False, "Invalid path"
+    if not os.path.isdir(bd):
+        return False, "Folder not found"
+    if not os.path.isfile(fp):
+        return False, "File not found"
+    if os.path.dirname(fp) != bd:
+        return False, "File must be in the listed folder"
+    if Path(fp).suffix.lower() not in VIDEO_SOURCE_EXTENSIONS:
+        return False, "Not a supported video recording type"
+    return True, None
+
+
 @app.route("/api/browse")
 def browse():
     cfg = load_config()
@@ -2093,13 +2288,57 @@ def browse():
 
     files = []
     for f in sorted(Path(directory).iterdir()):
-        if f.suffix.lower() in (".mkv", ".mp4", ".mov", ".avi", ".webm"):
+        if f.suffix.lower() in VIDEO_SOURCE_EXTENSIONS:
             files.append({
                 "name": f.name,
                 "path": str(f),
                 "size_mb": round(f.stat().st_size / (1024 * 1024), 1),
             })
     return jsonify({"directory": directory, "files": files})
+
+
+@app.route("/api/source-recording/rename", methods=["POST"])
+def rename_source_recording():
+    """Rename a recording in the Extract file list (same directory only)."""
+    data = request.get_json() or {}
+    filepath = data.get("filepath")
+    base_dir = data.get("base_dir")
+    new_stem = (data.get("new_stem") or "").strip()
+    ok, err = _assert_browse_dir_video_file(filepath, base_dir)
+    if not ok:
+        return jsonify({"error": err}), 400
+    safe_stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", new_stem).strip()
+    if not safe_stem or safe_stem in (".", ".."):
+        return jsonify({"error": "Invalid name"}), 400
+    old = Path(filepath)
+    new_name = f"{safe_stem}{old.suffix.lower()}"
+    fp_norm = os.path.normpath(os.path.abspath(str(old)))
+    new_path = os.path.normpath(os.path.abspath(str(old.parent / new_name)))
+    if new_path == fp_norm:
+        return jsonify({"path": new_path, "name": new_name})
+    if os.path.exists(new_path):
+        return jsonify({"error": f"A file named {new_name} already exists"}), 409
+    try:
+        os.rename(fp_norm, new_path)
+    except OSError as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"path": new_path, "name": new_name})
+
+
+@app.route("/api/source-recording/delete", methods=["POST"])
+def delete_source_recording():
+    """Move a recording to the system Trash (macOS Finder), same as optional post-extract delete."""
+    data = request.get_json() or {}
+    filepath = data.get("filepath")
+    base_dir = data.get("base_dir")
+    ok, err = _assert_browse_dir_video_file(filepath, base_dir)
+    if not ok:
+        return jsonify({"error": err}), 400
+    try:
+        trash_file(filepath)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"ok": True})
 
 
 @app.route("/api/probe", methods=["POST"])
@@ -2835,15 +3074,80 @@ def _ffmpeg_wav_to_flac_file(wav_path: str, flac_path: str) -> None:
     )
 
 
+def _parse_ableton_performance_sample_stem(t0: str) -> dict | None:
+    """
+    Ableton-style **performance / sample** layout (hyphens separate fields in the browser):
+
+        {leading key} - {artist} - {title} - {Camelot key} - {BPM}
+
+    Example::
+
+        A01 - Pleasurekraft - One Last High (Tiger Stripes Remix) - 1A - 126
+
+    The first token is a Camelot-style code; the last two fields repeat key + BPM.
+    This is **not** the same as the alternate pattern where **BPM** appears in the
+    second field (see the m4 match in parse_ableton_style_wav_stem).
+    """
+    m = re.search(
+        r"^(.+)\s*-\s*([0-9]{1,2}[ABa-b])\s*-\s*([0-9]{2,3})\s*$",
+        t0,
+        re.I,
+    )
+    if not m:
+        return None
+    body = m.group(1).strip()
+    m2 = re.match(
+        r"^([A-Za-z]?\d{1,2})\s*-\s*(.+)$",
+        body,
+        re.I,
+    )
+    if not m2:
+        return None
+    rest = m2.group(2).strip()
+    sep = " - "
+    i = rest.find(sep)
+    if i >= 0:
+        artist = rest[:i].strip().strip(" ,")
+        artist = re.sub(r",\s*$", "", artist).strip()
+        title = rest[i + len(sep) :].strip()
+    else:
+        # e.g. "Pleasurekraft,- One Last High ..." (comma or ",-" instead of " - " after artist)
+        msep = re.match(r"^(.+?),\s*-\s*(.+)$", rest) or re.match(
+            r"^(.+?),\s+(.+)$", rest
+        )
+        if not msep:
+            return None
+        artist = msep.group(1).strip().strip(" ,")
+        title = msep.group(2).strip()
+    if not artist or not title:
+        return None
+    return {
+        "artist": artist,
+        "title": title,
+        "matched": True,
+        "loose": "",
+    }
+
+
 def parse_ableton_style_wav_stem(stem: str) -> dict:
     """
-    Parse DJ / Ableton-style stem: e.g. A06 - 139 - Members Of Mayday - 10 In 01
-    → artist + title. Aligns with static/fix.js parseAbletonStyleFilename.
+    Parse DJ / Ableton-style stems for search and tag hints. Aligns with static/fix.js
+    ``parseAbletonStyleFilename``.
 
-    If that pattern does not match, strip Rekordbox-style lead (A02) and tail key+BPM (2A 120)
-    so names like "A02 Artist Name 2A 120" search and tag correctly.
+    Supported forms include:
+
+    1. **BPM in the second field** (common export): e.g.
+       ``A06 - 139 - Members Of Mayday - 10 In 01`` → artist + title.
+
+    2. **Ableton performance / sample** layout: leading key, artist, title, key, BPM
+       (see ``_parse_ableton_performance_sample_stem``).
+
+    3. Otherwise strip leading key/slot and trailing key+BPM (spaces or ``-`` between
+       key and BPM where present) and build a **loose** search string.
     """
     t0 = re.sub(r"_PN$", "", stem, flags=re.I).strip()
+    # Embedded _PN before " - 1A - 126" (some Platinum Notes exports)
+    t0 = re.sub(r"(?i)_pn(?=\s*-)", "", t0).strip()
     if not t0:
         return {"artist": "", "title": "", "matched": False, "loose": ""}
     m4 = re.match(
@@ -2858,6 +3162,9 @@ def parse_ableton_style_wav_stem(stem: str) -> dict:
             "matched": True,
             "loose": "",
         }
+    perf = _parse_ableton_performance_sample_stem(t0)
+    if perf:
+        return perf
     t = strip_rekordbox_style_filename_affixes(t0)
     if not t:
         return {"artist": "", "title": "", "matched": False, "loose": ""}

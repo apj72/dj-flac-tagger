@@ -30,7 +30,7 @@ Use these sections with [Stitch](https://stitch.withgoogle.com/): one screen per
 
 2. **Step 2 — Track info**  
    - Label: combined music services + URL.  
-   - **URL** field (full width) — Bandcamp, Discogs, Apple Music, Spotify, generic URL.  
+   - **URL** field (full width) — Bandcamp, Discogs, Apple Music, Spotify, SoundCloud, Beatport track links, generic URL.  
    - **“Or track name”** text field.  
    - **Primary button:** “Fetch Metadata”.  
    - **Status** area (inline message, success/warning after fetch — hidden when idle).

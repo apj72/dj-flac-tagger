@@ -41,6 +41,8 @@ def test_infer_metadata_source_type(app_module):
     assert app_module.infer_metadata_source_type("") == ""
     assert app_module.infer_metadata_source_type("https://bandcamp.com/track/x") == "bandcamp"
     assert app_module.infer_metadata_source_type("https://www.discogs.com/release/1") == "discogs"
+    assert app_module.infer_metadata_source_type("https://soundcloud.com/artist/track-slug") == "soundcloud"
+    assert app_module.infer_metadata_source_type("https://www.beatport.com/track/wackypaky/16495841") == "beatport"
     assert app_module.infer_metadata_source_type("https://music.apple.com/us/album/x") == "apple_music"
     assert app_module.infer_metadata_source_type("https://open.spotify.com/track/x") == "spotify"
 

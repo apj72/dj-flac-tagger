@@ -84,8 +84,8 @@ Copy **A + B + the section below** into one generation request per icon.
 
 ## After generation
 
-1. Save into `static/icons/tabs/` as **`extract.png`**, **`fix-metadata.png`**, **`inspect.png`**, **`normalise.png`**, **`convert.png`** (WAV→FLAC), **`bulk-fix.png`**, **`settings.png`** — **PNG with alpha**. Resize large exports (e.g. `sips -Z 256`) before committing. `mask-image` URLs live in `static/style.css` under `.tab-icon-*`.
-2. For **mask** compatibility, artwork should be **filled** or **closed strokes** that read as a **solid silhouette**; very thin hairlines may break when scaled down.
+1. Save into `static/icons/tabs/` as **`extract.png`**, **`fix-metadata.png`**, **`inspect.png`**, **`normalise.png`**, **`convert.png`** (WAV→FLAC), **`bulk-fix.png`**, **`settings.png`** — **PNG** (RGBA). Resize large exports (e.g. `sips -Z 256`), then run **`python3 scripts/strip_tab_icon_plates.py`** to remove the light plate. `mask-image` URLs live in `static/style.css` under `.tab-icon-*`.
+2. Icons are shown around **`1.85rem` tall**; keep forms **bold** and legible. Art is dark-on-light plates before stripping; the script turns the plate transparent for masking.
 
 ---
 

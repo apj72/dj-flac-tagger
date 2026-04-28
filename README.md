@@ -1,6 +1,6 @@
 # DJ MetaManager
 
-A local web tool for DJs to turn recordings into a clean, tagged library in **multiple audio formats**. Record vinyl or other sources through OBS with BlackHole, then extract audio from video containers, auto-tag with metadata and artwork from Discogs, Bandcamp, Apple Music, or Spotify, and export to **FLAC (lossless)**, **MP3**, or **AAC (M4A)** — whatever you choose in Settings — ready for Rekordbox, Traktor, or any DJ software.
+A local web tool for DJs to turn recordings into a clean, tagged library in **multiple audio formats**. Record vinyl or other sources through OBS with BlackHole, then extract audio from video containers, auto-tag with metadata and artwork from Discogs, Bandcamp, Apple Music, Spotify, **SoundCloud**, **Beatport**, or other pages, and export to **FLAC (lossless)**, **MP3**, or **AAC (M4A)** — whatever you choose in Settings — ready for Rekordbox, Traktor, or any DJ software.
 
 **Fix Metadata** and **Inspect** work across **FLAC, MP3, M4A/AAC, OGG**, and more for browsing and editing. **Normalise** applies **EBU R128** loudness to existing files and re-encodes using the same **system-wide format** as Extract. A **Settings** tab controls paths, output format, and loudness targets.
 
@@ -14,7 +14,7 @@ A local web tool for DJs to turn recordings into a clean, tagged library in **mu
 | **`master`** | Stable release; multi-format extract, tag, and normalise as documented below. |
 | **`v2`** | Active development; new features land here first, then merge to `master` when ready. |
 
-**On branch `v2` today:** **Bulk Fix** (batch FLAC metadata, Bandcamp search, duplicate-name warnings, optional sibling `.wav` hints, **best-match pre-selection** after fetch), batch **WAV → FLAC** with offsets and **browser-stored batch progress**, **conversion-order handoff** to Bulk Fix for flat output (see [UI state](#ui-state-browser)), in-app **bulk convert confirmation** (no native `confirm` dialog), **per-tab UI drafts** for Extract / Fix / Inspect / Normalise / Settings in `localStorage`, **Inspect** folder picker, last browsed folder remembered between **Fix Metadata** and **Inspect**, and **UTF-8–safe** HTML/JSON scraping so accented titles (e.g. Apple Music) write correctly to tags.
+**On branch `v2` today:** **tab bar icons** with hover/focus labels; Extract **Rename** / **Delete** for source recordings (delete → Finder Trash on macOS; `POST /api/source-recording/rename` | `delete`), **SoundCloud** and **Beatport** URLs in **Fetch metadata**; **Bulk Fix → Reset form** to clear saved browser state; plus **Bulk Fix** (batch FLAC metadata, Bandcamp search, duplicate-name warnings, optional sibling `.wav` hints, **best-match pre-selection** after fetch), batch **WAV → FLAC** with offsets and **browser-stored batch progress**, **conversion-order handoff** to Bulk Fix for flat output (see [UI state](#ui-state-browser)), in-app **bulk convert confirmation** (no native `confirm` dialog), **per-tab UI drafts** for Extract / Fix / Inspect / Normalise / Settings in `localStorage`, **Inspect** folder picker, last browsed folder remembered between **Fix Metadata** and **Inspect**, and **UTF-8–safe** HTML/JSON scraping so accented titles (e.g. Apple Music) write correctly to tags.
 
 ## Recording
 
@@ -31,11 +31,12 @@ Seven pages, via tabs at the top (order: **Extract → Fix Metadata → Inspect 
 1. **Extracts audio** from MKV/MP4/MOV — output codec and container follow **Settings → extract format** (FLAC 16-bit, MP3 320 CBR, or AAC in M4A). When the source stream already matches the target, ffmpeg copies or transcodes as appropriate; video is discarded.
 2. **Analyses audio levels** — integrated LUFS, true peak, mean volume with colour-coded meters.
 3. **Normalises audio** (optional) — two-pass **EBU R128** `loudnorm` to the **LUFS target in Settings** (default **-14**; use **-11.5** to align with tools like Platinum Notes). Toggle on/off per extract.
-4. **Fetches metadata** from Bandcamp, Discogs, Apple Music, Spotify, or generic URLs.
-5. **Embeds artwork** and **stores the metadata source URL** in the file (`DJMETAMANAGER_SOURCE_URL` Vorbis comment / MP3 TXXX; older files may still use `DJFLACTAGGER_SOURCE_URL`, which is read for compatibility) and in the **processing log** for later re-fetch.
-6. **Copies** the tagged file to your **destination** folder.
-7. **Moves the source recording to Bin** (optional, macOS Finder).
-8. **Platinum Notes (optional)** — in Settings, set the **exact app name** (e.g. `Platinum Notes 10`). On Extract you can **open the extracted file in Platinum Notes** and **watch for the `*_PN` output** (same base name and extension family); when it appears, tags and artwork are **re-applied** from the same log entry (and the PN file is **copied next to your library copy** when a destination copy exists).
+4. **Fetches metadata** from Bandcamp, Discogs, Apple Music, Spotify, **SoundCloud**, **Beatport** (track URLs), or generic pages.
+5. **Rename** or **Delete** source videos from the list (**Delete** moves to **Finder Trash** on macOS; both use in-app dialogs).
+6. **Embeds artwork** and **stores the metadata source URL** in the file (`DJMETAMANAGER_SOURCE_URL` Vorbis comment / MP3 TXXX; older files may still use `DJFLACTAGGER_SOURCE_URL`, which is read for compatibility) and in the **processing log** for later re-fetch.
+7. **Copies** the tagged file to your **destination** folder.
+8. **Moves the source recording to Bin** (optional, macOS Finder).
+9. **Platinum Notes (optional)** — in Settings, set the **exact app name** (e.g. `Platinum Notes 10`). On Extract you can **open the extracted file in Platinum Notes** and **watch for the `*_PN` output** (same base name and extension family); when it appears, tags and artwork are **re-applied** from the same log entry (and the PN file is **copied next to your library copy** when a destination copy exists).
 
 Paths, loudness targets, and Platinum Notes options live on the **Settings** tab.
 
@@ -45,6 +46,7 @@ The app does **not** use cookies for form memory. **Extract**, **Fix Metadata**,
 
 - **Settings:** After you click **Save Settings**, the settings draft is cleared so the next load matches the server.
 - **WAV → FLAC** and **Bulk Fix** use **additional** keys (e.g. bulk folder/target memory, batch offset handoff, `djmm.bulkFixHandoff` after a flat-folder convert) so large workflows stay separate from the generic page store.
+- **Bulk Fix** also exposes **Reset form** — clears folder fields, loaded batch, `djmm.bulkFixState`, `djmm.bulkFixDir`, and any pending WAV→FLAC **`djmm.bulkFixHandoff`** for a clean slate in this browser profile.
 
 ### Fix Metadata
 
@@ -93,7 +95,7 @@ Convert **WAV** recordings to **FLAC** (ffmpeg, compression level 12). Source WA
 - **Bulk (folder tree)** — convert every `.wav` under a root (optionally recursive). Output modes:
   - **Next to each WAV** — write `<name>.flac` beside the source.
   - **Mirror under destination** — preserve subfolders under your **Settings** destination (avoids name collisions across BPM folders).
-  - **One flat folder** — e.g. all converted files into a single Rekordbox-style directory; filenames use **`Slot - BPM - Artist - Title`** when the WAV name matches that pattern; many DJ exports instead use a **flat** name with a lead slot and trailing key + BPM (see [Filename search and tags](#filename-search-and-tags)).
+  - **One flat folder** — e.g. all converted files into a single destination directory; output names follow **[Filename search and tags](#filename-search-and-tags)** when the **WAV stem** matches a known **Ableton-style** pattern (see below). **Pioneer Rekordbox** does not define a special on-disk filename format: it uses **embedded metadata and its own database**; files are often _also_ given hyphenated “Ableton performance” names when exporting for **Ableton Live** (sample browser / set prep).
 - **Tags from filename** — after each encode, **artist** and **title** Vorbis tags are set when the stem can be parsed (see below; aligned with **Fix Metadata** and **Bulk Fix**).
 - **Batching (recommended for large trees)** — by default, each run only processes a **batch** of WAVs in **sorted path order** using **offset** and **limit** (e.g. 25 per run). Use **Next offset** to step through hundreds of files safely; keep **skip if FLAC exists** on to resume. Uncheck “limit each run” only if you intentionally want one run for the whole tree (you’ll get a stronger warning when the scan count is high). Successful limited batches can **persist the next offset** per source folder (browser only).
 - **Bulk run confirmation** uses an in-page modal (same style as the folder picker), not the browser’s native confirm dialog.
@@ -101,11 +103,11 @@ Convert **WAV** recordings to **FLAC** (ffmpeg, compression level 12). Source WA
 
 ### Bulk Fix (metadata in batches)
 
-For a **folder of FLACs** (often the same flat folder as **WAV → FLAC** output), review and apply **Discogs, Apple Music, or Bandcamp** (and other) metadata without doing one file at a time on **Fix Metadata**.
+For a **folder of FLACs** (often the same flat folder as **WAV → FLAC** output), review and apply **Discogs, Apple Music, Bandcamp**, or pasted URLs (**SoundCloud**, **Beatport**, etc.) **without** doing one file at a time on **Fix Metadata**.
 
 1. **Scan & load** — choose root, **files per pass**, and **offset** (same idea as WAV batching: stable sorted list). If the same **filename** exists more than once (e.g. in different subfolders, or two copies in the same batch), the table flags **Duplicate in this batch** or **Same name elsewhere** and lists other paths; the apply step warns if you are about to tag multiple copies.
 2. **Fetch online matches** — runs the same combined **iTunes + Discogs + Bandcamp** search as Fix, with gentle rate spacing between files. The **search query** for each file is built from the **filename stem** using [Filename search and tags](#filename-search-and-tags). After results return, the **Match** dropdown **pre-selects a best guess** (filename hints + light source tie-break) so you can skim and only change wrong rows.
-3. **Review** — per row, pick a search result or paste a **Bandcamp / Discogs / Apple / Spotify** URL. After **Fetch online matches**, each row lists **shortcuts (Apple / Discogs / Bandcamp)** and the **full URL** for every hit (same URL the dropdown uses), so you can open and validate in the browser before apply. The **Match** column uses high-contrast link colours on a slightly lighter cell background so URLs stay readable on dark mode.
+3. **Review** — per row, pick a search result or paste a **catalogue URL** (Bandcamp, Discogs, Apple, Spotify, **SoundCloud**, **Beatport** track links, …). After **Fetch online matches**, each row lists **shortcuts (Apple / Discogs / Bandcamp)** and the **full URL** for every hit (same URL the dropdown uses), so you can open and validate in the browser before apply. The **Match** column uses high-contrast link colours on a slightly lighter cell background so URLs stay readable on dark mode.
 4. **Apply** — fetches full metadata, matches **multi-track** Discogs releases using the **title hint** from the filename when possible, embeds tags and artwork; optional **rename to `Artist - Title.flac`**. Optional logging to the processing log.
 
 **Optional same-name `.wav`:** If `SomeTrack.wav` sits in the **same folder** as `SomeTrack.flac`, the server reads **embedded WAV tags** (when mutagen can see them — e.g. some BWF/RIFF metadata). If **both** artist and title are present in the WAV, the **search query** uses that pair (often cleaner than the filename alone). If only one of those fields exists, it can still **fill title/artist hints** for track matching without replacing the whole query. Many exports have **no** useful WAV tags, so the filename rules above still do most of the work.
@@ -114,25 +116,31 @@ The **WAV → FLAC** tab links here after a flat-folder conversion with **`?dir=
 
 #### Filename search and tags
 
-DJs often export or convert tracks with **extra text in the filename** that is not part of the real artist/title. The app **does not** search on the raw stem; it normalizes first so Discogs, Apple, and Bandcamp get a useful query.
+DJs often keep **extra text in the filename** (Camelot key, BPM, etc.) for quick scanning in a DAW or file browser. The app **does not** search on the raw stem; it normalizes first so Discogs, Apple, and Bandcamp get a useful query.
+
+**Pioneer Rekordbox** identifies tracks from **metadata and its internal database**, not from a special filename format. A folder such as `…/Rekordbox-music/Underground/126/` is simply how **you** arranged exports; the stems below are patterns people commonly use with **Ableton Live** (and similar tools) when **loading samples** or preparing a performance: **hyphens** separate fields in the name for readability in Ableton’s browser. The same file may also live in a Rekordbox collection, but the **naming** described here is **Ableton-style**, not a Rekordbox requirement.
 
 1. A **`_PN` suffix** (Platinum Notes) on the stem is removed, e.g. `Track_PN` → `Track` (case-insensitive).
-2. **Classic Ableton / export pattern** (hyphen-separated): if the name looks like  
-   `[slot] - [BPM] - [artist] - [title]`  
-   (e.g. `A06 - 139 - Members Of Mayday - 10 In 01`), that pattern wins — **no** further stripping, so the hyphens in the real title are preserved.
-3. Otherwise **Rekordbox-style flat names** are cleaned:
-   - **Trailing** [Camelot key] + [BPM], e.g. ` 2A 120` or ` 12A 98` (number + A/B, space, 2–3 digit BPM) at the **end** of the stem.
-   - **Leading** slot prefix, e.g. `A02 ` or `B12 ` (one letter + 1–2 digits + space).
+2. **Ableton / export pattern — BPM in the second field** (hyphen-separated): if the name looks like  
+   `[key or slot] - [BPM] - [artist] - [title]`  
+   (e.g. `A06 - 139 - Members Of Mayday - 10 In 01`), that pattern wins — **no** further stripping, so the hyphens in the real title are preserved. Here **BPM** is a 2–3 digit number in the **second** field.
+3. **Ableton performance / sample layout** (also hyphen-separated): a common convention is  
+   `[leading key] - [artist] - [title] - [Camelot key] - [BPM]`  
+   e.g. `A01 - Pleasurekraft - One Last High (Tiger Stripes Remix) - 1A - 126` — leading token is a **Camelot-style** code, then **artist**, then **track name**, then **key** and **BPM** repeated at the end. After metadata is fixed in the app, a typical library filename becomes **`Artist - Title.flac`**, which may not match the original stem word-for-word.
+4. **Otherwise** (e.g. older flat exports with spaces) the stem is cleaned:
+   - **Trailing** [Camelot key] + [BPM], e.g. ` 2A 120`, `12A 98`, or ` - 8A - 118` (with hyphens) at the **end** of the stem.
+   - **Leading** key/slot prefix, e.g. `A02 ` or `B12 ` (one letter + 1–2 digits + space).
 
 **Examples after normalization:**
 
 | Filename stem (no extension) | Search / tag string used |
 |------------------------------|-------------------------|
-| `A06 - 139 - Members Of Mayday - 10 In 01` | Artist + title from the hyphenated pattern (unchanged) |
+| `A06 - 139 - Members Of Mayday - 10 In 01` | Artist + title from the **BPM-in-second-field** pattern (unchanged) |
+| `A01 - Pleasurekraft - One Last High (Tiger Stripes Remix) - 1A - 126` | Artist = Pleasurekraft, title = One Last High (Tiger Stripes Remix) |
 | `A02 Christian Loeffler All Comes (Mind Against Remix) 2A 120` | `Christian Loeffler All Comes (Mind Against Remix)` |
 | `A02 Ripperton Unfold 2A 119` | `Ripperton Unfold` |
 
-These rules apply to **Bulk Fix** (scan query and title hint), **Fix Metadata** (suggested search from the filename), and **WAV → FLAC** embedding when a classic pattern does not match.
+These rules apply to **Bulk Fix** (scan query and title hint), **Fix Metadata** (suggested search from the filename), and **WAV → FLAC** tag embedding when a known pattern does not match.
 
 ## Recording Setup
 
@@ -221,8 +229,10 @@ Normalisation uses **two-pass EBU R128** with your configured **I** and **TP** t
 | **Bandcamp** | Track/album metadata, artwork |
 | **Apple Music** | Metadata, artwork, album tracklists |
 | **Spotify** | Metadata, artwork, album tracklists |
+| **SoundCloud** | Track metadata from embedded page JSON (titles, artist/album hints, genre, artwork) |
+| **Beatport** | Track metadata from page data (title/mix, artists, release, label, genre, date, artwork) |
 | **Any URL** | Open Graph title/image where available |
-| **Fix page auto-search** | iTunes + Discogs + Bandcamp (Bandcamp via public site search) |
+| **Fix page auto-search** | iTunes + Discogs + Bandcamp (paste **SoundCloud / Beatport** URLs manually for those catalogues). |
 
 ## Supported formats
 
@@ -233,7 +243,7 @@ Normalisation uses **two-pass EBU R128** with your configured **I** and **TP** t
 
 **Inspect: Fix artwork dimensions** applies to **FLAC** only (other formats skip this).
 
-**Unicode:** Metadata scraped from Apple Music, Bandcamp, Spotify, and generic pages is decoded as **UTF-8** so accented titles (e.g. **André**) are not mangled when written to tags.
+**Unicode:** Metadata scraped from Apple Music, Bandcamp, Spotify, SoundCloud, Beatport, and generic pages is decoded as **UTF-8** so accented titles (e.g. **André**) are not mangled when written to tags.
 
 ## Configuration (`config.json`)
 
@@ -257,6 +267,9 @@ Example (see `config.json.example`):
 
 | Method | Path | Purpose |
 |--------|------|---------|
+| `GET` | `/api/browse` | List recording containers (MKV/MOV/MP4/…) in **Settings → source_dir** or a given `dir` query. |
+| `POST` | `/api/source-recording/rename` | Rename a file in that list (same directory only). Body: `filepath`, `base_dir`, `new_stem`. |
+| `POST` | `/api/source-recording/delete` | Move a listed recording to Bin (macOS Finder). Body: `filepath`, `base_dir`. |
 | `GET` | `/api/browse-wav` | List `.wav` in a directory (WAV → FLAC). |
 | `POST` | `/api/convert-wav-to-flac` | Single WAV → FLAC; optional `output` `same` / `destination`. |
 | `POST` | `/api/convert-wav-bulk` | Bulk WAV → FLAC; `output` `same` / `destination` / `custom` + `target_dir` for flat output. Optional **`offset`**, **`limit`** for batch slices; response includes **`batch`** (`total_wavs`, `candidates_in_batch`, etc.) and, when any outputs were produced or skipped as existing FLACs in that batch, **`batch_flac_paths`** (ordered list of absolute `.flac` paths matching the WAV batch order). |
@@ -279,13 +292,15 @@ pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
 
-Coverage includes: browse/convert WAV, bulk convert (including **offset/limit**, **`batch_flac_paths`**, and **custom** flat output + tags), **retag** rename, **bulk-fix** scan and **scan-paths** (including duplicate detection and WAV tag hints), **Bandcamp search** parsing (mocked HTML), **fetch-metadata** track hints, normalise API, and shared helpers. Tests that invoke **ffmpeg** skip automatically if it is missing. Network calls to live Discogs, Apple, or Bandcamp are **not** required in automated tests; bulk **suggest**/**apply** against real services are left to manual checks.
+Coverage includes: browse/convert WAV, bulk convert (including **offset/limit**, **`batch_flac_paths`**, and **custom** flat output + tags), **retag** rename, **bulk-fix** scan and **scan-paths** (including duplicate detection and WAV tag hints), **Bandcamp search** parsing (mocked HTML), **fetch-metadata** / **SoundCloud / Beatport** scraping (mocked HTML), normalise API, source-recording rename/delete helpers, and shared helpers. Tests that invoke **ffmpeg** skip automatically if it is missing. Network calls to live Discogs, Apple, or Bandcamp are **not** required in automated tests; bulk **suggest**/**apply** against real services are left to manual checks.
 
 ## Project structure
 
 ```
 dj-meta-manager/
 ├── docs/user-guide/       # Modular HTML user guide (see index.html)
+├── scripts/
+│   └── rekordbox_wavs_missing_in_library.py  # List Ableton-style .wav tree entries with no match in a flat .flac library
 ├── app.py                 # Flask API — ffmpeg, scrapers, mutagen
 ├── config.json            # Local settings (not in repo)
 ├── config.json.example

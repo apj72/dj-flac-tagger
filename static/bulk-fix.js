@@ -89,6 +89,79 @@ async function resetDirToDefault() {
   $("#bf-dir").value = (cfg.destination_dir || "").trim();
 }
 
+function resetBulkFixFormFactory() {
+  if (
+    !window.confirm(
+      "Reset Bulk Fix to defaults? This clears the folder path, batch table, all saved Bulk Fix state in this browser, and any pending WAV → FLAC handoff. You cannot undo this.",
+    )
+  ) {
+    return;
+  }
+
+  closeFolderModal();
+
+  if (bfSaveTimer) {
+    clearTimeout(bfSaveTimer);
+    bfSaveTimer = null;
+  }
+
+  try {
+    localStorage.removeItem(BF_STATE_LS);
+    localStorage.removeItem(BF_DIR_LS);
+    localStorage.removeItem("djmm.bulkFixHandoff");
+  } catch (_) {
+    /* quota / private mode */
+  }
+
+  batchRows = [];
+  lastBfScanMeta = null;
+
+  $("#bf-dir").value = "";
+  $("#bf-recursive").checked = true;
+  $("#bf-batch-size").value = "25";
+  $("#bf-offset").value = "0";
+  $("#bf-rename").checked = false;
+
+  const st = $("#bf-range-status");
+  const hint = $("#bf-load-hint");
+  if (st) st.textContent = "";
+  if (hint) hint.textContent = "";
+
+  const fetchSt = $("#bf-fetch-status");
+  if (fetchSt) {
+    fetchSt.textContent = "";
+    fetchSt.classList.add("hidden");
+  }
+
+  const out = $("#bf-result");
+  if (out) {
+    out.classList.add("hidden");
+    out.innerHTML = "";
+  }
+
+  setBfProgress("bf-progress-wrap", false);
+  setBfProgress("bf-step3-progress-wrap", false);
+
+  document.getElementById("bf-next-offset-box")?.classList.add("hidden");
+
+  const applyBtn = $("#bf-apply-btn");
+  if (applyBtn) {
+    applyBtn.disabled = true;
+    applyBtn.textContent = "Apply metadata to selected rows";
+  }
+
+  const fetchBtn = $("#bf-fetch-matches-btn");
+  if (fetchBtn) fetchBtn.disabled = true;
+
+  renderTable();
+
+  try {
+    history.replaceState({}, "", "/bulk-fix");
+  } catch (_) {
+    /* ignore */
+  }
+}
+
 function setBatchUiEnabled(hasBatch) {
   document.getElementById("bf-fetch-matches-btn").disabled = !hasBatch;
   document.getElementById("bf-apply-btn").disabled = !hasBatch;
@@ -814,6 +887,7 @@ document.getElementById("bf-choose-btn").addEventListener("click", openFolderMod
 document.getElementById("bf-default-btn").addEventListener("click", () => {
   resetDirToDefault();
 });
+document.getElementById("bf-reset-form-btn").addEventListener("click", resetBulkFixFormFactory);
 document.getElementById("bf-modal-select").addEventListener("click", () => {
   if (folderModalPath) {
     $("#bf-dir").value = folderModalPath;
