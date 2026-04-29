@@ -9,3 +9,6 @@ processing_log.json
 .dj-flac-tagger.pid
 server.log
 design/
+build/
+dist/
+*.dmg

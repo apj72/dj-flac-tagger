@@ -35,6 +35,7 @@
       <h2>Configuration file (<code>config.json</code>)</h2>
       <p>
         Start from <code>config.json.example</code>. Typical keys include <code>source_dir</code>, <code>destination_dir</code>, <code>extract_profile</code> (<code>flac</code>, <code>mp3</code>, or <code>aac</code>/<code>m4a</code>), <code>platinum_notes_app</code>, <code>pn_output_suffix</code>, <code>target_lufs</code>, and <code>target_true_peak</code>. Positive LUFS input (e.g. <code>11.5</code>) is interpreted as negative integrated loudness where the app supports that shorthand.
+        From a bundled <strong>macOS .app</strong>, the live file sits under <strong><code>~/Library/Application Support/DJ MetaManager/config.json</code></strong>; see README (macOS app bundle section).
       </p>
 
       <figure class="guide-figure">
@@ -159,6 +160,7 @@
       <h2>Processing log</h2>
       <p>
         JSON log on disk records extract/fix activity including <code>metadata_source_url</code>, <code>metadata_source_type</code>, <code>kind</code> (extract vs fix), profile, and loudness targets when relevant. Use it to <strong>re-tag</strong> after external renames (e.g. Platinum Notes) via the workflows described in the README.
+        From the <strong>.app</strong> bundle, the live file defaults to <strong><code>~/Library/Application Support/DJ MetaManager/processing_log.json</code></strong>.
       </p>
 
       <h2>Batch re-tag API</h2>

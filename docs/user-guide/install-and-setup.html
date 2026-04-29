@@ -40,6 +40,14 @@
         <li>Optional: <strong>flac</strong> CLI for smaller FLAC output on Normalise (<code>brew install flac</code>).</li>
       </ul>
 
+      <h2>Optional: macOS <code>.app</code> / DMG distribution</h2>
+      <p>
+        Maintainers can build a double-click <strong>DJ MetaManager.app</strong> and ship it inside a <strong>.dmg</strong> using PyInstaller (see repository <strong>README.md</strong> — section <strong>macOS app bundle (.dmg)</strong>). The UI is still served in your <strong>default browser</strong> at <strong>http://127.0.0.1:5123</strong>. You still need <strong>ffmpeg</strong> and <strong>ffprobe</strong> on the Mac (typically <code>brew install ffmpeg</code>) unless the maintainer vendors those binaries separately.
+      </p>
+      <p>
+        For that bundle, configuration and the processing log are stored under <strong><code>~/Library/Application Support/DJ MetaManager/</code></strong>, not beside the cloned source tree.
+      </p>
+
       <h2>Clone and virtual environment</h2>
       <pre><code>git clone https://github.com/apj72/dj-meta-manager.git
 cd dj-meta-manager

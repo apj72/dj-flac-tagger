@@ -61,9 +61,64 @@ def extract_profile_options():
     return [{"key": key, "label": val["label"]} for key, val in EXTRACT_PROFILES.items()]
 
 
-app = Flask(__name__)
+def bundle_base_path():
+    """Root directory containing bundled `static/` and `config.json.example` (PyInstaller: `sys._MEIPASS`)."""
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            return Path(meipass)
+        # Fallback: sibling of launcher executable inside an .app bundle
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+
+def writable_app_data_dir():
+    """Per-user directory for settings and logs when bundled (writable path outside code signature)."""
+    if sys.platform == "darwin":
+        p = Path.home() / "Library" / "Application Support" / "DJ MetaManager"
+    elif os.name == "nt":
+        local = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        p = Path(local) / "DJ MetaManager"
+    else:
+        p = Path.home() / ".config" / "dj-meta-manager"
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    return p
+
+
+def _default_config_path():
+    if getattr(sys, "frozen", False):
+        return str(writable_app_data_dir() / "config.json")
+    return str(Path(__file__).resolve().parent / "config.json")
+
+
+def _default_log_path():
+    if getattr(sys, "frozen", False):
+        return str(writable_app_data_dir() / "processing_log.json")
+    return str(Path(__file__).resolve().parent / "processing_log.json")
+
+
+def _prepend_bundled_ffmpeg_to_path():
+    """If FFmpeg was shipped beside the frozen build, use it instead of relying on PATH."""
+    base = bundle_base_path()
+    for tools_dir in (
+        base / "ffmpeg-mac" / "bin",
+        base / "ffmpeg" / "bin",
+        base / "bin",
+        base,
+    ):
+        ffmpeg = tools_dir / "ffmpeg"
+        if ffmpeg.is_file() and os.access(ffmpeg, os.X_OK):
+            os.environ["PATH"] = str(tools_dir) + os.pathsep + os.environ.get("PATH", "")
+
+
+_prepend_bundled_ffmpeg_to_path()
+
+app = Flask(__name__, static_folder=str(bundle_base_path() / "static"))
+
+CONFIG_PATH = _default_config_path()
 
 
 def load_config():
@@ -130,7 +185,7 @@ def get_normalisation_targets():
     return lufs, tp
 
 
-LOG_PATH = os.path.join(os.path.dirname(__file__), "processing_log.json")
+LOG_PATH = _default_log_path()
 
 
 def load_log():

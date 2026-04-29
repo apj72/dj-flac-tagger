@@ -183,6 +183,23 @@ cp config.json.example config.json
 
 Edit `config.json` or use the **Settings** tab in the UI.
 
+## macOS app bundle (.dmg)
+
+You can ship DJ MetaManager as a **double‑click `.app`** (no Terminal) for less technical users. The interface is unchanged: the app starts a **local web server** and opens your **default browser** at `http://127.0.0.1:5123`.
+
+- **FFmpeg / ffprobe** are not included in the default PyInstaller build; users should install them (e.g. `brew install ffmpeg`) or you can place vendored `ffmpeg` and `ffprobe` under `ffmpeg-mac/bin/` inside the frozen bundle (see `_prepend_bundled_ffmpeg_to_path()` in `app.py` and respect FFmpeg’s license if you redistribute binaries).
+- **Settings and processing log** for the bundled app are stored under **`~/Library/Application Support/DJ MetaManager/`** instead of the project directory.
+- **Code signing and notarization** are not automated; unsigned builds may require **Right‑click → Open** the first time under Gatekeeper.
+
+Build on **macOS** (PyInstaller + `hdiutil`):
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+./packaging/build_macos_dmg.sh
+```
+
+Outputs: `dist/DJ MetaManager.app` and `build/releases/DJ_MetaManager_macos.dmg`. Spec: `packaging/dj-mm.spec`; GUI entry: `launch_gui.py`.
+
 ## Usage
 
 ### Start / stop (background)
