@@ -1,5 +1,15 @@
 # DJ MetaManager
 
+<p align="center">
+  <img src="static/header-logo-dark-112h.png" alt="DJ MetaManager — dark theme header logo" width="366" height="112" />
+</p>
+
+<p align="center">
+  <img src="static/bg-dark-background.png" alt="DJ MetaManager — dark theme full-page background art" width="720" />
+  <br />
+  <sub>Dark UI: fixed <a href="static/bg-dark-background.png">full-viewport scenic background</a> with semi-transparent (“glass”) panels; <a href="static/header-logo-dark-112h.png">112px-tall wordmark</a> in the header (light theme uses separate assets).</sub>
+</p>
+
 A local web tool for DJs to turn recordings into a clean, tagged library in **multiple audio formats**. Record vinyl or other sources through OBS with BlackHole, then extract audio from video containers, auto-tag with metadata and artwork from Discogs, Bandcamp, Apple Music, Spotify, **SoundCloud**, **Beatport**, or other pages, and export to **FLAC (lossless)**, **MP3**, or **AAC (M4A)** — whatever you choose in Settings — ready for Rekordbox, Traktor, or any DJ software.
 
 **Fix Metadata** and **Inspect** work across **FLAC, MP3, M4A/AAC, OGG**, and more for browsing and editing. **Normalise** applies **EBU R128** loudness to existing files and re-encodes using the same **system-wide format** as Extract. A **Settings** tab controls paths, output format, and loudness targets.
