@@ -143,6 +143,13 @@ def load_config():
         "loudness_verify_enabled": True,
         "loudness_verify_tolerance_lufs": 2.0,
         "loudness_verify_tolerance_tp": 0.35,
+        # When False, selecting a .mkv on Extract skips client-side LUFS / volumedetect (faster; meters hidden).
+        "extract_mkv_audio_analysis_enabled": True,
+        # Fix Metadata / Bulk Fix: peel these from the end of the filename stem before building search queries.
+        # Use a list of strings: literal suffixes (matched with endswith), or "regex:..." with a Python regex
+        # that must match the end of the stem (typically end your pattern with $). Peeled segments are appended
+        # back when renaming to Artist - Title. Example: ["_warped", "regex:_bpm\\([A-Za-z0-9]{3}\\)$"]
+        "fix_retain_filename_suffixes": [],
     }
     try:
         with open(CONFIG_PATH) as f:
@@ -1631,6 +1638,49 @@ def search_bandcamp(query, limit=6):
     return results
 
 
+def peel_fix_retain_suffixes(stem: str, lines: list | None) -> tuple[str, str]:
+    """
+    Repeatedly peel configured suffix patterns from the **end** of stem for search parsing.
+    Returns (core_stem, retained_concat) where retained is pieces left-to-right after the core
+    (e.g. core ``Track``, retained ``_bpm(120)_warped``).
+    """
+    cur = (stem or "").strip()
+    if not cur or not lines:
+        return cur, ""
+    peeled_right_to_left: list[str] = []
+    safety = 0
+    while cur and safety < 32:
+        safety += 1
+        matched_piece: str | None = None
+        for raw in lines:
+            if raw is None:
+                continue
+            line = str(raw).strip()
+            if not line or line.startswith("#"):
+                continue
+            low = line.lower()
+            if low.startswith("regex:"):
+                pat_s = line[6:].strip()
+                try:
+                    rx = re.compile(pat_s)
+                except re.error:
+                    continue
+                m = rx.search(cur)
+                if m is not None and m.start() >= 0 and m.end() == len(cur):
+                    matched_piece = m.group(0)
+                    break
+            else:
+                if cur.endswith(line):
+                    matched_piece = line
+                    break
+        if not matched_piece:
+            break
+        peeled_right_to_left.append(matched_piece)
+        cur = cur[: len(cur) - len(matched_piece)]
+    retained = "".join(reversed(peeled_right_to_left))
+    return cur, retained
+
+
 def strip_rekordbox_style_filename_affixes(stem: str) -> str:
     """
     Remove common noise from an **Ableton / DAW export** stem so search uses artist/title only.
@@ -1666,7 +1716,9 @@ def search_query_from_ableton_stem(stem: str) -> dict:
     """
     Build an online search query from a file stem (matches Fix Metadata / fix.js intent).
     """
-    p = parse_ableton_style_wav_stem(stem)
+    cfg = load_config()
+    core, _ret = peel_fix_retain_suffixes(stem, cfg.get("fix_retain_filename_suffixes") or [])
+    p = parse_ableton_style_wav_stem(core)
     if p.get("matched") and (p.get("artist") or "").strip() and (p.get("title") or "").strip():
         a = p["artist"].strip()
         t = p["title"].strip()
@@ -1692,7 +1744,7 @@ def search_query_from_ableton_stem(stem: str) -> dict:
             "artist_hint": "",
             "pattern_matched": False,
         }
-    tail = _normalize_track_filename_stem(stem)
+    tail = _normalize_track_filename_stem(core)
     t = re.sub(r"\s+", " ", tail.replace("_", " ")).strip()
     return {
         "query": t,
@@ -2122,10 +2174,12 @@ def _retag_file_from_source_url(
     planned_new_name = None
     if rename_to_tags:
         ext = Path(filepath).suffix.lower() or ".flac"
+        retained = _retained_suffix_from_filepath(filepath)
         planned_new_name = _basename_from_artist_title_for_rename(
             mcopy.get("artist", ""),
             mcopy.get("title", ""),
             ext,
+            retained_suffix=retained,
         )
         if not planned_new_name:
             return {
@@ -2280,6 +2334,8 @@ def update_settings():
             cfg["extract_profile"] = pk
     if "loudness_verify_enabled" in data:
         cfg["loudness_verify_enabled"] = bool(data["loudness_verify_enabled"])
+    if "extract_mkv_audio_analysis_enabled" in data:
+        cfg["extract_mkv_audio_analysis_enabled"] = bool(data["extract_mkv_audio_analysis_enabled"])
     if "loudness_verify_tolerance_lufs" in data and data["loudness_verify_tolerance_lufs"] not in (None, ""):
         try:
             v = float(data["loudness_verify_tolerance_lufs"])
@@ -2294,6 +2350,28 @@ def update_settings():
                 cfg["loudness_verify_tolerance_tp"] = v
         except (TypeError, ValueError):
             pass
+    if "fix_retain_filename_suffixes" in data:
+        raw = data["fix_retain_filename_suffixes"]
+        lines: list[str] = []
+        if isinstance(raw, list):
+            for x in raw:
+                if isinstance(x, str):
+                    s = x.strip()
+                    if s and not s.startswith("#"):
+                        lines.append(s)
+        elif isinstance(raw, str):
+            for ln in raw.splitlines():
+                s = ln.strip()
+                if s and not s.startswith("#"):
+                    lines.append(s)
+        for line in lines:
+            if line.lower().startswith("regex:"):
+                pat = line[6:].strip()
+                try:
+                    re.compile(pat)
+                except re.error as e:
+                    return jsonify({"error": f"Invalid regex in fix filename suffixes: {pat} ({e})"}), 400
+        cfg["fix_retain_filename_suffixes"] = lines
 
     save_config(cfg)
 
@@ -2878,10 +2956,15 @@ def fix_artwork():
         return jsonify({"error": str(e)}), 500
 
 
-def _basename_from_artist_title_for_rename(artist: str, title: str, ext: str) -> str | None:
-    """Build a safe filename (basename) from tag fields; ext must be like .flac."""
+def _basename_from_artist_title_for_rename(artist: str, title: str, ext: str, retained_suffix: str = "") -> str | None:
+    """Build a safe filename (basename) from tag fields; ext must be like .flac.
+    retained_suffix is peeled from the original stem (e.g. _warped) and appended before ext.
+    """
     if not ext.startswith("."):
         ext = "." + ext
+    rs = (retained_suffix or "").strip()
+    if rs:
+        rs = re.sub(r'[<>:"/\\|?*]', "", rs)
     a = (artist or "").strip()
     t = (title or "").strip()
     if not t and not a:
@@ -2896,7 +2979,16 @@ def _basename_from_artist_title_for_rename(artist: str, title: str, ext: str) ->
         return None
     if len(base) > 200:
         base = base[:200].rstrip(" .")
-    return f"{base}{ext}"
+    return f"{base}{rs}{ext}"
+
+
+def _retained_suffix_from_filepath(filepath: str) -> str:
+    stem = Path(filepath or "").stem
+    if not stem:
+        return ""
+    cfg = load_config()
+    _c, retained = peel_fix_retain_suffixes(stem, cfg.get("fix_retain_filename_suffixes") or [])
+    return retained
 
 
 @app.route("/api/retag", methods=["POST"])
@@ -2920,10 +3012,12 @@ def retag():
     planned_new_name = None
     if rename_to_tags:
         ext = Path(filepath).suffix.lower() or ".flac"
+        retained = _retained_suffix_from_filepath(filepath)
         planned_new_name = _basename_from_artist_title_for_rename(
             metadata.get("artist", ""),
             metadata.get("title", ""),
             ext,
+            retained_suffix=retained,
         )
         if not planned_new_name:
             return jsonify({

@@ -25,8 +25,13 @@
 
     <main>
       <section class="card">
-        <h2><span class="step">1</span> Folder of FLACs</h2>
-        <p class="hint" style="margin-top:0">Use after <a href="/convert">WAV → FLAC</a> (e.g. flat “Converted WAVs” folder) or any library tree. After a <strong>custom flat</strong> bulk convert, <strong>Open Bulk Fix for this folder</strong> passes the exact FLAC paths from that run in <strong>conversion order</strong> (folder listing is often alphabetical by renamed file, which does not match BPM / tree order). Other flows: <code class="mono">/bulk-fix?dir=…</code> with optional offset/limit, or <strong>Load batch</strong> here. The app builds a <strong>search query</strong> from each filename. Leaving this page restores the last batch and matches (same browser).</p>
+        <h2>
+          <span class="step">1</span> Folder of FLACs
+          <span class="help-tip">
+            <button type="button" class="help-tip-btn" aria-label="About Bulk Fix folder and batch handoff">?</button>
+            <span class="help-tip-bubble" role="tooltip">Use after <a href="/convert">WAV → FLAC</a> (e.g. flat “Converted WAVs” folder) or any library tree. After a <strong>custom flat</strong> bulk convert, <strong>Open Bulk Fix for this folder</strong> passes the exact FLAC paths from that run in <strong>conversion order</strong> (folder listing is often alphabetical by renamed file, which does not match BPM / tree order). Other flows: <code class="mono">/bulk-fix?dir=…</code> with optional offset/limit, or <strong>Load batch</strong> here. The app builds a <strong>search query</strong> from each filename. Leaving this page restores the last batch and matches (same browser).</span>
+          </span>
+        </h2>
         <div class="dir-bar">
           <input type="text" id="bf-dir" placeholder="~/Music/FLACs/Converted WAVs" />
           <button type="button" id="bf-choose-btn" class="btn btn-secondary" title="Server folder list">Choose folder…</button>
@@ -73,8 +78,13 @@
       </section>
 
       <section class="card">
-        <h2><span class="step">3</span> Search &amp; review</h2>
-        <p class="hint" style="margin-top:0">Click <strong>Fetch online matches</strong> to query Apple Music and Discogs for this batch. The dropdown pre-selects a <strong>best guess</strong> from your filename hints — change it or paste a <strong>Bandcamp / Discogs / Apple</strong> URL if needed. <strong>Open</strong> links go to the same page used for apply (so you can validate in the browser). If a same-named <code class="mono">.wav</code> sits next to a FLAC, embedded WAV tags (when present) can refine the search and hints. Only checked rows are applied.</p>
+        <h2>
+          <span class="step">3</span> Search &amp; review
+          <span class="help-tip">
+            <button type="button" class="help-tip-btn" aria-label="About fetch matches and review">?</button>
+            <span class="help-tip-bubble" role="tooltip">Click <strong>Fetch online matches</strong> to query Apple Music and Discogs for this batch. The dropdown pre-selects a <strong>best guess</strong> from your filename hints — change it or paste a <strong>Bandcamp / Discogs / Apple</strong> URL if needed. <strong>Open</strong> links go to the same page used for apply (so you can validate in the browser). If a same-named <code class="mono">.wav</code> sits next to a FLAC, embedded WAV tags (when present) can refine the search and hints. Only checked rows are applied.</span>
+          </span>
+        </h2>
         <div class="field-row" style="gap:0.5rem; flex-wrap:wrap; margin:0.5rem 0; align-items:center">
           <button type="button" id="bf-fetch-matches-btn" class="btn btn-primary" disabled>Fetch online matches</button>
           <span id="bf-fetch-status" class="status hidden"></span>

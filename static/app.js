@@ -20,6 +20,24 @@ function extensionForExtractProfile(profileKey) {
 let selectedFile = null;
 let currentTracklist = [];
 let currentLoudnormParams = null;
+/** Mirrors Settings → extract MKV audio analysis (client-side meters on Extract tab). */
+let extractMkvAudioAnalysisEnabled = true;
+
+function filepathLooksLikeMkv(p) {
+  if (!p || typeof p !== "string") return false;
+  return p.toLowerCase().endsWith(".mkv");
+}
+
+function refreshExtractMkvAnalysisSettingsHint() {
+  const banner = $("#extract-mkv-analysis-settings-hint");
+  if (!banner) return;
+  if (!extractMkvAudioAnalysisEnabled) banner.classList.remove("hidden");
+  else banner.classList.add("hidden");
+}
+
+function hideMkvAnalysisSkippedInPanel() {
+  $("#mkv-analysis-skipped-msg")?.classList.add("hidden");
+}
 
 function collectExtractPageState() {
   return {
@@ -122,6 +140,8 @@ async function loadExtractPrefs() {
   $("#dir-input").value = cfg.source_dir_resolved || "";
   const dest = (cfg.destination_dir || "").trim();
   if (dest) $("#retag-dir").value = dest;
+  extractMkvAudioAnalysisEnabled = cfg.extract_mkv_audio_analysis_enabled !== false;
+  refreshExtractMkvAnalysisSettingsHint();
 }
 
 // ---- Browse files ----
@@ -421,7 +441,11 @@ async function selectFile(el) {
     <span><strong>Duration:</strong> ${dur}</span>
   `;
 
-  runAnalysis(selectedFile);
+  if (!extractMkvAudioAnalysisEnabled && filepathLooksLikeMkv(selectedFile)) {
+    applyMkvExtractAnalysisSkipped();
+  } else {
+    runAnalysis(selectedFile);
+  }
   scheduleExtractPageSave();
 }
 
@@ -431,11 +455,27 @@ function formatDuration(secs) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function applyMkvExtractAnalysisSkipped() {
+  const panel = $("#analysis-panel");
+  panel.classList.remove("hidden");
+  const meters = panel.querySelector(".level-meters");
+  if (meters) meters.classList.add("hidden");
+  $("#mkv-analysis-skipped-msg")?.classList.remove("hidden");
+  $("#level-verdict").innerHTML = "";
+
+  const existingSpinner = panel.querySelector(".analysis-spinner");
+  if (existingSpinner) existingSpinner.remove();
+
+  currentLoudnormParams = null;
+  updateExtractButton();
+}
+
 // ---- Audio analysis ----
 async function runAnalysis(filepath) {
   const panel = $("#analysis-panel");
   panel.classList.remove("hidden");
-  panel.querySelector(".level-meters").classList.add("hidden");
+  hideMkvAnalysisSkippedInPanel();
+  panel.querySelector(".level-meters")?.classList.add("hidden");
   $("#level-verdict").innerHTML = "";
 
   const existingSpinner = panel.querySelector(".analysis-spinner");
@@ -454,7 +494,7 @@ async function runAnalysis(filepath) {
   const data = await resp.json();
 
   spinner.remove();
-  panel.querySelector(".level-meters").classList.remove("hidden");
+  panel.querySelector(".level-meters")?.classList.remove("hidden");
 
   if (data.error) {
     $("#level-verdict").innerHTML = `<span class="verdict-low">${data.error}</span>`;

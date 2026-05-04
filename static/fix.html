@@ -26,14 +26,19 @@
     <main>
       <!-- Select audio file -->
       <section class="card">
-        <h2><span class="step">1</span> Select Audio File</h2>
+        <h2>
+          <span class="step">1</span> Select Audio File
+          <span class="help-tip">
+            <button type="button" class="help-tip-btn" aria-label="About folders and filenames on Fix Metadata">?</button>
+            <span class="help-tip-bubble" role="tooltip">“Choose folder” lists folders on the server; “Default” uses your Settings destination (music / FLACs folder). The last folder you list here is remembered when you open <a href="/inspect">Inspect</a> (and vice versa). <strong>Tip:</strong> for Ableton-style names like <code>Slot - BPM - Artist - Title</code>, the app can guess a <strong>search query</strong> (artist + title) when there are no tags. Use <a href="/convert">WAV → FLAC</a> → <em>Open in Fix Metadata</em> to switch here with a file pre-selected, or <code class="mono">/fix?file=…&amp;q=…</code> in the address bar.</span>
+          </span>
+        </h2>
         <div class="dir-bar">
           <input type="text" id="fix-dir" placeholder="~/Music/DJ-library" />
           <button type="button" id="fix-browse-btn" class="btn btn-secondary">Browse</button>
           <button type="button" id="fix-choose-folder-btn" class="btn btn-secondary" title="Open folder navigator">Choose folder…</button>
           <button type="button" id="fix-default-dir-btn" class="btn btn-secondary" title="Path from Settings → Fix Metadata default (or destination)">Default</button>
         </div>
-        <p class="hint" style="margin:0 0 0.75rem">“Choose folder” lists folders on the server; “Default” uses your Settings destination (music / FLACs folder). The last folder you list here is remembered when you open <a href="/inspect">Inspect</a> (and vice versa). <strong>Tip:</strong> for Ableton-style names like <code>Slot - BPM - Artist - Title</code>, the app can guess a <strong>search query</strong> (artist + title) when there are no tags. Use <a href="/convert">WAV → FLAC</a> → <em>Open in Fix Metadata</em> to switch here with a file pre-selected, or <code class="mono">/fix?file=…&amp;q=…</code> in the address bar.</p>
         <div id="fix-file-list" class="file-list"></div>
         <div id="fix-current-tags" class="probe-info hidden"></div>
       </section>
@@ -137,7 +142,7 @@
         <div class="field-row" style="margin-bottom:0.5rem">
           <label class="inline">
             <input type="checkbox" id="fix-rename-to-tags" />
-            <span>After saving, <strong>rename the file on disk</strong> to <code>Artist - Title</code> (drops slot, BPM, key, and other filename clutter; same folder, same file type)</span>
+            <span>After saving, <strong>rename the file on disk</strong> to <code>Artist - Title</code> (drops slot, BPM, key, and other clutter; same folder, same type). Suffixes configured under <a href="/settings">Settings → Fix Metadata suffixes</a> (e.g. <code>_warped</code>) stay before the extension.</span>
           </label>
         </div>
         <p class="hint mono" id="fix-rename-preview" style="margin:0 0 0.75rem">Turn on rename to preview the new filename.</p>

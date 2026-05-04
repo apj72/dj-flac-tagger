@@ -44,21 +44,42 @@
         </div>
         <div class="field-row">
           <label for="cfg-source">Source folder (OBS recordings)</label>
-          <input type="text" id="cfg-source" placeholder="~/DJ-Mixes" />
+          <div class="dir-bar">
+            <input type="text" id="cfg-source" placeholder="~/DJ-Mixes" autocomplete="off" />
+            <button type="button" class="btn btn-secondary settings-folder-btn" data-target="cfg-source" title="Open folder navigator">Choose folder…</button>
+          </div>
         </div>
         <div class="field-row">
           <label for="cfg-dest">Destination folder (copy of extracted audio)</label>
-          <input type="text" id="cfg-dest" placeholder="~/Music/DJ-library" />
+          <div class="dir-bar">
+            <input type="text" id="cfg-dest" placeholder="~/Music/DJ-library" autocomplete="off" />
+            <button type="button" class="btn btn-secondary settings-folder-btn" data-target="cfg-dest" title="Open folder navigator">Choose folder…</button>
+          </div>
         </div>
         <div class="field-row">
           <label for="cfg-fix-default">Fix Metadata — default browse folder</label>
-          <input type="text" id="cfg-fix-default" placeholder="Leave empty to use destination folder" />
+          <div class="dir-bar">
+            <input type="text" id="cfg-fix-default" placeholder="Leave empty to use destination folder" autocomplete="off" />
+            <button type="button" class="btn btn-secondary settings-folder-btn" data-target="cfg-fix-default" title="Open folder navigator">Choose folder…</button>
+          </div>
           <p class="hint" style="margin-top:0.35rem">Initial path and <strong>Default</strong> on Fix when nothing is remembered in this browser.</p>
         </div>
         <div class="field-row">
           <label for="cfg-inspect-default">Inspect — default browse folder</label>
-          <input type="text" id="cfg-inspect-default" placeholder="Leave empty to use destination folder" />
+          <div class="dir-bar">
+            <input type="text" id="cfg-inspect-default" placeholder="Leave empty to use destination folder" autocomplete="off" />
+            <button type="button" class="btn btn-secondary settings-folder-btn" data-target="cfg-inspect-default" title="Open folder navigator">Choose folder…</button>
+          </div>
           <p class="hint" style="margin-top:0.35rem">Initial path and <strong>Default</strong> on Inspect when nothing is remembered.</p>
+        </div>
+        <div class="field-row">
+          <label for="cfg-fix-retain-suffixes">Fix Metadata — filename suffixes to strip for search, keep when renaming</label>
+          <textarea id="cfg-fix-retain-suffixes" rows="5" class="modal-field-input mono" style="resize:vertical;min-height:5.5rem" spellcheck="false" placeholder="_warped&#10;regex:_bpm\\([A-Za-z0-9]{3}\\)$"></textarea>
+          <p class="hint" style="margin-top:0.35rem">
+            One rule per line. Matching runs from the <strong>end</strong> of the name (before <code>.flac</code>) and repeats until nothing matches.
+            Plain lines (e.g. <code>_warped</code>) match that exact ending. Lines starting with <code>regex:</code> use a Python/JavaScript regex that should usually end with <code>$</code> so only a suffix matches (example: three alphanumerics in parentheses: <code>regex:_bpm\([A-Za-z0-9]{3}\)$</code>).
+            <strong>Bulk Fix</strong> and <strong>Fix Metadata</strong> search use the name with these parts removed; “rename to tags” appends them back after <code>Artist - Title</code>.
+          </p>
         </div>
         <div class="field-row">
           <label for="cfg-pn-app">Platinum Notes — app name (macOS “Open after extract”)</label>
@@ -89,10 +110,33 @@
           </label>
         </div>
 
+        <div class="field-row">
+          <label class="inline">
+            <input type="checkbox" id="cfg-mkv-extract-analysis" />
+            <span><strong>Extract tab:</strong> analyse <strong>.MKV</strong> audio levels when you select a recording (LUFS meters and normalise suggestion). Turn off for faster browsing of long OBS captures; MP4/MOV and other sources are unaffected.</span>
+          </label>
+          <p class="hint" style="margin-top:0.35rem">When off, the Extract page shows that analysis is skipped. <strong>Normalise on extract</strong> still measures loudness on the server when you extract.</p>
+        </div>
+
         <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
         <span id="settings-status" class="settings-status hidden">Saved</span>
       </section>
     </main>
+  </div>
+
+  <div id="settings-folder-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-folder-modal-title">
+    <div class="modal-card">
+      <h3 id="settings-folder-modal-title">Choose folder</h3>
+      <div class="modal-path mono" id="settings-modal-path"></div>
+      <div class="modal-nav">
+        <button type="button" id="settings-modal-up" class="btn btn-secondary btn-sm">Enclosing folder</button>
+      </div>
+      <div id="settings-modal-dir-list" class="modal-dir-list"></div>
+      <div class="modal-actions">
+        <button type="button" id="settings-modal-select" class="btn btn-primary">Use this folder</button>
+        <button type="button" id="settings-modal-cancel" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <script src="/static/path-persist.js"></script>

@@ -29,7 +29,7 @@
       <p class="breadcrumb"><a href="index.html">Home</a> · Bulk Fix</p>
       <h1>Bulk Fix (batch metadata)</h1>
       <p class="lead">
-        <strong>Bulk Fix</strong> applies online metadata to <strong>many FLAC files</strong> in one workflow. It is ideal after <strong>WAV → FLAC</strong> bulk conversion or for any flat or tree-shaped library slice. The server builds a <strong>search query per filename</strong>, fetches combined Apple + Discogs + Bandcamp suggestions with gentle rate limiting, and lets you review before apply.
+        <strong>Bulk Fix</strong> applies online metadata to <strong>many FLAC files</strong> in one workflow. It is ideal after <strong>WAV → FLAC</strong> bulk conversion or for any flat or tree-shaped library slice. The server builds a <strong>search query per filename</strong> (using the same stem rules as Fix Metadata, including optional <a href="reference-config-and-formats.html#fix-filename-suffixes">configured trailing suffixes</a> stripped for search only), fetches combined Apple + Discogs + Bandcamp suggestions with gentle rate limiting, and lets you review before apply. Optional <strong>rename to Artist - Title</strong> keeps those configured suffixes before the extension when you apply.
       </p>
 
       <h2>Step 1 — Load a batch</h2>

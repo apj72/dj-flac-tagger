@@ -25,8 +25,15 @@
 
     <main>
       <section class="card">
-        <h2><span class="step">1</span> Select audio</h2>
-        <p class="hint">Two-pass EBU R128 to <strong id="norm-target-label">your Settings target</strong>. Tags and artwork are copied to the new file. <strong>Output format</strong> and file extension come from <strong id="norm-format-hint">Settings → extract format</strong> (FLAC, MP3, or AAC/M4A; default FLAC). For <strong>FLAC</strong> output: audio is <strong>16-bit</strong> at the source sample rate and layout; files are often larger than the original because lossless waveforms are harder to compress — that is expected. With Xiph <code>flac</code> installed, FLAC encoding uses <code>flac --best -e -p</code>. For <strong>MP3 / AAC</strong>, FFmpeg encodes after loudnorm. Writes <code>{stem}{suffix}</code> plus the configured extension beside the original.</p>
+        <h2>
+          <span class="step">1</span> Select audio
+          <span class="help-tip">
+            <button type="button" class="help-tip-btn" aria-label="About normalise output and FLAC encoding">?</button>
+            <span class="help-tip-bubble" role="tooltip">
+              Two-pass EBU R128 to <strong id="norm-target-label">your Settings target</strong>. Tags and artwork are copied to the new file. <strong>Output format</strong> and file extension come from <strong id="norm-format-hint">Settings → extract format</strong> (FLAC, MP3, or AAC/M4A; default FLAC). For <strong>FLAC</strong> output: audio is <strong>16-bit</strong> at the source sample rate and layout; files are often larger than the original because lossless waveforms are harder to compress — that is expected. With Xiph <code>flac</code> installed, FLAC encoding uses <code>flac --best -e -p</code>. For <strong>MP3 / AAC</strong>, FFmpeg encodes after loudnorm. Writes <code>{stem}{suffix}</code> plus the configured extension beside the original.
+            </span>
+          </span>
+        </h2>
         <div class="dir-bar">
           <input type="text" id="norm-dir" placeholder="~/Music/DJ-library" />
           <button id="norm-browse-btn" class="btn btn-secondary">Browse</button>

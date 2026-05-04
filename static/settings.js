@@ -1,5 +1,15 @@
 const $ = (sel) => document.querySelector(sel);
 
+let settingsFolderModalPath = "";
+let settingsFolderModalTargetInputId = "";
+
+function linesToRetainSuffixArray(text) {
+  return (text || "")
+    .split("\n")
+    .map((ln) => ln.trim())
+    .filter((ln) => ln && !ln.startsWith("#"));
+}
+
 function collectSettingsPageDraft() {
   return {
     v: 1,
@@ -13,6 +23,8 @@ function collectSettingsPageDraft() {
     target_lufs: $("#cfg-target-lufs").value,
     target_true_peak: $("#cfg-target-tp").value,
     loudness_verify_enabled: $("#cfg-loudness-verify").checked,
+    extract_mkv_audio_analysis_enabled: $("#cfg-mkv-extract-analysis").checked,
+    fix_retain_filename_suffixes_text: $("#cfg-fix-retain-suffixes").value,
   };
 }
 
@@ -36,6 +48,12 @@ function applySettingsDraft(st) {
   if (st.target_lufs != null) $("#cfg-target-lufs").value = st.target_lufs;
   if (st.target_true_peak != null) $("#cfg-target-tp").value = st.target_true_peak;
   if (st.loudness_verify_enabled != null) $("#cfg-loudness-verify").checked = st.loudness_verify_enabled;
+  if (st.extract_mkv_audio_analysis_enabled != null) {
+    $("#cfg-mkv-extract-analysis").checked = st.extract_mkv_audio_analysis_enabled;
+  }
+  if (st.fix_retain_filename_suffixes_text != null) {
+    $("#cfg-fix-retain-suffixes").value = st.fix_retain_filename_suffixes_text;
+  }
 }
 
 function fillExtractProfileSelect(cfg) {
@@ -66,6 +84,9 @@ async function loadSettings() {
       ? String(cfg.target_true_peak)
       : "-1";
   $("#cfg-loudness-verify").checked = cfg.loudness_verify_enabled !== false;
+  $("#cfg-mkv-extract-analysis").checked = cfg.extract_mkv_audio_analysis_enabled !== false;
+  const sfx = cfg.fix_retain_filename_suffixes;
+  $("#cfg-fix-retain-suffixes").value = Array.isArray(sfx) && sfx.length ? sfx.join("\n") : "";
   const draft = typeof djmmPageStateGetPage === "function" ? djmmPageStateGetPage("settings") : null;
   if (draft && draft.v === 1) applySettingsDraft(draft);
 }
@@ -85,16 +106,36 @@ async function saveSettings() {
       target_lufs: $("#cfg-target-lufs").value.trim(),
       target_true_peak: $("#cfg-target-tp").value.trim(),
       loudness_verify_enabled: $("#cfg-loudness-verify").checked,
+      extract_mkv_audio_analysis_enabled: $("#cfg-mkv-extract-analysis").checked,
+      fix_retain_filename_suffixes: linesToRetainSuffixArray($("#cfg-fix-retain-suffixes").value),
     }),
   });
-  await resp.json();
+  let j = {};
+  try {
+    j = await resp.json();
+  } catch (e) {
+    j = {};
+  }
+  if (!resp.ok || (j && j.error)) {
+    const status = $("#settings-status");
+    status.classList.remove("hidden");
+    status.style.color = "var(--danger)";
+    status.textContent = j.error;
+    setTimeout(() => {
+      status.classList.add("hidden");
+      status.style.color = "";
+    }, 6000);
+    return;
+  }
 
   if (typeof djmmPageStateSetPage === "function") {
     djmmPageStateSetPage("settings", null);
   }
 
   const status = $("#settings-status");
+  status.style.color = "";
   status.classList.remove("hidden");
+  status.textContent = "Saved";
   setTimeout(() => status.classList.add("hidden"), 2000);
 }
 
@@ -125,11 +166,128 @@ function wireSettingsPersistence() {
     document.getElementById(id)?.addEventListener("change", scheduleSettingsPageSave);
   });
   document.getElementById("cfg-loudness-verify")?.addEventListener("change", scheduleSettingsPageSave);
+  document.getElementById("cfg-mkv-extract-analysis")?.addEventListener("change", scheduleSettingsPageSave);
+  document.getElementById("cfg-fix-retain-suffixes")?.addEventListener("input", scheduleSettingsPageSave);
+}
+
+function closeSettingsFolderModal() {
+  const el = $("#settings-folder-modal");
+  if (el) el.classList.add("hidden");
+  settingsFolderModalTargetInputId = "";
+  document.removeEventListener("keydown", onSettingsFolderModalKeydown);
+}
+
+function onSettingsFolderModalKeydown(e) {
+  if (e.key === "Escape") closeSettingsFolderModal();
+}
+
+async function resolveStartPathForSetting(inputId) {
+  const input = document.getElementById(inputId);
+  const trimmed = input && input.value ? input.value.trim() : "";
+  if (trimmed) return trimmed;
+  const resp = await fetch("/api/settings");
+  const cfg = await resp.json();
+  switch (inputId) {
+    case "cfg-source":
+      return (((cfg.source_dir || "") + "").trim() || "~");
+    case "cfg-dest":
+      return (((cfg.destination_dir || "") + "").trim() || "~");
+    case "cfg-fix-default": {
+      const fd = ((cfg.fix_metadata_default_dir || "") + "").trim();
+      if (fd) return fd;
+      return (((cfg.destination_dir || "") + "").trim() || "~");
+    }
+    case "cfg-inspect-default": {
+      const id = ((cfg.inspect_default_dir || "") + "").trim();
+      if (id) return id;
+      return (((cfg.destination_dir || "") + "").trim() || "~");
+    }
+    default:
+      return "~";
+  }
+}
+
+async function openFolderModalForSetting(inputId) {
+  settingsFolderModalTargetInputId = inputId;
+  const modal = $("#settings-folder-modal");
+  modal.classList.remove("hidden");
+  document.addEventListener("keydown", onSettingsFolderModalKeydown);
+  const start = await resolveStartPathForSetting(inputId);
+  await loadSettingsFolderInModal(start || "~");
+}
+
+async function loadSettingsFolderInModal(path) {
+  const listEl = $("#settings-modal-dir-list");
+  const pathEl = $("#settings-modal-path");
+  const upBtn = $("#settings-modal-up");
+  listEl.innerHTML = '<div class="status">Loading…</div>';
+  upBtn.disabled = true;
+
+  const resp = await fetch(`/api/browse-folders?path=${encodeURIComponent(path)}`);
+  const data = await resp.json();
+  if (data.error) {
+    listEl.innerHTML = `<div class="status">${data.error}</div>`;
+    pathEl.textContent = path;
+    settingsFolderModalPath = path;
+    return;
+  }
+  settingsFolderModalPath = data.path;
+  pathEl.textContent = data.path;
+  if (data.parent) {
+    upBtn.disabled = false;
+    upBtn.onclick = () => loadSettingsFolderInModal(data.parent);
+  } else {
+    upBtn.disabled = true;
+    upBtn.onclick = null;
+  }
+
+  if (!data.directories || data.directories.length === 0) {
+    listEl.innerHTML = '<div class="status">No subfolders (you can still use this folder)</div>';
+    return;
+  }
+  const paths = data.directories.map((d) => d.path);
+  const esc = (s) =>
+    String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  listEl.innerHTML = data.directories
+    .map(
+      (d, i) =>
+        `<button type="button" class="modal-dir-item" data-idx="${i}">${esc(d.name)}/</button>`
+    )
+    .join("");
+  listEl.querySelectorAll(".modal-dir-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const i = parseInt(btn.dataset.idx, 10);
+      if (!Number.isNaN(i) && paths[i]) loadSettingsFolderInModal(paths[i]);
+    });
+  });
+}
+
+function wireSettingsFolderNavigator() {
+  document.querySelectorAll(".settings-folder-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-target");
+      if (id) void openFolderModalForSetting(id);
+    });
+  });
+  $("#settings-modal-cancel").addEventListener("click", closeSettingsFolderModal);
+  $("#settings-modal-select").addEventListener("click", () => {
+    const tid = settingsFolderModalTargetInputId;
+    if (tid && settingsFolderModalPath) {
+      const inp = $("#" + tid);
+      if (inp) inp.value = settingsFolderModalPath;
+      scheduleSettingsPageSave();
+    }
+    closeSettingsFolderModal();
+  });
+  $("#settings-folder-modal").addEventListener("click", (e) => {
+    if (e.target && e.target.id === "settings-folder-modal") closeSettingsFolderModal();
+  });
 }
 
 $("#save-settings-btn").addEventListener("click", saveSettings);
 loadSettings().then(() => {
   wireThemeControl();
   wireSettingsPersistence();
+  wireSettingsFolderNavigator();
   scheduleSettingsPageSave();
 });

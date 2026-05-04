@@ -6,6 +6,8 @@ let currentMeta = {};
 let artworkUrl = "";
 /** Paths in current file list (same order as .file-item data-idx). */
 let fixBrowseFilePaths = [];
+/** From Settings: suffixes to peel before search (same rules as server). */
+let fixRetainSuffixPatterns = [];
 
 function collectFixPageState() {
   const snap =
@@ -93,10 +95,53 @@ function stripRekordboxStyleFilenameAffixes(stem) {
 }
 
 /**
- * Parse Ableton-style stems: (1) BPM in 2nd field, (2) performance layout key–artist–title–key–BPM, else loose.
- * Rekordbox does not use these filename rules; it uses metadata + its database—names like this are common for Ableton sample sets.
+ * Peel configured suffix patterns from the end of the stem (match app.py peel_fix_retain_suffixes).
+ * Returns { core, retained } — retained is fragments after the core for re-attaching on rename.
  */
-function parseAbletonStyleFilename(stem) {
+function peelFixRetainSuffixes(stem, lines) {
+  let cur = (stem || "").trim();
+  if (!cur || !lines || !lines.length) {
+    return { core: cur, retained: "" };
+  }
+  const peeled = [];
+  let safety = 0;
+  while (cur && safety < 32) {
+    safety += 1;
+    let matchedPiece = null;
+    for (const raw of lines) {
+      if (raw == null) continue;
+      const line = String(raw).trim();
+      if (!line || line.startsWith("#")) continue;
+      if (line.toLowerCase().startsWith("regex:")) {
+        const pat = line.slice(6).trim();
+        let rx;
+        try {
+          rx = new RegExp(pat);
+        } catch (e) {
+          continue;
+        }
+        const m = rx.exec(cur);
+        if (m && m.index >= 0 && m.index + m[0].length === cur.length) {
+          matchedPiece = m[0];
+          break;
+        }
+      } else if (cur.endsWith(line)) {
+        matchedPiece = line;
+        break;
+      }
+    }
+    if (!matchedPiece) break;
+    peeled.push(matchedPiece);
+    cur = cur.slice(0, cur.length - matchedPiece.length);
+  }
+  const retained = peeled.reverse().join("");
+  return { core: cur, retained };
+}
+
+/**
+ * Parse Ableton-style stems on a **core** stem (retain-suffixes already peeled).
+ */
+function parseAbletonStyleFilenameCore(stem) {
   let t0 = (stem || "").replace(/_PN$/i, "").trim();
   t0 = t0.replace(/_pn(?=\s*-)/gi, "").trim();
   if (!t0) {
@@ -124,7 +169,8 @@ function parseAbletonStyleFilename(stem) {
       const rest = mHead[2].trim();
       const sep = " - ";
       const i = rest.indexOf(sep);
-      let artist, title;
+      let artist;
+      let title;
       if (i > 0) {
         artist = rest
           .slice(0, i)
@@ -158,6 +204,15 @@ function parseAbletonStyleFilename(stem) {
   return { searchQuery: loose, suggestedTitle: "", suggestedArtist: "" };
 }
 
+/**
+ * Parse Ableton-style stems; peels Settings “retain suffix” rules first so search ignores e.g. _warped.
+ */
+function parseAbletonStyleFilename(stem) {
+  const peeled = peelFixRetainSuffixes(stem, fixRetainSuffixPatterns);
+  const inner = parseAbletonStyleFilenameCore(peeled.core);
+  return { ...inner, retainedSuffix: peeled.retained };
+}
+
 // ---- Browse audio files ----
 function fixDefaultBrowseDir(cfg) {
   const d = ((cfg.fix_metadata_default_dir || "") + "").trim();
@@ -168,6 +223,8 @@ function fixDefaultBrowseDir(cfg) {
 async function loadSettings() {
   const resp = await fetch("/api/settings");
   const cfg = await resp.json();
+  const sfx = cfg.fix_retain_filename_suffixes;
+  fixRetainSuffixPatterns = Array.isArray(sfx) ? sfx : [];
   const last = typeof djmmGetLastAudioBrowseDir === "function" ? djmmGetLastAudioBrowseDir().trim() : "";
   $("#fix-dir").value = last || fixDefaultBrowseDir(cfg);
 }
@@ -357,6 +414,7 @@ async function selectFlacFile(el) {
 
   const stem = selectedFile.split("/").pop().replace(/\.[^.]+$/, "");
   const parsed = parseAbletonStyleFilename(stem);
+  window.__fixRetainedSuffixFromFile = parsed.retainedSuffix || "";
   if (!data.title && parsed.suggestedTitle) {
     $("#fix-title").value = parsed.suggestedTitle;
   }
@@ -696,7 +754,9 @@ function previewRenamedFilename() {
   base = base.replace(/[<>:"/\\|?*]/g, "").replace(/\s+/g, " ").replace(/^\.+|\.+$/g, "").trim();
   if (!base) return null;
   if (base.length > 200) base = base.slice(0, 200).replace(/\s+$/, "");
-  return `${base}${ext}`;
+  const sfx =
+    typeof window.__fixRetainedSuffixFromFile === "string" ? window.__fixRetainedSuffixFromFile : "";
+  return `${base}${sfx}${ext}`;
 }
 
 function updateRenamePreview() {
@@ -732,6 +792,7 @@ function clearAll() {
   $("#fix-fetch-status").classList.add("hidden");
   $("#fix-result").classList.add("hidden");
   $("#fix-rename-to-tags").checked = false;
+  window.__fixRetainedSuffixFromFile = "";
   updateRenamePreview();
   artworkUrl = "";
   currentTracklist = [];

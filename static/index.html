@@ -26,16 +26,27 @@
     <main>
       <!-- Step 1: Source file -->
       <section class="card" id="source-section">
-        <h2><span class="step">1</span> Source File</h2>
-        <p class="hint" style="margin-top:0;margin-bottom:0.75rem">Folders, <strong>extract format</strong> (FLAC, MP3, or AAC/M4A), and Platinum Notes options are on the <a href="/settings">Settings</a> tab. Use <strong>Rename</strong> to label recordings before you extract; <strong>Delete</strong> moves a bad take to the Bin (macOS).</p>
+        <h2>
+          <span class="step">1</span> Source File
+          <span class="help-tip">
+            <button type="button" class="help-tip-btn" aria-label="About source files">?</button>
+            <span class="help-tip-bubble" role="tooltip">Folders, <strong>extract format</strong> (FLAC, MP3, or AAC/M4A), and Platinum Notes options are on the <a href="/settings">Settings</a> tab. Use <strong>Rename</strong> to label recordings before you extract; <strong>Delete</strong> moves a bad take to the Bin (macOS).</span>
+          </span>
+        </h2>
         <div class="dir-bar">
           <input type="text" id="dir-input" placeholder="~/DJ-Mixes" />
           <button id="browse-btn" class="btn btn-secondary">Browse</button>
         </div>
         <div id="file-list" class="file-list"></div>
         <div id="probe-info" class="probe-info hidden"></div>
+        <p id="extract-mkv-analysis-settings-hint" class="hint hidden" role="status">
+          .MKV loudness analysis is <strong>off</strong> in <a href="/settings">Settings</a>. Selecting an MKV skips the Extract meters here; enabling <strong>Normalise</strong> still analyses the source on the server during extract.
+        </p>
         <div id="analysis-panel" class="analysis-panel hidden">
           <div class="analysis-header">Audio Levels</div>
+          <div id="mkv-analysis-skipped-msg" class="hint analysis-skipped-msg hidden" role="status">
+            <strong>.MKV level analysis is disabled.</strong> LUFS meters are not run for this file (see Settings). You can extract as usual — with <strong>Normalise</strong> checked, loudness is still measured during extract.
+          </div>
           <div class="level-meters">
             <div class="meter-row">
               <span class="meter-label">LUFS</span>
@@ -139,8 +150,13 @@
 
       <!-- Step 4: Extract -->
       <section class="card" id="extract-section">
-        <h2><span class="step">4</span> Extract &amp; Tag</h2>
-        <p class="hint" style="margin-top:0;margin-bottom:0.75rem">Output format is whatever you set under <a href="/settings">Settings → extract format</a> (default lossless FLAC). Platinum Notes should use <strong>Match input format</strong> so the <code>_PN</code> file matches that extension.</p>
+        <h2>
+          <span class="step">4</span> Extract &amp; Tag
+          <span class="help-tip">
+            <button type="button" class="help-tip-btn" aria-label="About extract and Platinum Notes output">?</button>
+            <span class="help-tip-bubble" role="tooltip">Output format is whatever you set under <a href="/settings">Settings → extract format</a> (default lossless FLAC). Platinum Notes should use <strong>Match input format</strong> so the <code>_PN</code> file matches that extension.</span>
+          </span>
+        </h2>
         <label class="checkbox-row">
           <input type="checkbox" id="normalise" />
           <span>Normalise audio (EBU R128 — target LUFS from Settings)</span>

@@ -10,5 +10,7 @@
   "target_true_peak": -1.0,
   "loudness_verify_enabled": true,
   "loudness_verify_tolerance_lufs": 2.0,
-  "loudness_verify_tolerance_tp": 0.35
+  "loudness_verify_tolerance_tp": 0.35,
+  "extract_mkv_audio_analysis_enabled": true,
+  "fix_retain_filename_suffixes": []
 }

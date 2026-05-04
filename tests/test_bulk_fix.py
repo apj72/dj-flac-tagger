@@ -1,5 +1,6 @@
 """Tests for bulk metadata fix API (scan + helpers)."""
 
+import json
 import os
 
 import pytest
@@ -17,6 +18,23 @@ def test_search_query_strips_rekordbox_affixes(app_module):
     assert "Ripperton" in sq["query"] and "Unfold" in sq["query"]
     assert "2A" not in sq["query"] and "119" not in sq["query"]
     assert "A02" not in sq["query"]
+
+
+def test_peel_retain_suffixes_stacked(app_module):
+    lines = ["regex:_bpm\\([A-Za-z0-9]{3}\\)$", "_warped"]
+    core, ret = app_module.peel_fix_retain_suffixes("Track_bpm(12A)_warped", lines)
+    assert core == "Track"
+    assert ret == "_bpm(12A)_warped"
+
+
+def test_search_query_strips_configured_literal_suffix(app_module, tmp_path):
+    cfg_path = tmp_path / "config.json"
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["fix_retain_filename_suffixes"] = ["_warped"]
+    cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+    sq = app_module.search_query_from_ableton_stem("alpha_beta_gamma_warped")
+    assert "_warped" not in (sq.get("query") or "")
 
 
 def test_best_track_in_list_prefers_close_title(app_module):

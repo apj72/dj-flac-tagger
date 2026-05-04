@@ -181,6 +181,17 @@ async function selectFile(el) {
   scheduleInspectPageSave();
 }
 
+/** Clear read-only metadata / artwork / file-detail panels without changing the folder listing selection. */
+function clearInspectDetailsPanels() {
+  $("#ins-meta-table").innerHTML =
+    '<div class="status inspect-empty">Details cleared. Click this file in the list again to reload.</div>';
+  $("#ins-art-preview").innerHTML = "";
+  $("#ins-art-info").innerHTML =
+    '<div class="inspect-no-art">Artwork cleared — click the file again to reload.</div>';
+  $("#ins-file-info").innerHTML =
+    '<div class="status inspect-empty">Details cleared. Click this file in the list again to reload.</div>';
+}
+
 function renderFileInfo(data) {
   const fi = data.file_info || {};
   const rows = [
@@ -307,6 +318,8 @@ document.getElementById("ins-folder-modal").addEventListener("click", (e) => {
 });
 $("#ins-dir").addEventListener("keydown", (e) => { if (e.key === "Enter") browseFiles(); });
 $("#ins-dir").addEventListener("input", scheduleInspectPageSave);
+
+document.getElementById("ins-clear-details-btn")?.addEventListener("click", clearInspectDetailsPanels);
 
 // ---- Init ----
 async function initInspect() {

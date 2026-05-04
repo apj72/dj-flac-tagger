@@ -368,6 +368,7 @@ header h1 {
   margin-bottom: 1rem;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.6rem;
 }
 
@@ -722,6 +723,18 @@ label {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 0.6rem;
+}
+
+.analysis-skipped-msg {
+  margin: 0 0 0.65rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.analysis-skipped-msg strong {
+  color: var(--text);
 }
 
 .level-meters {

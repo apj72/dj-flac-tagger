@@ -34,7 +34,7 @@
 
       <h2>Configuration file (<code>config.json</code>)</h2>
       <p>
-        Start from <code>config.json.example</code>. Typical keys include <code>source_dir</code>, <code>destination_dir</code>, <code>extract_profile</code> (<code>flac</code>, <code>mp3</code>, or <code>aac</code>/<code>m4a</code>), <code>platinum_notes_app</code>, <code>pn_output_suffix</code>, <code>target_lufs</code>, and <code>target_true_peak</code>. Positive LUFS input (e.g. <code>11.5</code>) is interpreted as negative integrated loudness where the app supports that shorthand.
+        Start from <code>config.json.example</code>. Typical keys include <code>source_dir</code>, <code>destination_dir</code>, <code>extract_profile</code> (<code>flac</code>, <code>mp3</code>, or <code>aac</code>/<code>m4a</code>), <code>platinum_notes_app</code>, <code>pn_output_suffix</code>, <code>target_lufs</code>, <code>target_true_peak</code>, <code>loudness_verify_enabled</code>, <code>extract_mkv_audio_analysis_enabled</code> (Extract tab: run full loudness analysis when selecting <code>.mkv</code> recordings), and <code>fix_retain_filename_suffixes</code> (Fix / Bulk Fix: strip configured trailing fragments from the filename stem for search, and keep them when renaming to <code>Artist - Title</code>). Positive LUFS input (e.g. <code>11.5</code>) is interpreted as negative integrated loudness where the app supports that shorthand.
         From a bundled <strong>macOS .app</strong>, the live file sits under <strong><code>~/Library/Application Support/DJ MetaManager/config.json</code></strong>; see README (macOS app bundle section).
       </p>
 
@@ -46,6 +46,13 @@
       <h2>Filename search and tags</h2>
       <p>
         The app <strong>does not</strong> search on raw stems. It normalises DJ export noise first. Rules apply to <strong>Bulk Fix</strong> queries, <strong>Fix Metadata</strong> auto-search from filename, and <strong>WAV → FLAC</strong> tag embedding when the classic pattern does not match.
+      </p>
+      <h3 id="fix-filename-suffixes">Configurable trailing suffixes (Fix Metadata &amp; Bulk Fix)</h3>
+      <p>
+        In <strong>Settings</strong>, <strong>Fix Metadata — filename suffixes to strip for search, keep when renaming</strong> defines an ordered list of rules (one per line in the UI). Each line is either a <strong>literal</strong> string matched at the <strong>end</strong> of the filename stem (before the extension), or a line starting with <strong><code>regex:</code></strong> followed by a regular expression (Python on the server; JavaScript in the Fix tab). A <code>regex:</code> pattern should usually end with <code>$</code> so only a true suffix matches—for example three alphanumeric characters in parentheses: <code>regex:_bpm\([A-Za-z0-9]{3}\)$</code>.
+      </p>
+      <p>
+        The server repeatedly peels matching fragments from the <strong>end</strong> of the stem (longest-first within each pass follows the rule order you configured). The peeled fragments are <strong>not</strong> used in the online search query. If you turn on <strong>rename to Artist - Title</strong>, those fragments are appended back <strong>after</strong> the title part and <strong>before</strong> the file extension (e.g. <code>Artist - Title_warped.flac</code>). This is useful for custom markers such as <code>_warped</code> after Ableton or other offline processing. If <strong>normalised extract</strong> is enabled on Extract, loudness is still measured on the server during extract regardless of this setting.
       </p>
       <ol>
         <li>Strip a trailing <code>_PN</code> suffix (Platinum Notes), case-insensitive.</li>

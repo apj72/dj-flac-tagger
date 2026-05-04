@@ -29,7 +29,7 @@ Seven pages, via tabs at the top (order: **Extract → Fix Metadata → Inspect 
 ### Extract (main workflow)
 
 1. **Extracts audio** from MKV/MP4/MOV — output codec and container follow **Settings → extract format** (FLAC 16-bit, MP3 320 CBR, or AAC in M4A). When the source stream already matches the target, ffmpeg copies or transcodes as appropriate; video is discarded.
-2. **Analyses audio levels** — integrated LUFS, true peak, mean volume with colour-coded meters.
+2. **Analyses audio levels** — integrated LUFS, true peak, mean volume with colour-coded meters. For **`.mkv`** files you can disable this automatic analysis in **Settings** (faster for very long OBS captures); the Extract UI explains when it is off. **Normalised extract** always measures the source on the server when you enable it.
 3. **Normalises audio** (optional) — two-pass **EBU R128** `loudnorm` to the **LUFS target in Settings** (default **-14**; use **-11.5** to align with tools like Platinum Notes). Toggle on/off per extract.
 4. **Fetches metadata** from Bandcamp, Discogs, Apple Music, Spotify, **SoundCloud**, **Beatport** (track URLs), or generic pages.
 5. **Rename** or **Delete** source videos from the list (**Delete** moves to **Finder Trash** on macOS; both use in-app dialogs).
@@ -52,7 +52,7 @@ The app does **not** use cookies for form memory. **Extract**, **Fix Metadata**,
 
 Browse audio files (multiple formats), auto-search iTunes, Discogs, and Bandcamp, fetch from URLs, edit fields, **save tags and artwork**. The **URL field** is saved into the file and into the **processing log** (when you used a URL or artwork URL) so you can trace the source. **Saved metadata URL** appears on **Inspect** for FLAC/OGG/MP3 where supported.
 
-When a file has no useful tags, the **suggested search** string is derived from the **filename** using the same rules as **WAV → FLAC** tags and **Bulk Fix** (see [Filename search and tags](#filename-search-and-tags) below).
+When a file has no useful tags, the **suggested search** string is derived from the **filename** using the same rules as **WAV → FLAC** tags and **Bulk Fix** (see [Filename search and tags](#filename-search-and-tags) below). **Rename to tags** can keep configured **trailing suffixes** (e.g. `_warped`) before the extension when set under **Settings → Fix Metadata filename suffixes**.
 
 **Folder path:** The last folder you successfully listed in **Fix** or **Inspect** is remembered in the browser (alongside **Default** from Settings), so switching between those tabs keeps the same directory.
 
@@ -84,6 +84,8 @@ If you use **Extract → open in Platinum Notes → watch for processed output**
 - **Source / destination** folders  
 - **Fix Metadata / Inspect default folders** (optional; when empty, the **destination** folder is used for the initial path and **Default** on those tabs)  
 - **Extract format** — global default for **Extract** output and **Normalise** re-encode  
+- **Extract — analyse .MKV audio levels** — when off, skips the automatic full-file loudness meters on the Extract tab for `.mkv` only (faster for long recordings); **normalised extract** still analyses on the server  
+- **Fix Metadata — filename suffixes** — list of literals or `regex:` lines (`fix_retain_filename_suffixes` in `config.json`): peeled from the end of the stem **before** building search queries; **re-appended** when renaming to `Artist - Title` (see [Filename search and tags](#filename-search-and-tags))  
 - **Platinum Notes** app name and **`_PN` output suffix**  
 - **Loudness target (LUFS)** and **true peak (dBTP)** — e.g. **-11.5** / **-1** to match Platinum Notes; **-14** / **-1** for streaming-style reference. You may enter **11.5** (positive); it is treated as **-11.5 LUFS**.
 
@@ -108,7 +110,7 @@ For a **folder of FLACs** (often the same flat folder as **WAV → FLAC** output
 1. **Scan & load** — choose root, **files per pass**, and **offset** (same idea as WAV batching: stable sorted list). If the same **filename** exists more than once (e.g. in different subfolders, or two copies in the same batch), the table flags **Duplicate in this batch** or **Same name elsewhere** and lists other paths; the apply step warns if you are about to tag multiple copies.
 2. **Fetch online matches** — runs the same combined **iTunes + Discogs + Bandcamp** search as Fix, with gentle rate spacing between files. The **search query** for each file is built from the **filename stem** using [Filename search and tags](#filename-search-and-tags). After results return, the **Match** dropdown **pre-selects a best guess** (filename hints + light source tie-break) so you can skim and only change wrong rows.
 3. **Review** — per row, pick a search result or paste a **catalogue URL** (Bandcamp, Discogs, Apple, Spotify, **SoundCloud**, **Beatport** track links, …). After **Fetch online matches**, each row lists **shortcuts (Apple / Discogs / Bandcamp)** and the **full URL** for every hit (same URL the dropdown uses), so you can open and validate in the browser before apply. The **Match** column uses high-contrast link colours on a slightly lighter cell background so URLs stay readable on dark mode.
-4. **Apply** — fetches full metadata, matches **multi-track** Discogs releases using the **title hint** from the filename when possible, embeds tags and artwork; optional **rename to `Artist - Title.flac`**. Optional logging to the processing log.
+4. **Apply** — fetches full metadata, matches **multi-track** Discogs releases using the **title hint** from the filename when possible, embeds tags and artwork; optional **rename to `Artist - Title.flac`** (suffixes configured in **Settings** for search/retain are preserved at the end of the stem when renaming). Optional logging to the processing log.
 
 **Optional same-name `.wav`:** If `SomeTrack.wav` sits in the **same folder** as `SomeTrack.flac`, the server reads **embedded WAV tags** (when mutagen can see them — e.g. some BWF/RIFF metadata). If **both** artist and title are present in the WAV, the **search query** uses that pair (often cleaner than the filename alone). If only one of those fields exists, it can still **fill title/artist hints** for track matching without replacing the whole query. Many exports have **no** useful WAV tags, so the filename rules above still do most of the work.
 
@@ -117,6 +119,8 @@ The **WAV → FLAC** tab links here after a flat-folder conversion with **`?dir=
 #### Filename search and tags
 
 DJs often keep **extra text in the filename** (Camelot key, BPM, etc.) for quick scanning in a DAW or file browser. The app **does not** search on the raw stem; it normalizes first so Discogs, Apple, and Bandcamp get a useful query.
+
+**Configurable trailing markers:** under **Settings → Fix Metadata filename suffixes** (`fix_retain_filename_suffixes` in `config.json`, a JSON array of strings). Each entry is either a **literal** suffix matched at the end of the stem, or `regex:` plus a pattern (usually ending in `$` for a true suffix). The server peels these from the **end** of the stem (repeatedly, in rule order) **before** the steps below; those fragments are **omitted from the search query** and **re-appended before the extension** when you rename to `Artist - Title`.
 
 **Pioneer Rekordbox** identifies tracks from **metadata and its internal database**, not from a special filename format. A folder such as `…/Rekordbox-music/Underground/126/` is simply how **you** arranged exports; the stems below are patterns people commonly use with **Ableton Live** (and similar tools) when **loading samples** or preparing a performance: **hyphens** separate fields in the name for readability in Ableton’s browser. The same file may also live in a Rekordbox collection, but the **naming** described here is **Ableton-style**, not a Rekordbox requirement.
 
@@ -276,7 +280,9 @@ Example (see `config.json.example`):
   "platinum_notes_app": "Platinum Notes 10",
   "pn_output_suffix": "_PN",
   "target_lufs": -11.5,
-  "target_true_peak": -1.0
+  "target_true_peak": -1.0,
+  "extract_mkv_audio_analysis_enabled": true,
+  "fix_retain_filename_suffixes": []
 }
 ```
 

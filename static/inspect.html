@@ -26,21 +26,29 @@
     <main>
       <!-- Browse -->
       <section class="card">
-        <h2>Select Audio File</h2>
+        <h2>
+          Select Audio File
+          <span class="help-tip">
+            <button type="button" class="help-tip-btn" aria-label="About choosing a folder for Inspect">?</button>
+            <span class="help-tip-bubble" role="tooltip"><strong>Choose folder</strong> picks a directory on the machine running the app (e.g. a flat <strong>Converted WAVs</strong> output from <a href="/convert">WAV → FLAC</a>). <strong>Default</strong> fills Settings → destination. The last folder you list here is remembered when you open <a href="/fix">Fix Metadata</a> (and vice versa). Then <strong>List files</strong> or press Enter. You can also open <code class="mono">/inspect?dir=/path/to/folder</code>.</span>
+          </span>
+        </h2>
         <div class="dir-bar">
           <input type="text" id="ins-dir" placeholder="~/Music/FLACs/Converted WAVs" />
           <button type="button" id="ins-browse-btn" class="btn btn-secondary">List files</button>
           <button type="button" id="ins-choose-folder-btn" class="btn btn-secondary" title="Open folder navigator on the server">Choose folder…</button>
           <button type="button" id="ins-default-dir-btn" class="btn btn-secondary" title="Settings → Inspect default (or destination)">Default</button>
         </div>
-        <p class="hint" style="margin:0 0 0.75rem"><strong>Choose folder</strong> picks a directory on the machine running the app (e.g. a flat <strong>Converted WAVs</strong> output from <a href="/convert">WAV → FLAC</a>). <strong>Default</strong> fills Settings → destination. The last folder you list here is remembered when you open <a href="/fix">Fix Metadata</a> (and vice versa). Then <strong>List files</strong> or press Enter. You can also open <code class="mono">/inspect?dir=/path/to/folder</code>.</p>
         <div id="ins-file-list" class="file-list"></div>
       </section>
 
       <div id="ins-details-layout" class="inspect-details-layout hidden">
         <div class="inspect-row-meta-art">
           <section class="card inspect-meta-panel" id="ins-meta-section">
-            <h2>Metadata</h2>
+            <h2>
+              Metadata
+              <button type="button" id="ins-clear-details-btn" class="btn btn-secondary btn-sm" title="Clear metadata, artwork, and file details panels">Clear</button>
+            </h2>
             <div id="ins-meta-table" class="inspect-meta-table"></div>
           </section>
           <aside class="card inspect-art-aside" id="ins-art-section">
