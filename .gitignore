@@ -8,6 +8,7 @@ processing_log.json
 .dj-metamanager.pid
 .dj-flac-tagger.pid
 server.log
+docs/TAB_ICON_PROMPTS.md
 design/
 build/
 dist/

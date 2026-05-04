@@ -383,7 +383,7 @@ Choose **Settings → Appearance** → **Dark / Light / Match system**: stored a
 
 Reference JPEGs (**`design/UI/darkmode.jpg`**, **`lightmode.jpg`**) remain as optional palette references for designers.
 
-Tab PNG masks live under **`static/icons/tabs/`**; regeneration prompts are in **`docs/TAB_ICON_PROMPTS.md`**.
+Tab PNG masks live under **`static/icons/tabs/`**. Optional: maintain your own **`docs/TAB_ICON_PROMPTS.md`** for icon-generation prompts (that path is gitignored).
 
 ## HTML user guide
 
