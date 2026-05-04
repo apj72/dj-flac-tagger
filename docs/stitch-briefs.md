@@ -6,8 +6,9 @@ Use these sections with [Stitch](https://stitch.withgoogle.com/): one screen per
 
 ## Global (include in every page or as project context)
 
-**Product:** “DJ MetaManager” — pro-sumer DJ library tool. **Tagline / subtitle under title:** `Multi-format audio · Tag · Artwork`.  
-**Layout:** Centered app column (~780px most pages; **Inspect** is wider, ~max 1320px) on a **very dark** background. **Card** sections with rounded corners, subtle border, raised surface. **Top header:** app title (gradient: purple → mint/teal on dark), subtitle, then **horizontal tab bar** in a **pill** container: **Extract** | **Fix Metadata** | **Inspect** | **Normalise** | **Settings** (one active, clear selected state).  
+**Product:** “DJ MetaManager” — pro-sumer DJ library tool. **Brand copy** (marketing / tagline ideas): “Multi-format audio · Tag · Artwork” fits the positioning; header **wordmarks** (dark/light PNG) replace an inline subtitle in the shipped UI.  
+
+**Layout:** Centered app column (~780px most pages; **Inspect** is wider, ~max 1320px) on a **fixed full-screen scenic theme background** or solid fill when backgrounds are toggled off. **Glass** section surfaces (semi-transparent panels with blur); inputs and buttons stay opaque. **Top header:** wordmark/logo linking home, then **horizontal tab bar** in a **pill** container: **Extract** | **Fix Metadata** | **Inspect** | **Normalise** | **WAV→FLAC** | **Bulk Fix** | **Settings** (one active).
 **Aesthetic direction:** **Dark mode**, confident and calm — control-room / studio, not a generic admin UI. **Typography:** system UI sans (-apple-system / Segoe / Roboto). **Accent pattern:** **Primary actions** = mint/teal; **Secondary** = muted blue-gray; **Emphasis/Extract** = purple or accent variant. Meters and progress = horizontal bars with numeric readouts. **Density:** comfortable for long sessions; clear hierarchy: numbered steps, hint text in smaller muted color. **Accessibility:** sufficient contrast, focus states on tabs and buttons, labels tied to fields.
 
 **User:** A DJ or collector who values **clarity, meters (LUFS/peak), and traceability** of metadata sources.
@@ -160,7 +161,7 @@ Use these sections with [Stitch](https://stitch.withgoogle.com/): one screen per
 
 ## Optional mood line (for Stitch)
 
-> Dark studio UI for a Mac-first DJ app: **purple–teal gradient logotype**, **mint** primary actions, **cards** and **tab pill nav**, **horizontal LUFS/peak meters**, **square artwork**, and **numbered workflow steps** — precise, low-noise, professional.
+> Dark/light studio-adjacent UI for a Mac-first DJ app: **wordmark/header art** plus **purple–accent / mint-teal accent system**, **mint** primary actions, **semi-transparent (“glass”) section panels**, **horizontal LUFS/peak meters**, **square artwork**, global **preview bar**, and **numbered workflow steps** — precise, low-noise, professional.
 
 ---
 

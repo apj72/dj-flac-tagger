@@ -35,4 +35,26 @@
       document.documentElement.dataset.theme = resolve("system");
     }
   });
+
+  /* Page background image (scenic hero): on by default; off = solid --bg only */
+  var BG_KEY = "djmm.pageBackgroundEnabled";
+
+  function applyPageBackgroundFromStorage() {
+    var raw = localStorage.getItem(BG_KEY);
+    var off = raw === "0" || raw === "false";
+    document.documentElement.setAttribute("data-page-background", off ? "off" : "on");
+  }
+
+  applyPageBackgroundFromStorage();
+
+  window.djmmApplyPageBackgroundEnabled = function (enabled) {
+    localStorage.setItem(BG_KEY, enabled ? "1" : "0");
+    document.documentElement.setAttribute("data-page-background", enabled ? "on" : "off");
+  };
+
+  window.djmmGetPageBackgroundEnabled = function () {
+    var raw = localStorage.getItem(BG_KEY);
+    if (raw === "0" || raw === "false") return false;
+    return true;
+  };
 })();

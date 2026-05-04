@@ -50,6 +50,7 @@ The app does **not** use cookies for form memory. **Extract**, **Fix Metadata**,
 - **WAV → FLAC** and **Bulk Fix** use **additional** keys (e.g. bulk folder/target memory, batch offset handoff, `djmm.bulkFixHandoff` after a flat-folder convert) so large workflows stay separate from the generic page store.
 - **Bulk Fix** also exposes **Reset form** — clears folder fields, loaded batch, `djmm.bulkFixState`, `djmm.bulkFixDir`, and any pending WAV→FLAC **`djmm.bulkFixHandoff`** for a clean slate in this browser profile.
 - **Audio preview bar** (`static/player.js`): included on all main tabs; loads the current selection when the format is supported. **No autoplay** — use **Play** / **Pause**. Keyboard shortcuts on the timeline when focused: arrows, Home/End, Space to toggle playback.
+- **Appearance (browser-only):** **Theme** preference is **`djmm.themePreference`** (`dark`, `light`, or `system`). **Full-page scenic background** can be toggled with **`djmm.pageBackgroundEnabled`** (`1`/`0`); Settings → Appearance includes both. See **[Appearance](#appearance)** for assets and styling.
 
 ### Audio preview bar (all tabs)
 
@@ -352,14 +353,27 @@ dj-meta-manager/
 │   ├── bulk-fix.html / bulk-fix.js # Bulk Fix metadata
 │   ├── path-persist.js             # Last audio browse dir (Fix + Inspect) + `djmm.pageState` UI drafts
 │   ├── player.js                   # Bottom audio preview bar (all tabs)
+│   ├── theme-init.js               # `<head>` theme + scenic background prefs (`localStorage`) before paint
 │   ├── settings.html / settings.js
+│   ├── bg-dark-background.png / bg-light-background.png  # Page backgrounds (copies of `design/UI/`)
+│   ├── header-logo-dark-112h.png / header-logo-light-112h.png
 │   └── style.css
 └── README.md
 ```
 
 ## Appearance
 
-**Dark** and **light** themes use CSS variables aligned with the **Obsidian Flux** (dark) and **Luminous Glass** (light) palettes in **`design/UI/`** (local reference images). Choose **Settings → Appearance** (stored in the browser as `djmm.themePreference`: dark, light, or match system). Tab icons live under **`static/icons/tabs/`**; prompts for generating replacements are in **`docs/TAB_ICON_PROMPTS.md`**.
+**Dark / light themes** map to CSS palettes **Obsidian Flux** and **Luminous Glass**. On every tab:
+
+- **Header:** Wordmarks at **`static/header-logo-dark-112h.png`** and **`header-logo-light-112h.png`** (sources: **`design/UI/header_logo_dark_112h.png`**, **`header_logo_light_112h.png`**). Replace those design files and re-copy to **`static/`** if you redesign.
+- **Page background:** Fixed full-viewport art — **`dark_background.png`** / **`light_background.png`** in **`design/UI/`**, served as **`static/bg-dark-background.png`** and **`bg-light-background.png`**. Content scrolls over it; turning it off yields a flat **`--bg`** fill only.
+- **Section panels:** Semi-transparent (“glass”) surfaces with **`backdrop-filter`** so the background reads through behind cards, modals where applied, tab pill, preview bar — inputs and buttons stay opaque.
+
+Choose **Settings → Appearance** → **Dark / Light / Match system**: stored as **`djmm.themePreference`** in **`localStorage`**. **Show page background image** toggles **`djmm.pageBackgroundEnabled`** (`1`/`0`; default on). Neither is stored in **`config.json`**.
+
+Reference JPEGs (**`design/UI/darkmode.jpg`**, **`lightmode.jpg`**) remain as optional palette references for designers.
+
+Tab PNG masks live under **`static/icons/tabs/`**; regeneration prompts are in **`docs/TAB_ICON_PROMPTS.md`**.
 
 ## HTML user guide
 

@@ -13,6 +13,8 @@ function linesToRetainSuffixArray(text) {
 function collectSettingsPageDraft() {
   return {
     v: 1,
+    page_background_enabled:
+      typeof djmmGetPageBackgroundEnabled === "function" ? djmmGetPageBackgroundEnabled() : true,
     source_dir: $("#cfg-source").value,
     destination_dir: $("#cfg-dest").value,
     fix_metadata_default_dir: $("#cfg-fix-default").value,
@@ -35,6 +37,11 @@ function scheduleSettingsPageSave() {
 }
 
 function applySettingsDraft(st) {
+  if (st.page_background_enabled != null && typeof djmmApplyPageBackgroundEnabled === "function") {
+    djmmApplyPageBackgroundEnabled(!!st.page_background_enabled);
+    const pg = document.getElementById("cfg-page-background");
+    if (pg) pg.checked = !!st.page_background_enabled;
+  }
   if (st.source_dir != null) $("#cfg-source").value = st.source_dir;
   if (st.destination_dir != null) $("#cfg-dest").value = st.destination_dir;
   if (st.fix_metadata_default_dir != null) $("#cfg-fix-default").value = st.fix_metadata_default_dir;
@@ -147,6 +154,18 @@ function wireThemeControl() {
     if (typeof djmmApplyThemePreference === "function") {
       djmmApplyThemePreference(sel.value);
     }
+  });
+}
+
+function wirePageBackgroundControl() {
+  const cb = document.getElementById("cfg-page-background");
+  if (!cb || typeof djmmGetPageBackgroundEnabled !== "function") return;
+  cb.checked = djmmGetPageBackgroundEnabled();
+  cb.addEventListener("change", () => {
+    if (typeof djmmApplyPageBackgroundEnabled === "function") {
+      djmmApplyPageBackgroundEnabled(cb.checked);
+    }
+    scheduleSettingsPageSave();
   });
 }
 
@@ -287,6 +306,7 @@ function wireSettingsFolderNavigator() {
 $("#save-settings-btn").addEventListener("click", saveSettings);
 loadSettings().then(() => {
   wireThemeControl();
+  wirePageBackgroundControl();
   wireSettingsPersistence();
   wireSettingsFolderNavigator();
   scheduleSettingsPageSave();

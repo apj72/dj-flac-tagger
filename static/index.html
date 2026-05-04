@@ -10,8 +10,13 @@
 <body>
   <div class="app">
     <header>
-      <h1>DJ MetaManager</h1>
-      <p class="subtitle">Multi-format audio &middot; Tag &middot; Artwork</p>
+      <h1 class="sr-only">DJ MetaManager</h1>
+      <div class="header-logo-wrap">
+        <a href="/" class="header-logo-link" aria-label="DJ MetaManager home">
+          <img src="/static/header-logo-dark-112h.png" alt="" width="366" height="112" class="header-logo header-logo--dark" decoding="async" />
+          <img src="/static/header-logo-light-112h.png" alt="" width="370" height="112" class="header-logo header-logo--light" decoding="async" />
+        </a>
+      </div>
       <nav class="tab-nav">
         <a href="/" class="tab-link tab-link--icon-only active" data-tooltip="Extract" aria-label="Extract"><span class="tab-icon tab-icon-extract" aria-hidden="true"></span></a>
         <a href="/fix" class="tab-link tab-link--icon-only" data-tooltip="Fix Metadata" aria-label="Fix Metadata"><span class="tab-icon tab-icon-fix" aria-hidden="true"></span></a>

@@ -13,7 +13,7 @@ Professional, **static** documentation for DJ MetaManager. Open **`index.html`**
 | `workflow-normalise.html` | Loudness normalisation |
 | `workflow-wav-to-flac.html` | Single + bulk WAV conversion, handoff |
 | `workflow-bulk-fix.html` | Batch metadata |
-| `reference-config-and-formats.html` | Filename rules, formats, API sketch, UI state (incl. preview: `stream-audio`, `retag-artwork`) |
+| `reference-config-and-formats.html` | Filename rules, formats, API sketch, UI state (preview: `stream-audio`, `retag-artwork`, theme + background `localStorage`, `design/UI` masters) |
 | `partials/nav.inc.html` | **Copy-paste** nav snippet when adding pages |
 | `assets/guide.css` | Shared typography and components |
 | `assets/images/README.md` | **Screenshot checklist** (filenames and what to capture) |

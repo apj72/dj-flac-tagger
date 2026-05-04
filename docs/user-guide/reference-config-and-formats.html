@@ -193,9 +193,15 @@
       </ul>
       <p>Full table: see repository README.</p>
 
-      <h2>UI state in the browser</h2>
+      <h2 id="ui-state-browser">UI state in the browser</h2>
       <p>
-        <strong><code>djmm.pageState</code></strong> in <code>localStorage</code> holds debounced drafts for Extract, Fix, Inspect, Normalise, and Settings. Settings clears its draft after a successful save so the next load matches the server. <strong>WAV → FLAC</strong> and <strong>Bulk Fix</strong> use additional keys (batch offsets, <code>djmm.bulkFixHandoff</code>, etc.). The audio preview bar stores <strong><code>djmmPlayerVolume</code></strong> separately. Nothing is synced to the cloud by the stock app.
+        <strong><code>djmm.pageState</code></strong> in <code>localStorage</code> holds debounced drafts for Extract, Fix, Inspect, Normalise, and Settings. Settings clears its draft after a successful save so the next load matches the server. <strong>WAV → FLAC</strong> and <strong>Bulk Fix</strong> use additional keys (batch offsets, <code>djmm.bulkFixHandoff</code>, etc.). The audio preview bar stores <strong><code>djmmPlayerVolume</code></strong> separately.
+      </p>
+      <p>
+        <strong>Theme and visuals</strong> (not written to <code>config.json</code>): <strong><code>djmm.themePreference</code></strong> — <code>dark</code>, <code>light</code>, or <code>system</code>; <strong><code>djmm.pageBackgroundEnabled</code></strong> — <code>1</code> or <code>0</code> toggles full-page scenic art (settings UI: “Show page background image”). Implemented in <code>static/theme-init.js</code> for early apply. Repo art lives under <code>design/UI/</code> (<code>dark_background.png</code>, <code>light_background.png</code>, header wordmarks); the app ships copies under <code>static/</code> for HTTP.
+      </p>
+      <p>
+        Nothing is synced to the cloud by the stock app.
       </p>
 
       <h2>Branches</h2>

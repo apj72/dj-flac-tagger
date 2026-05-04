@@ -13,7 +13,7 @@ Place exported PNG (or WebP) files in this folder using the **exact filenames** 
 
 | # | Filename | What to show |
 |---|----------|----------------|
-| 1 | `01-nav-all-tabs.png` | Full header with **all eight tabs** visible: Extract, Fix Metadata, Inspect, Normalise, WAV → FLAC, Bulk Fix, Settings. |
+| 1 | `01-nav-all-tabs.png` | Full header with **wordmark/logo** plus **all eight tabs** visible: Extract, Fix Metadata, Inspect, Normalise, WAV → FLAC, Bulk Fix, Settings. |
 | 2 | `02-settings-full-page.png` | **Settings** page: source/destination, extract format, LUFS / true peak, Platinum Notes fields. |
 | 3 | `03-extract-file-list-meters.png` | **Extract**: folder path, video file list, one file selected, **LUFS / peak meters** visible. |
 | 4 | `04-extract-metadata-url.png` | **Extract**: track URL field, fetch metadata, normalise toggle, extract button area. |
