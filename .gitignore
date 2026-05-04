@@ -9,6 +9,7 @@ processing_log.json
 .dj-flac-tagger.pid
 server.log
 docs/TAB_ICON_PROMPTS.md
+docs/stitch-briefs.md
 design/
 build/
 dist/
