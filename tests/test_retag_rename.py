@@ -126,3 +126,137 @@ def test_retag_rename_keeps_configured_warped_suffix(tmp_path, client, monkeypat
     newp = tmp_path / "A - B_warped.flac"
     assert newp.is_file()
     assert not p.exists()
+
+
+PNG_1X1_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+
+def test_retag_embeds_local_artwork_base64_png(tmp_path, client, app_module, monkeypatch):
+    import app as app_mod
+
+    monkeypatch.setattr(app_mod, "CONFIG_PATH", str(tmp_path / "config.json"))
+    monkeypatch.setattr(app_mod, "LOG_PATH", str(tmp_path / "log.json"))
+    p = tmp_path / "track.flac"
+    try:
+        _minimal_flac(p)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pytest.skip("ffmpeg not available")
+
+    r = client.post(
+        "/api/retag",
+        json={
+            "filepath": str(p),
+            "metadata": {"title": "Boot", "artist": "Live", "comment": "x"},
+            "artwork_url": "",
+            "artwork_base64": PNG_1X1_B64,
+            "artwork_mime": "image/png",
+            "metadata_source_url": "",
+            "record_in_log": False,
+            "rename_to_tags": False,
+        },
+    )
+    assert r.status_code == 200, r.get_json()
+    data, mime = app_module.read_embedded_artwork(str(p))
+    assert data is not None and len(data) > 10
+    assert "png" in (mime or "").lower()
+
+
+def test_retag_rejects_non_image_base64(tmp_path, client, app_module, monkeypatch):
+    import app as app_mod
+
+    monkeypatch.setattr(app_mod, "CONFIG_PATH", str(tmp_path / "config.json"))
+    monkeypatch.setattr(app_mod, "LOG_PATH", str(tmp_path / "log.json"))
+    p = tmp_path / "t.flac"
+    try:
+        _minimal_flac(p)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pytest.skip("ffmpeg not available")
+
+    r = client.post(
+        "/api/retag",
+        json={
+            "filepath": str(p),
+            "metadata": {"title": "X", "artist": "Y"},
+            "artwork_url": "",
+            "artwork_base64": "aGVsbG8=",
+            "artwork_mime": "image/jpeg",
+            "record_in_log": False,
+        },
+    )
+    assert r.status_code == 400
+
+
+def test_retag_artwork_only_preserves_tags(tmp_path, client, monkeypatch):
+    import app as app_mod
+
+    monkeypatch.setattr(app_mod, "CONFIG_PATH", str(tmp_path / "config.json"))
+    monkeypatch.setattr(app_mod, "LOG_PATH", str(tmp_path / "log.json"))
+    p = tmp_path / "track.flac"
+    try:
+        _minimal_flac(p)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pytest.skip("ffmpeg not available")
+
+    rv = client.post(
+        "/api/retag",
+        json={
+            "filepath": str(p),
+            "metadata": {"title": "PreserveThis", "artist": "Artist", "comment": "x"},
+            "artwork_url": "",
+            "metadata_source_url": "",
+            "record_in_log": False,
+            "rename_to_tags": False,
+        },
+    )
+    assert rv.status_code == 200, rv.get_json()
+
+    r = client.post(
+        "/api/retag-artwork",
+        json={
+            "filepath": str(p),
+            "artwork_url": "",
+            "artwork_base64": PNG_1X1_B64,
+            "artwork_mime": "image/png",
+            "record_in_log": False,
+        },
+    )
+    assert r.status_code == 200, r.get_json()
+    data, mime = app_mod.read_embedded_artwork(str(p))
+    assert data is not None and len(data) > 10
+
+    rd = client.post("/api/read-tags", json={"filepath": str(p)}).get_json()
+    assert rd.get("title") == "PreserveThis"
+
+
+def test_retag_prefers_base64_over_artwork_url(tmp_path, client, monkeypatch):
+    """Server must not fetch artwork_url when artwork_base64 is provided."""
+    import app as app_mod
+
+    monkeypatch.setattr(app_mod, "CONFIG_PATH", str(tmp_path / "config.json"))
+    monkeypatch.setattr(app_mod, "LOG_PATH", str(tmp_path / "log.json"))
+
+    def _bad_fetch(url):
+        raise AssertionError("fetch_artwork must not run when artwork_base64 is set")
+
+    monkeypatch.setattr(app_mod, "fetch_artwork", _bad_fetch)
+
+    p = tmp_path / "cover.flac"
+    try:
+        _minimal_flac(p)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pytest.skip("ffmpeg not available")
+
+    r = client.post(
+        "/api/retag",
+        json={
+            "filepath": str(p),
+            "metadata": {"title": "T", "artist": "U", "comment": "z"},
+            "artwork_url": "https://example.com/dummy.jpg",
+            "artwork_base64": PNG_1X1_B64,
+            "artwork_mime": "image/png",
+            "metadata_source_url": "",
+            "record_in_log": False,
+            "rename_to_tags": False,
+        },
+    )
+    assert r.status_code == 200, r.get_json()

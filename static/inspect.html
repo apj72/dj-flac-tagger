@@ -39,7 +39,14 @@
           <button type="button" id="ins-choose-folder-btn" class="btn btn-secondary" title="Open folder navigator on the server">Choose folder…</button>
           <button type="button" id="ins-default-dir-btn" class="btn btn-secondary" title="Settings → Inspect default (or destination)">Default</button>
         </div>
-        <div id="ins-file-list" class="file-list"></div>
+        <div
+          id="ins-file-list"
+          class="file-list"
+          tabindex="0"
+          role="listbox"
+          aria-label="Audio files in folder"
+          aria-multiselectable="false"
+        ></div>
       </section>
 
       <div id="ins-details-layout" class="inspect-details-layout hidden">
@@ -82,5 +89,6 @@
 
   <script src="/static/path-persist.js"></script>
   <script src="/static/inspect.js"></script>
+  <script src="/static/player.js"></script>
 </body>
 </html>

@@ -37,6 +37,9 @@
         Enter a folder path or use <strong>Browse</strong>, <strong>Choose folder…</strong> (server-side navigator), or <strong>Default</strong> (Settings destination). The app lists supported audio files. Selecting a file loads current tags into the editor and triggers an <strong>automatic combined search</strong> when it can derive a query from tags or filename.
       </p>
       <p>
+        With focus <strong>outside</strong> text fields (and the folder modal closed), use <strong>↑</strong> / <strong>↓</strong>, <strong>Home</strong>, and <strong>End</strong> to move the highlighted row and load that file—navigation targets the selection instead of only scrolling the list. You can also <strong>Tab</strong> to the file list (<code>role=&quot;listbox&quot;</code>) for the same keys.
+      </p>
+      <p>
         <strong>Deep links:</strong> <code>/fix?file=/absolute/path/to/track.flac</code> with optional <code>&amp;q=search+terms</code> to override the search query.
       </p>
 
@@ -47,10 +50,10 @@
 
       <h2>Step 2 — Search results</h2>
       <p>
-        The server queries <strong>Apple Music (iTunes Search API)</strong>, <strong>Discogs</strong>, and <strong>Bandcamp</strong> (public search page), then merges results. Click a row to <strong>fetch full metadata</strong> for that URL. If the release has multiple tracks, a tracklist appears so you can pick the correct cut.
+        The server queries <strong>Apple Music (iTunes Search API)</strong>, <strong>Discogs</strong>, <strong>Bandcamp</strong> (public search page), and <strong>SoundCloud</strong>, then merges results. Click a row to <strong>fetch full metadata</strong> for that URL. If the release has multiple tracks, a tracklist appears so you can pick the correct cut.
       </p>
       <p>
-        When <strong>combined search returns no hits</strong>, the UI shows a <strong>fallback panel</strong>: choose <strong>Apple Music</strong> (default), <strong>Discogs</strong>, or <strong>Bandcamp</strong>, refine the query, and click <strong>Search</strong>. The app shows up to <strong>three</strong> results from that catalogue only; pick one to fetch metadata.
+        When <strong>combined search returns no hits</strong>, the UI shows a <strong>fallback panel</strong>: choose <strong>Apple Music</strong> (default), <strong>Discogs</strong>, <strong>Bandcamp</strong>, or <strong>SoundCloud</strong>, refine the query, and click <strong>Search</strong>. The app shows up to <strong>three</strong> results from that catalogue only; pick one to fetch metadata.
       </p>
 
       <figure class="guide-figure">
@@ -70,7 +73,10 @@
 
       <h2>Step 3 — Edit and artwork</h2>
       <p>
-        Adjust title, artist, album, year, genre, label, catalogue number, and comment. Artwork preview loads via the app’s artwork proxy when a remote URL is present.
+        Adjust title, artist, album, year, genre, label, catalogue number, and comment. The cover area shows embedded art, a local file you drop or choose, or catalogue art from search. <strong>Click the cover</strong> to open a full-screen preview.
+      </p>
+      <p>
+        <strong>Artwork image URL</strong> is separate from <strong>Fetch from URL</strong> (metadata source): paste a direct link to a JPEG/PNG/WebP/GIF file. <strong>Update artwork</strong> embeds only the cover via <code>POST /api/retag-artwork</code>; <strong>Save Tags &amp; Artwork</strong> applies text tags too, with priority <strong>local cover → artwork URL → release art</strong> from search when you save.
       </p>
 
       <figure class="guide-figure">
@@ -93,7 +99,15 @@
         Inspect is for <strong>verification</strong>: list files, select one, and read every tag the app exposes, plus embedded artwork. <strong>Fix artwork dimensions</strong> (FLAC only) can rewrite cover art to dimensions friendly for Rekordbox. <strong>Saved metadata URL</strong> displays when the file records which page was used for tagging.
       </p>
       <p>
+        File list keyboard behaviour matches <strong>Fix Metadata</strong>: <strong>↑</strong> / <strong>↓</strong>, <strong>Home</strong>, and <strong>End</strong> move selection and load the file when you are not typing in the path field or interacting with the folder modal.
+      </p>
+      <p>
         <strong>Deep link:</strong> <code>/inspect?dir=/path/to/folder</code>. The last browsed folder is shared with Fix Metadata in the browser for convenience.
+      </p>
+
+      <h2>Audio preview bar</h2>
+      <p>
+        On <strong>every</strong> main tab, a bar at the bottom streams the <strong>currently selected</strong> audio file (<code>GET /api/stream-audio</code>) when the format is browser-playable. Use <strong>Play</strong> / <strong>Pause</strong> explicitly (no autoplay); drag or click the timeline to seek. Volume is remembered in this browser. Video-only sources on Extract do not preview in the audio element.
       </p>
 
       <figure class="guide-figure">

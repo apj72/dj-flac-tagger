@@ -637,6 +637,16 @@ label {
   overflow-y: auto;
 }
 
+/* Fix Metadata: ~3 visible file rows (scroll the rest; was ~7 in default 240px) */
+.page-fix #fix-file-list.file-list.fix-file-list-compact {
+  max-height: 6.75rem;
+  box-sizing: content-box;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  background: var(--surface);
+}
+
 .file-item {
   display: flex;
   align-items: center;
@@ -891,8 +901,83 @@ label {
   justify-content: center;
   color: var(--text-muted);
   font-size: 0.85rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.65rem;
   overflow: hidden;
+}
+
+.fix-artwork-dropzone.dragover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.25);
+}
+
+.fix-artwork-preview-inner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.35rem;
+}
+
+.fix-artwork-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Fix Metadata: enlarge cover preview */
+.fix-artwork-dropzone:has(#fix-artwork-preview img) {
+  cursor: zoom-in;
+}
+
+.fix-artwork-preview-inner img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.fix-artwork-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  box-sizing: border-box;
+}
+
+.fix-artwork-lightbox-overlay.hidden {
+  display: none;
+}
+
+.fix-artwork-lightbox-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.fix-artwork-lightbox-close {
+  position: fixed;
+  top: 1rem;
+  inset-inline-end: 1rem;
+  z-index: 1;
+}
+
+.fix-artwork-lightbox-inner img {
+  max-width: min(96vw, 3200px);
+  max-height: min(94vh, 3200px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
 }
 
 .artwork-placeholder img {
@@ -1076,6 +1161,7 @@ label {
 .search-source.src-apple { background: #fc3c44; color: var(--text-on-accent); }
 .search-source.src-discogs { background: #333; color: var(--text-on-accent); }
 .search-source.src-bandcamp { background: #1da0c3; color: var(--text-on-accent); }
+.search-source.src-soundcloud { background: #ff5500; color: var(--text-on-accent); }
 .search-source.src-generic { background: #666; color: var(--text-on-accent); }
 
 .sr-only {
@@ -1382,4 +1468,196 @@ label {
 }
 .help-tip-bubble a {
   color: var(--bulk-table-link);
+}
+
+/* ---- Global audio preview bar (all tabs) ---- */
+body.has-djmm-player .app {
+  padding-bottom: calc(6.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+.djmm-player-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 900;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.14);
+  padding: 0.65rem 1rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+}
+
+.djmm-player-inner {
+  max-width: min(1320px, calc(100vw - 2rem));
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.djmm-player-transport {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.4rem;
+  padding-top: 1.85rem;
+}
+
+.djmm-player-transport .btn {
+  min-width: 4.5rem;
+}
+
+.djmm-player-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.djmm-player-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.35rem;
+}
+
+.djmm-player-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.djmm-player-time {
+  flex: 0 0 auto;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  padding-top: 10px;
+  min-width: 2.85rem;
+  text-align: right;
+}
+
+.djmm-player-time-total {
+  text-align: left;
+  min-width: 3.1rem;
+}
+
+.djmm-player-rail-track {
+  flex: 1;
+  min-width: 0;
+}
+
+.djmm-player-rail {
+  --rail-h: 14px;
+  position: relative;
+  height: var(--rail-h);
+  margin-top: 10px;
+  margin-bottom: 2px;
+  touch-action: none;
+  cursor: grab;
+  border-radius: 7px;
+  outline: none;
+}
+
+.djmm-player-rail.djmm-dragging {
+  cursor: grabbing;
+}
+
+.djmm-player-rail:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+.djmm-player-track-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 7px;
+  background: var(--border);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.djmm-player-buffer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  border-radius: 7px;
+  background: var(--surface-hover);
+  opacity: 0.65;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.djmm-player-filled {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  border-radius: 7px;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--primary) 100%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.djmm-player-thumb {
+  position: absolute;
+  left: 0%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 18px;
+  height: 18px;
+  margin-left: 0;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #fff 0%, var(--surface-hover) 100%);
+  border: 2px solid var(--primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.djmm-player-rail.djmm-dragging .djmm-player-thumb {
+  border-color: var(--accent);
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+html[data-theme="light"] .djmm-player-thumb {
+  background: linear-gradient(145deg, #ffffff 30%, var(--surface-hover) 100%);
+}
+
+.djmm-player-vol-label {
+  flex: 0 0 auto;
+  padding-top: 1.85rem;
+}
+
+.djmm-player-vol-label input[type="range"] {
+  width: 4.75rem;
+  vertical-align: middle;
+}
+
+@media (max-width: 520px) {
+  .djmm-player-inner {
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+  .djmm-player-transport {
+    padding-top: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .djmm-player-row {
+    flex-wrap: wrap;
+  }
+  .djmm-player-time {
+    padding-top: 6px;
+  }
+  .djmm-player-vol-label {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 0;
+  }
 }

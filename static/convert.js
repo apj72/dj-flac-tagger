@@ -697,6 +697,9 @@ async function browseWav() {
       hint.innerHTML = `<span><strong>Selected:</strong> ${selectedWav.split("/").pop()}</span>`;
       $("#convert-run-btn").disabled = false;
       $("#convert-result").classList.add("hidden");
+      if (window.DJMM && typeof window.DJMM.setPlayerTrack === "function" && selectedWav) {
+        window.DJMM.setPlayerTrack(selectedWav, selectedWav.split("/").pop());
+      }
     });
   });
 }

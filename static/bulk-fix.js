@@ -17,6 +17,57 @@ function esc(s) {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * In-app confirmation (same modal styling as Extract / WAV→FLAC — avoid window.confirm).
+ * bodyHtml is generated in this module only (escaped where needed).
+ */
+function bfShowConfirm(title, bodyHtml, okText, destructive) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("bf-confirm-modal");
+    const okBtn = document.getElementById("bf-confirm-ok");
+    const cancelBtn = document.getElementById("bf-confirm-cancel");
+    const titleEl = document.getElementById("bf-confirm-title");
+    const bodyEl = document.getElementById("bf-confirm-body");
+    if (!modal || !okBtn || !cancelBtn || !titleEl || !bodyEl) {
+      resolve(false);
+      return;
+    }
+    titleEl.textContent = title;
+    bodyEl.innerHTML = bodyHtml;
+    okBtn.textContent = okText;
+    okBtn.className = destructive ? "btn btn-danger" : "btn btn-primary";
+    let done = false;
+    function finish(val) {
+      if (done) return;
+      done = true;
+      modal.classList.add("hidden");
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onDocKey);
+      modal.removeEventListener("click", onOverlay);
+      resolve(val);
+    }
+    function onOk() {
+      finish(true);
+    }
+    function onCancel() {
+      finish(false);
+    }
+    function onDocKey(e) {
+      if (e.key === "Escape") onCancel();
+    }
+    function onOverlay(e) {
+      if (e.target === modal) onCancel();
+    }
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onDocKey);
+    modal.addEventListener("click", onOverlay);
+    modal.classList.remove("hidden");
+    requestAnimationFrame(() => okBtn.focus());
+  });
+}
+
 function closeFolderModal() {
   const el = document.getElementById("bf-folder-modal");
   if (el) el.classList.add("hidden");
@@ -89,14 +140,14 @@ async function resetDirToDefault() {
   $("#bf-dir").value = (cfg.destination_dir || "").trim();
 }
 
-function resetBulkFixFormFactory() {
-  if (
-    !window.confirm(
-      "Reset Bulk Fix to defaults? This clears the folder path, batch table, all saved Bulk Fix state in this browser, and any pending WAV → FLAC handoff. You cannot undo this.",
-    )
-  ) {
-    return;
-  }
+async function resetBulkFixFormFactory() {
+  const ok = await bfShowConfirm(
+    "Reset Bulk Fix?",
+    '<p style="margin:0">This clears the folder path, the batch table, all saved Bulk Fix state in this browser, and any pending WAV → FLAC handoff.</p><p style="margin:0.75rem 0 0"><strong>You cannot undo this.</strong></p>',
+    "Reset",
+    true,
+  );
+  if (!ok) return;
 
   closeFolderModal();
 
@@ -241,6 +292,7 @@ function scoreBulkFixResult(row, r, index, nResults) {
   const src = String(r.source || "").toLowerCase();
   if (src === "apple_music" || src === "itunes") score += 1.2;
   else if (src === "discogs") score += 1;
+  else if (src === "soundcloud") score += 0.85;
   else if (src === "bandcamp") score += 0.6;
   score += (nResults - index) * 0.04;
   return score;
@@ -449,6 +501,7 @@ function renderTable() {
     if (source === "discogs") return "Discogs";
     if (source === "apple_music") return "Apple";
     if (source === "bandcamp") return "Bandcamp";
+    if (source === "soundcloud") return "SoundCloud";
     return source ? String(source) : "Web";
   }
   tbody.innerHTML = batchRows
@@ -825,11 +878,16 @@ async function applySelected() {
     if (!use || !use.checked) return;
     if (row.duplicate_basename) dupSelected += 1;
   });
-  let confirmMsg = `Apply metadata to ${items.length} file(s) from the selected sources?`;
+  let bodyHtml = `<p style="margin:0">Apply metadata to <strong>${esc(
+    String(items.length),
+  )}</strong> file(s) from the selected sources?</p>`;
   if (dupSelected > 0) {
-    confirmMsg += `\n\n${dupSelected} selected row(s) have the same filename as another file under this folder (see File column). Continue only if you want those copies tagged.`;
+    bodyHtml += `<p style="margin:0.75rem 0 0" class="hint"><strong>Duplicate filenames:</strong> ${esc(
+      String(dupSelected),
+    )} selected row(s) share a basename with another file under this folder (see File column). Continue only if you intend to tag those copies.</p>`;
   }
-  if (!window.confirm(confirmMsg)) return;
+  const confirmed = await bfShowConfirm("Apply metadata", bodyHtml, "Apply", false);
+  if (!confirmed) return;
 
   out.classList.add("hidden");
   const btn = $("#bf-apply-btn");
@@ -887,7 +945,9 @@ document.getElementById("bf-choose-btn").addEventListener("click", openFolderMod
 document.getElementById("bf-default-btn").addEventListener("click", () => {
   resetDirToDefault();
 });
-document.getElementById("bf-reset-form-btn").addEventListener("click", resetBulkFixFormFactory);
+document.getElementById("bf-reset-form-btn").addEventListener("click", () => {
+  void resetBulkFixFormFactory();
+});
 document.getElementById("bf-modal-select").addEventListener("click", () => {
   if (folderModalPath) {
     $("#bf-dir").value = folderModalPath;

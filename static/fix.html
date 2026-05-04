@@ -7,7 +7,7 @@
   <script src="/static/theme-init.js"></script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body class="page-fix">
   <div class="app">
     <header>
       <h1>DJ MetaManager</h1>
@@ -39,57 +39,55 @@
           <button type="button" id="fix-choose-folder-btn" class="btn btn-secondary" title="Open folder navigator">Choose folder…</button>
           <button type="button" id="fix-default-dir-btn" class="btn btn-secondary" title="Path from Settings → Fix Metadata default (or destination)">Default</button>
         </div>
-        <div id="fix-file-list" class="file-list"></div>
+        <div
+          id="fix-file-list"
+          class="file-list fix-file-list-compact"
+          tabindex="0"
+          role="listbox"
+          aria-label="Audio files in folder"
+          aria-multiselectable="false"
+        ></div>
         <div id="fix-current-tags" class="probe-info hidden"></div>
       </section>
 
-      <!-- Search results -->
-      <section class="card hidden" id="fix-search-section">
-        <h2><span class="step">2</span> Search Results</h2>
-        <div id="fix-search-status" class="status hidden"></div>
-        <div id="fix-search-results" class="search-results"></div>
-        <div id="fix-search-fallback" class="fix-search-fallback hidden">
-          <p class="hint" style="margin:0 0 0.65rem">No combined matches. Pick a catalogue, adjust the query, and search (top 3 hits).</p>
-          <div class="fix-search-manual-row">
-            <label class="sr-only" for="fix-search-site">Site</label>
-            <select id="fix-search-site" class="fix-search-site-select" aria-label="Site to search">
-              <option value="apple_music" selected>Apple Music</option>
-              <option value="discogs">Discogs</option>
-              <option value="bandcamp">Bandcamp</option>
-            </select>
-            <input type="text" id="fix-search-manual-q" class="fix-search-manual-input" placeholder="Artist and track name" autocomplete="off" />
-            <button type="button" id="fix-search-manual-btn" class="btn btn-primary">Search</button>
-          </div>
-          <div id="fix-search-manual-status" class="status hidden" style="margin-top:0.5rem"></div>
-        </div>
-        <p class="hint" style="margin-top:0.75rem">Not what you're looking for? Paste a URL below instead.</p>
-      </section>
-
-      <!-- Manual fetch -->
-      <section class="card" id="fix-manual-section">
-        <h2><span class="step-alt">&#128279;</span> Fetch from URL</h2>
-        <div class="field-row">
-          <label for="fix-url">Bandcamp / Discogs / Apple Music / Spotify / SoundCloud / Beatport / URL</label>
-          <input type="url" id="fix-url" placeholder="Paste a Discogs, Bandcamp, Apple, Spotify, SoundCloud, or Beatport track link…" />
-        </div>
-        <button id="fix-fetch-btn" class="btn btn-primary">Fetch Metadata</button>
-        <div id="fix-fetch-status" class="status hidden"></div>
-      </section>
-
-      <!-- Track selector -->
-      <section class="card hidden" id="fix-tracklist-section">
-        <h2><span class="step-alt">&#9835;</span> Select Track</h2>
-        <div id="fix-tracklist" class="tracklist"></div>
-      </section>
-
-      <!-- Metadata editor -->
+      <!-- Metadata editor (was step 3): directly under file picker -->
       <section class="card">
-        <h2><span class="step">3</span> Metadata &amp; Artwork <button id="fix-clear-btn" class="btn btn-secondary btn-sm btn-clear">Clear All</button></h2>
+        <h2><span class="step">2</span> Metadata &amp; Artwork <button id="fix-clear-btn" class="btn btn-secondary btn-sm btn-clear">Clear All</button></h2>
         <div class="metadata-layout">
           <div class="artwork-panel">
-            <div id="fix-artwork-preview" class="artwork-placeholder">
-              <span>No artwork</span>
+            <div
+              id="fix-artwork-zone"
+              class="artwork-placeholder fix-artwork-dropzone"
+              title="Drop a cover image here. Click the cover to view full size."
+            >
+              <div id="fix-artwork-preview" class="fix-artwork-preview-inner">
+                <span>No artwork</span>
+              </div>
             </div>
+            <input
+              type="file"
+              id="fix-artwork-file"
+              accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+              class="sr-only"
+            />
+            <div class="fix-artwork-actions">
+              <button type="button" id="fix-artwork-choose" class="btn btn-secondary btn-sm">Choose image…</button>
+              <button type="button" id="fix-artwork-clear" class="btn btn-secondary btn-sm">Clear cover</button>
+              <button type="button" id="fix-artwork-update-btn" class="btn btn-accent btn-sm">Update artwork</button>
+            </div>
+            <div class="field-row" style="margin:0.5rem 0 0">
+              <label for="fix-artwork-direct-url">Artwork image URL</label>
+              <input
+                type="url"
+                id="fix-artwork-direct-url"
+                placeholder="https://… (direct JPG/PNG/WebP/GIF link)"
+                autocomplete="off"
+              />
+            </div>
+            <p id="fix-artwork-hint" class="hint" style="margin:0.35rem 0 0;font-size:0.8rem">
+              JPEG, PNG, WebP, or GIF (max 10 MB). Drag onto the square or use <strong>Choose image</strong>. Priority when saving:
+              chosen file, then artwork URL above, then release art from search. Tab draft remembers the URL field but not embedded files.
+            </p>
           </div>
           <div class="fields-panel">
             <div class="field-row">
@@ -136,6 +134,46 @@
         </div>
       </section>
 
+      <!-- Search results -->
+      <section class="card hidden" id="fix-search-section">
+        <h2><span class="step">3</span> Search Results</h2>
+        <div id="fix-search-status" class="status hidden"></div>
+        <div id="fix-search-results" class="search-results"></div>
+        <div id="fix-search-fallback" class="fix-search-fallback hidden">
+          <p class="hint" style="margin:0 0 0.65rem">No combined matches. Pick a catalogue, adjust the query, and search (top 3 hits).</p>
+          <div class="fix-search-manual-row">
+            <label class="sr-only" for="fix-search-site">Site</label>
+            <select id="fix-search-site" class="fix-search-site-select" aria-label="Site to search">
+              <option value="apple_music" selected>Apple Music</option>
+              <option value="discogs">Discogs</option>
+              <option value="bandcamp">Bandcamp</option>
+              <option value="soundcloud">SoundCloud</option>
+            </select>
+            <input type="text" id="fix-search-manual-q" class="fix-search-manual-input" placeholder="Artist and track name" autocomplete="off" />
+            <button type="button" id="fix-search-manual-btn" class="btn btn-primary">Search</button>
+          </div>
+          <div id="fix-search-manual-status" class="status hidden" style="margin-top:0.5rem"></div>
+        </div>
+        <p class="hint" style="margin-top:0.75rem">Not what you're looking for? Paste a URL below instead.</p>
+      </section>
+
+      <!-- Manual fetch -->
+      <section class="card" id="fix-manual-section">
+        <h2><span class="step-alt">&#128279;</span> Fetch from URL</h2>
+        <div class="field-row">
+          <label for="fix-url">Bandcamp / Discogs / Apple Music / Spotify / SoundCloud / Beatport / URL</label>
+          <input type="url" id="fix-url" placeholder="Paste a Discogs, Bandcamp, Apple, Spotify, SoundCloud, or Beatport track link…" />
+        </div>
+        <button id="fix-fetch-btn" class="btn btn-primary">Fetch Metadata</button>
+        <div id="fix-fetch-status" class="status hidden"></div>
+      </section>
+
+      <!-- Track selector -->
+      <section class="card hidden" id="fix-tracklist-section">
+        <h2><span class="step-alt">&#9835;</span> Select Track</h2>
+        <div id="fix-tracklist" class="tracklist"></div>
+      </section>
+
       <!-- Save -->
       <section class="card">
         <h2><span class="step">4</span> Save</h2>
@@ -167,7 +205,23 @@
     </div>
   </div>
 
+  <div
+    id="fix-artwork-lightbox"
+    class="fix-artwork-lightbox-overlay hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Album artwork preview"
+  >
+    <div class="fix-artwork-lightbox-inner">
+      <button type="button" id="fix-artwork-lightbox-close" class="btn btn-secondary fix-artwork-lightbox-close" aria-label="Close">
+        Close
+      </button>
+      <img id="fix-artwork-lightbox-img" alt="" />
+    </div>
+  </div>
+
   <script src="/static/path-persist.js"></script>
   <script src="/static/fix.js"></script>
+  <script src="/static/player.js"></script>
 </body>
 </html>

@@ -108,6 +108,10 @@ async function selectFile(el) {
     <span><strong>Duration:</strong> ${dur}</span>
   `;
 
+  if (window.DJMM && typeof window.DJMM.setPlayerTrack === "function") {
+    window.DJMM.setPlayerTrack(selectedFile, selectedFile.split("/").pop() || "Track");
+  }
+
   runAnalysis(selectedFile);
 }
 

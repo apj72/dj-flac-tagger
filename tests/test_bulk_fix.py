@@ -35,6 +35,100 @@ def test_search_query_strips_configured_literal_suffix(app_module, tmp_path):
 
     sq = app_module.search_query_from_ableton_stem("alpha_beta_gamma_warped")
     assert "_warped" not in (sq.get("query") or "")
+    assert "warped" not in (sq.get("query") or "").lower()
+
+
+def test_search_query_strips_warped_when_config_stored_as_string(app_module, tmp_path):
+    """Mis-typed config (string instead of JSON array) used to iterate by character."""
+    cfg_path = tmp_path / "config.json"
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["fix_retain_filename_suffixes"] = "_warped"
+    cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+    sq = app_module.search_query_from_ableton_stem("alpha_beta_gamma_warped")
+    assert "warped" not in (sq.get("query") or "").lower()
+
+
+def test_peel_literal_suffix_is_case_insensitive(app_module):
+    core, ret = app_module.peel_fix_retain_suffixes("Song_WARPED", ["_warped"])
+    assert core == "Song" and ret == "_WARPED"
+
+
+def test_peel_warped_space_form_after_closing_paren(app_module):
+    """Tags / loose strings often end with ') warped' while the file uses ')_warped'."""
+    core, ret = app_module.peel_fix_retain_suffixes(
+        "11 11 Tourist Trap (Jamie Jones Remix) warped", ["_warped"]
+    )
+    assert "warped" not in core.lower()
+    assert "warped" in ret.lower()
+
+
+def test_search_query_tourist_trap_stem_strips_warped(app_module, tmp_path):
+    cfg_path = tmp_path / "config.json"
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["fix_retain_filename_suffixes"] = ["_warped"]
+    cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+    sq = app_module.search_query_from_ableton_stem(
+        "11_11 - Tourist Trap (Jamie Jones Remix)_warped"
+    )
+    assert "warped" not in (sq.get("query") or "").lower()
+
+
+def test_search_query_strips_spaced_warped_without_retention_config(app_module, tmp_path):
+    """Loose parsing produces '… warped' when retain-suffix peel is inactive (empty Settings)."""
+    cfg_path = tmp_path / "config.json"
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["fix_retain_filename_suffixes"] = []
+    cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+    sq = app_module.search_query_from_ableton_stem(
+        "11_11 - Tourist Trap (Jamie Jones Remix)_warped"
+    )
+    assert "warped" not in (sq.get("query") or "").lower()
+
+
+def test_scrub_paren_dash_warped_variant(app_module):
+    s = app_module.scrub_ableton_warp_marker_from_search_text(
+        "11 11 Tourist Trap (Jamie Jones Remix) - warped",
+        filename_stem="x",
+    )
+    assert "warped" not in s.lower()
+
+
+def test_scrub_preserves_artistic_track_ending_warped(app_module):
+    """No Ableton `_warped` suffix on stem → trailing ' warped' may be intentional."""
+    s = app_module.scrub_ableton_warp_marker_from_search_text(
+        "Someone — warped",
+        filename_stem="Someone — warped",
+    )
+    assert "warped" in s.lower()
+
+
+def test_bulk_fix_peels_warped_from_wav_tags_when_both_fields(app_module, tmp_path, monkeypatch):
+    flac = tmp_path / "stem.flac"
+    wav = tmp_path / "stem.wav"
+    flac.write_bytes(b"x")
+    wav.write_bytes(b"y")
+    cfg_path = tmp_path / "config.json"
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["fix_retain_filename_suffixes"] = ["_warped"]
+    cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+    def fake_read(path):
+        if os.path.normpath(path) == os.path.normpath(str(wav)):
+            return {
+                "title": "Tourist Trap (Jamie Jones Remix) warped",
+                "artist": "11 11",
+                "album": "",
+            }
+        return app_module._read_wav_embedded_tags(path)
+
+    monkeypatch.setattr(app_module, "_read_wav_embedded_tags", fake_read)
+    info = app_module.bulk_fix_search_info_for_flac(str(flac))
+    assert "warped" not in (info.get("query") or "").lower()
+    assert "warped" not in (info.get("title_hint") or "").lower()
+    assert "Jamie Jones" in info["query"]
 
 
 def test_best_track_in_list_prefers_close_title(app_module):

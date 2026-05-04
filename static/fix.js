@@ -4,6 +4,10 @@ let selectedFile = null;
 let currentTracklist = [];
 let currentMeta = {};
 let artworkUrl = "";
+/** Local cover for Save (not stored in tab draft). */
+let localArtworkPayload = null;
+/** Whether the loaded file had embedded art before any local/remote override in this session. */
+let lastEmbeddedArtworkKnown = false;
 /** Paths in current file list (same order as .file-item data-idx). */
 let fixBrowseFilePaths = [];
 /** From Settings: suffixes to peel before search (same rules as server). */
@@ -15,6 +19,7 @@ function collectFixPageState() {
       ? { ...currentMeta }
       : {};
   delete snap.tracklist;
+  const directEl = document.getElementById("fix-artwork-direct-url");
   return {
     v: 1,
     fixDir: $("#fix-dir").value,
@@ -30,7 +35,7 @@ function collectFixPageState() {
     comment: $("#fix-comment").value,
     url: $("#fix-url").value,
     renameToTags: $("#fix-rename-to-tags").checked,
-    artworkUrl,
+    artworkDirectUrl: directEl ? directEl.value : "",
     currentTracklist,
     currentMetaSnapshot: Object.keys(snap).length ? snap : null,
   };
@@ -54,12 +59,9 @@ function applyFixFieldsOverlay(st) {
   if (st.comment != null) $("#fix-comment").value = st.comment;
   if (st.url != null) $("#fix-url").value = st.url;
   if (st.renameToTags != null) $("#fix-rename-to-tags").checked = st.renameToTags;
-  if (st.artworkUrl != null) {
-    artworkUrl = st.artworkUrl;
-    if (artworkUrl) {
-      const proxyUrl = `/api/fetch-artwork?url=${encodeURIComponent(artworkUrl)}`;
-      $("#fix-artwork-preview").innerHTML = `<img src="${proxyUrl}" alt="Cover art" onerror="this.parentElement.innerHTML='<span>Failed to load</span>'" />`;
-    }
+  const directUrlEl = document.getElementById("fix-artwork-direct-url");
+  if (directUrlEl && st.artworkDirectUrl != null) {
+    directUrlEl.value = st.artworkDirectUrl;
   }
 }
 
@@ -76,11 +78,206 @@ function wireFixPagePersistence() {
     "fix-catno",
     "fix-comment",
     "fix-url",
+    "fix-artwork-direct-url",
   ];
   ids.forEach((id) => {
     document.getElementById(id)?.addEventListener("input", scheduleFixPageSave);
   });
   document.getElementById("fix-rename-to-tags")?.addEventListener("change", scheduleFixPageSave);
+}
+
+function clearLocalArtworkPayload() {
+  localArtworkPayload = null;
+}
+
+/** Artwork for /api/retag and /api/retag-artwork: local file beats direct URL field, then release preview URL. */
+function resolveFixArtworkPayloadForApi() {
+  const directEl = document.getElementById("fix-artwork-direct-url");
+  const directArtUrl = directEl ? directEl.value.trim() : "";
+  const hadLocalArt = !!localArtworkPayload;
+  if (hadLocalArt) {
+    return {
+      artwork_url: "",
+      artwork_base64: localArtworkPayload.b64,
+      artwork_mime: localArtworkPayload.mime,
+      hadLocalArt: true,
+      sendsArtwork: true,
+    };
+  }
+  const url = directArtUrl || (artworkUrl || "").trim();
+  return {
+    artwork_url: url,
+    artwork_base64: undefined,
+    artwork_mime: undefined,
+    hadLocalArt: false,
+    sendsArtwork: !!url,
+  };
+}
+
+function paintDefaultArtworkPreview() {
+  const el = $("#fix-artwork-preview");
+  if (!el) return;
+  if (!selectedFile) {
+    el.innerHTML = "<span>No artwork</span>";
+    return;
+  }
+  if (lastEmbeddedArtworkKnown) {
+    const u = `/api/embedded-artwork-img?path=${encodeURIComponent(selectedFile)}`;
+    el.innerHTML = `<img src="${u}" alt="Embedded cover" onerror="this.outerHTML='<span>No artwork</span>'" />`;
+  } else {
+    el.innerHTML = "<span>No artwork</span>";
+  }
+}
+
+function setLocalArtworkFromFile(file) {
+  const hint = document.getElementById("fix-artwork-hint");
+  if (!file) return;
+  const maxBytes = 10 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    if (hint) hint.textContent = "Image too large (max 10 MB).";
+    return;
+  }
+  let mime = (file.type || "").trim().toLowerCase();
+  const ok = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+  if (!ok.has(mime)) {
+    const n = (file.name || "").toLowerCase();
+    if (n.endsWith(".jpg") || n.endsWith(".jpeg")) mime = "image/jpeg";
+    else if (n.endsWith(".png")) mime = "image/png";
+    else if (n.endsWith(".webp")) mime = "image/webp";
+    else if (n.endsWith(".gif")) mime = "image/gif";
+  }
+  if (!ok.has(mime)) {
+    if (hint) hint.textContent = "Use a JPEG, PNG, WebP, or GIF image.";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const s = reader.result;
+    if (typeof s !== "string") return;
+    const m = /^data:([^;]+);base64,(.+)$/i.exec(s);
+    if (!m) {
+      if (hint) hint.textContent = "Could not read that image.";
+      return;
+    }
+    const declMime = (m[1] || "").trim().toLowerCase().split(";")[0];
+    const useMime = ok.has(declMime) ? declMime : mime;
+    if (!ok.has(useMime)) {
+      if (hint) hint.textContent = "Use a JPEG, PNG, WebP, or GIF image.";
+      return;
+    }
+    localArtworkPayload = { b64: m[2].replace(/\s/g, ""), mime: useMime, dataUrl: s };
+    artworkUrl = "";
+    const el = $("#fix-artwork-preview");
+    if (el) el.innerHTML = `<img src="${s}" alt="Local cover" />`;
+    if (hint) {
+      hint.textContent =
+        "Local image ready — click Save Tags & Artwork to embed. Tab draft does not store this file.";
+    }
+    scheduleFixPageSave();
+  };
+  reader.onerror = () => {
+    if (hint) hint.textContent = "Could not read that file.";
+  };
+  reader.readAsDataURL(file);
+}
+
+function wireFixArtworkDropzone() {
+  const zone = document.getElementById("fix-artwork-zone");
+  const fin = document.getElementById("fix-artwork-file");
+  const choose = document.getElementById("fix-artwork-choose");
+  const clearBtn = document.getElementById("fix-artwork-clear");
+  if (!zone || !fin || !choose || !clearBtn) return;
+
+  choose.addEventListener("click", () => fin.click());
+  fin.addEventListener("change", () => {
+    const f = fin.files && fin.files[0];
+    fin.value = "";
+    if (f) setLocalArtworkFromFile(f);
+  });
+
+  ["dragenter", "dragover"].forEach((ev) => {
+    zone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.add("dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach((ev) => {
+    zone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.remove("dragover");
+    });
+  });
+  zone.addEventListener("drop", (e) => {
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) setLocalArtworkFromFile(f);
+  });
+
+  clearBtn.addEventListener("click", () => {
+    clearLocalArtworkPayload();
+    artworkUrl = "";
+    const hint = document.getElementById("fix-artwork-hint");
+    if (hint) {
+      hint.innerHTML =
+        "JPEG, PNG, WebP, or GIF (max 10 MB). Drag onto the square or use <strong>Choose image</strong>. Local files are used when you save and are not synced to your browser tab draft.";
+    }
+    paintDefaultArtworkPreview();
+    scheduleFixPageSave();
+  });
+}
+
+function wireFixArtworkLightbox() {
+  const overlay = document.getElementById("fix-artwork-lightbox");
+  const fullImg = document.getElementById("fix-artwork-lightbox-img");
+  const closeBtn = document.getElementById("fix-artwork-lightbox-close");
+  const zone = document.getElementById("fix-artwork-zone");
+  if (!overlay || !fullImg || !zone) return;
+
+  let escListener = null;
+  let prevBodyOverflow = "";
+
+  function closeFixArtworkLightbox() {
+    overlay.classList.add("hidden");
+    fullImg.removeAttribute("src");
+    fullImg.alt = "";
+    document.body.style.overflow = prevBodyOverflow;
+    prevBodyOverflow = "";
+    if (escListener) {
+      document.removeEventListener("keydown", escListener, true);
+      escListener = null;
+    }
+  }
+
+  function openFixArtworkLightbox(src, altText) {
+    if (!src) return;
+    fullImg.alt = altText || "Album artwork";
+    fullImg.src = src;
+    overlay.classList.remove("hidden");
+    prevBodyOverflow = document.body.style.overflow || "";
+    document.body.style.overflow = "hidden";
+    escListener = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        closeFixArtworkLightbox();
+      }
+    };
+    document.addEventListener("keydown", escListener, true);
+    closeBtn?.focus({ preventScroll: true });
+  }
+
+  zone.addEventListener("click", (e) => {
+    const thumbs = $("#fix-artwork-preview")?.querySelector("img");
+    if (!thumbs?.src) return;
+    if (e.button !== 0) return;
+    openFixArtworkLightbox(thumbs.currentSrc || thumbs.src, thumbs.alt || "Album artwork");
+  });
+
+  closeBtn?.addEventListener("click", () => closeFixArtworkLightbox());
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeFixArtworkLightbox();
+  });
 }
 
 // ---- Filename helpers (Ableton export / performance sample names; Rekordbox uses tags+DB) ----
@@ -94,13 +291,46 @@ function stripRekordboxStyleFilenameAffixes(stem) {
   return t;
 }
 
+/** Coerce Settings value to an array (string in config.json would iterate by character). */
+function normalizeFixRetainLines(raw) {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw.map((x) => String(x).trim()).filter((s) => s && !s.startsWith("#"));
+  }
+  if (typeof raw === "string") {
+    return raw.split("\n").map((ln) => ln.trim()).filter((s) => s && !s.startsWith("#"));
+  }
+  return [];
+}
+
+/** Match app.py scrub_ableton_warp_marker_from_search_text (Ableton Warp export noise). */
+function scrubAbletonWarpFromSearchText(s, filenameStem) {
+  let t = (s || "").trim();
+  if (!t) return t;
+  try {
+    t = t.normalize("NFC");
+  } catch (_) {
+    /* ignore */
+  }
+  t = t.replace(/\uff08/g, "(").replace(/\uff09/g, ")");
+  t = t.replace(/_warped\s*$/i, "").replace(/\s+$/, "");
+  t = t.replace(/\)warped\s*$/i, ")");
+  t = t.replace(/\)(?:[-_\s\u2013\u2014])+warped\s*$/i, ")");
+  const stem = `${filenameStem || ""}`.trim();
+  if (stem && /_warped\s*$/i.test(stem)) {
+    t = t.replace(/\s+warped\s*$/i, "").trimEnd();
+  }
+  return t.trim();
+}
+
 /**
  * Peel configured suffix patterns from the end of the stem (match app.py peel_fix_retain_suffixes).
  * Returns { core, retained } — retained is fragments after the core for re-attaching on rename.
  */
 function peelFixRetainSuffixes(stem, lines) {
   let cur = (stem || "").trim();
-  if (!cur || !lines || !lines.length) {
+  const rules = normalizeFixRetainLines(lines);
+  if (!cur || !rules.length) {
     return { core: cur, retained: "" };
   }
   const peeled = [];
@@ -108,7 +338,7 @@ function peelFixRetainSuffixes(stem, lines) {
   while (cur && safety < 32) {
     safety += 1;
     let matchedPiece = null;
-    for (const raw of lines) {
+    for (const raw of rules) {
       if (raw == null) continue;
       const line = String(raw).trim();
       if (!line || line.startsWith("#")) continue;
@@ -125,9 +355,21 @@ function peelFixRetainSuffixes(stem, lines) {
           matchedPiece = m[0];
           break;
         }
-      } else if (cur.endsWith(line)) {
-        matchedPiece = line;
-        break;
+      } else {
+        const ln = line.toLowerCase();
+        const n = line.length;
+        if (n <= cur.length && cur.slice(-n).toLowerCase() === ln) {
+          matchedPiece = cur.slice(-n);
+          break;
+        }
+        if (ln === "_warped") {
+          const rx = /(?<=\))(?:_\s*|\s+)?warped\s*$/i;
+          const m = rx.exec(cur);
+          if (m && m.index >= 0 && m.index + m[0].length === cur.length) {
+            matchedPiece = m[0];
+            break;
+          }
+        }
       }
     }
     if (!matchedPiece) break;
@@ -210,7 +452,13 @@ function parseAbletonStyleFilenameCore(stem) {
 function parseAbletonStyleFilename(stem) {
   const peeled = peelFixRetainSuffixes(stem, fixRetainSuffixPatterns);
   const inner = parseAbletonStyleFilenameCore(peeled.core);
-  return { ...inner, retainedSuffix: peeled.retained };
+  return {
+    ...inner,
+    searchQuery: scrubAbletonWarpFromSearchText(inner.searchQuery || "", stem),
+    suggestedTitle: scrubAbletonWarpFromSearchText(inner.suggestedTitle || "", stem),
+    suggestedArtist: scrubAbletonWarpFromSearchText(inner.suggestedArtist || "", stem),
+    retainedSuffix: peeled.retained,
+  };
 }
 
 // ---- Browse audio files ----
@@ -223,8 +471,7 @@ function fixDefaultBrowseDir(cfg) {
 async function loadSettings() {
   const resp = await fetch("/api/settings");
   const cfg = await resp.json();
-  const sfx = cfg.fix_retain_filename_suffixes;
-  fixRetainSuffixPatterns = Array.isArray(sfx) ? sfx : [];
+  fixRetainSuffixPatterns = normalizeFixRetainLines(cfg.fix_retain_filename_suffixes);
   const last = typeof djmmGetLastAudioBrowseDir === "function" ? djmmGetLastAudioBrowseDir().trim() : "";
   $("#fix-dir").value = last || fixDefaultBrowseDir(cfg);
 }
@@ -344,7 +591,7 @@ async function browseAudio() {
   $("#fix-file-list").innerHTML = data.files
     .map(
       (f, i) =>
-        `<div class="file-item" data-idx="${i}">
+        `<div class="file-item" role="option" aria-selected="false" data-idx="${i}">
           <span class="file-name">${esc(f.name)}</span>
           <span class="file-size">${f.size_mb} MB</span>
         </div>`
@@ -364,15 +611,100 @@ function findFileItemByPath(path) {
   return document.querySelector(`#fix-file-list .file-item[data-idx="${idx}"]`);
 }
 
+/** Arrow keys normally scroll the list; let them move the selected row instead unless typing elsewhere. */
+function fixPageFocusedFieldConsumesArrowKeys(el) {
+  if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName.toLowerCase();
+  if (tag === "textarea") return true;
+  if (tag === "select") return true;
+  if (tag === "input") {
+    const type = (el.type || "text").toLowerCase();
+    const textual = new Set([
+      "",
+      "text",
+      "search",
+      "url",
+      "email",
+      "password",
+      "tel",
+      "number",
+      "date",
+      "time",
+      "datetime-local",
+      "month",
+      "week",
+    ]);
+    return textual.has(type);
+  }
+  return false;
+}
+
+function wireFixFileListArrowNav() {
+  if (window.__fixFileListKbWired) return;
+  window.__fixFileListKbWired = true;
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      if (!document.body.classList.contains("page-fix")) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+      if (fixPageFocusedFieldConsumesArrowKeys(e.target)) return;
+      const modal = document.getElementById("fix-folder-modal");
+      if (
+        modal &&
+        !modal.classList.contains("hidden") &&
+        e.target &&
+        typeof e.target.closest === "function" &&
+        e.target.closest("#fix-folder-modal")
+      ) {
+        return;
+      }
+
+      const list = document.getElementById("fix-file-list");
+      if (!list) return;
+      const items = [...list.querySelectorAll(".file-item")];
+      if (!items.length) return;
+
+      e.preventDefault();
+
+      let cur = items.findIndex((row) => row.classList.contains("selected"));
+      let next = cur;
+      if (e.key === "ArrowDown") next = cur < 0 ? 0 : Math.min(cur + 1, items.length - 1);
+      else if (e.key === "ArrowUp") next = cur < 0 ? items.length - 1 : Math.max(cur - 1, 0);
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = items.length - 1;
+
+      const row = items[next];
+      if (row) {
+        void selectFlacFile(row);
+        row.scrollIntoView({ block: "nearest", behavior: "auto" });
+      }
+    },
+    true
+  );
+}
+
 async function selectFlacFile(el) {
-  $("#fix-file-list").querySelectorAll(".file-item").forEach((e) => e.classList.remove("selected"));
+  $("#fix-file-list").querySelectorAll(".file-item").forEach((e) => {
+    e.classList.remove("selected");
+    e.setAttribute("aria-selected", "false");
+  });
   el.classList.add("selected");
+  el.setAttribute("aria-selected", "true");
   const bidx = parseInt(el.dataset.idx, 10);
-  selectedFile = !Number.isNaN(bidx) && fixBrowseFilePaths[bidx] ? fixBrowseFilePaths[bidx] : null;
+  const prevPath = selectedFile;
+  const nextPath = !Number.isNaN(bidx) && fixBrowseFilePaths[bidx] ? fixBrowseFilePaths[bidx] : null;
+  selectedFile = nextPath;
   if (!selectedFile) return;
   currentTracklist = [];
   currentMeta = {};
   artworkUrl = "";
+  clearLocalArtworkPayload();
+  if (selectedFile !== prevPath) {
+    const directUrlInp = document.getElementById("fix-artwork-direct-url");
+    if (directUrlInp) directUrlInp.value = "";
+  }
 
   $("#fix-save-btn").disabled = false;
   $("#fix-result").classList.add("hidden");
@@ -430,9 +762,8 @@ async function selectFlacFile(el) {
     searchOverride = parsed.searchQuery || null;
   }
 
-  $("#fix-artwork-preview").innerHTML = data.has_artwork
-    ? '<span style="color:var(--primary)">Artwork embedded</span>'
-    : "<span>No artwork</span>";
+  lastEmbeddedArtworkKnown = !!data.has_artwork;
+  paintDefaultArtworkPreview();
 
   const searchPayload = { ...data };
   if (searchOverride) {
@@ -441,6 +772,14 @@ async function selectFlacFile(el) {
   autoSearch(searchPayload);
   updateRenamePreview();
   scheduleFixPageSave();
+
+  if (window.DJMM && typeof window.DJMM.setPlayerTrack === "function") {
+    const fileLabel = selectedFile.split("/").pop() || "Track";
+    const a = $("#fix-artist").value.trim();
+    const t = $("#fix-title").value.trim();
+    const label = a && t ? `${a} — ${t}` : t || a || fileLabel;
+    window.DJMM.setPlayerTrack(selectedFile, label);
+  }
 }
 
 function hideSearchFallback() {
@@ -475,6 +814,7 @@ function searchResultCardsHtml(results) {
         discogs: { label: "Discogs", cls: "src-discogs" },
         apple_music: { label: "Apple Music", cls: "src-apple" },
         bandcamp: { label: "Bandcamp", cls: "src-bandcamp" },
+        soundcloud: { label: "SoundCloud", cls: "src-soundcloud" },
       };
       const sm = srcMap[r.source] || { label: "Web", cls: "src-generic" };
       const srcClass = sm.cls;
@@ -689,7 +1029,11 @@ function populateFromMeta(meta) {
   if (meta.label) $("#fix-label").value = meta.label;
   if (meta.catno) $("#fix-catno").value = meta.catno;
 
-  if (meta.artwork_url) {
+  const directArt =
+    (document.getElementById("fix-artwork-direct-url") &&
+      document.getElementById("fix-artwork-direct-url").value.trim()) ||
+    "";
+  if (meta.artwork_url && !localArtworkPayload && !directArt) {
     artworkUrl = meta.artwork_url;
     const proxyUrl = `/api/fetch-artwork?url=${encodeURIComponent(artworkUrl)}`;
     $("#fix-artwork-preview").innerHTML = `<img src="${proxyUrl}" alt="Cover art" onerror="this.parentElement.innerHTML='<span>Failed to load</span>'" />`;
@@ -785,7 +1129,6 @@ function clearAll() {
   $("#fix-catno").value = "";
   $("#fix-comment").value = "";
   $("#fix-url").value = "";
-  $("#fix-artwork-preview").innerHTML = "<span>No artwork</span>";
   $("#fix-tracklist-section").classList.add("hidden");
   $("#fix-search-section").classList.add("hidden");
   hideSearchFallback();
@@ -795,6 +1138,10 @@ function clearAll() {
   window.__fixRetainedSuffixFromFile = "";
   updateRenamePreview();
   artworkUrl = "";
+  clearLocalArtworkPayload();
+  const dua = document.getElementById("fix-artwork-direct-url");
+  if (dua) dua.value = "";
+  paintDefaultArtworkPreview();
   currentTracklist = [];
   currentMeta = {};
   scheduleFixPageSave();
@@ -823,6 +1170,7 @@ async function saveTags() {
   };
 
   const metadata_source_url = $("#fix-url").value.trim();
+  const ar = resolveFixArtworkPayloadForApi();
 
   const resp = await fetch("/api/retag", {
     method: "POST",
@@ -830,7 +1178,9 @@ async function saveTags() {
     body: JSON.stringify({
       filepath: selectedFile,
       metadata,
-      artwork_url: artworkUrl,
+      artwork_url: ar.artwork_url,
+      artwork_base64: ar.artwork_base64,
+      artwork_mime: ar.artwork_mime,
       metadata_source_url,
       rename_to_tags: $("#fix-rename-to-tags").checked,
     }),
@@ -847,9 +1197,14 @@ async function saveTags() {
     const outPath = data.filepath || selectedFile;
     const shortName = outPath.split("/").pop();
     const parts = [`Tags updated for <strong>${shortName}</strong>`];
-    if (artworkUrl) parts.push("Artwork embedded");
+    if (ar.sendsArtwork) parts.push("Artwork embedded");
     if (data.renamed) parts.push("File renamed on disk to match title &amp; artist.");
     result.innerHTML = `<div class="result-title">Saved!</div><div class="result-detail">${parts.join("<br>")}</div>`;
+
+    if (ar.sendsArtwork) {
+      lastEmbeddedArtworkKnown = true;
+      if (ar.hadLocalArt) clearLocalArtworkPayload();
+    }
 
     if (outPath && (data.renamed || outPath !== selectedFile)) {
       const parent = outPath.split("/").slice(0, -1).join("/");
@@ -870,6 +1225,59 @@ async function saveTags() {
   btn.disabled = false;
   btn.textContent = "Save Tags & Artwork";
   scheduleFixPageSave();
+}
+
+async function saveArtworkOnly() {
+  if (!selectedFile) return;
+  const btn = document.getElementById("fix-artwork-update-btn");
+  const result = $("#fix-result");
+  const ar = resolveFixArtworkPayloadForApi();
+  if (!ar.sendsArtwork) {
+    result.classList.remove("hidden");
+    result.className = "result error";
+    result.innerHTML =
+      '<div class="result-title">Nothing to embed</div><div class="result-detail">Choose an image file, paste a direct artwork URL, or load release artwork from search first.</div>';
+    return;
+  }
+  const prevLabel = btn ? btn.textContent : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+  }
+  result.classList.add("hidden");
+  const body = {
+    filepath: selectedFile,
+    record_in_log: false,
+    artwork_url: ar.artwork_url || "",
+    artwork_base64: ar.artwork_base64,
+    artwork_mime: ar.artwork_mime,
+  };
+  try {
+    const resp = await fetch("/api/retag-artwork", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    result.classList.remove("hidden");
+    if (data.error) {
+      result.className = "result error";
+      result.innerHTML = `<div class="result-title">Error</div><div class="result-detail">${data.error}</div>`;
+    } else {
+      result.className = "result";
+      const shortName = (data.filepath || selectedFile).split("/").pop();
+      result.innerHTML = `<div class="result-title">Artwork saved</div><div class="result-detail">Cover embedded for <strong>${shortName}</strong>. Tags were not changed.</div>`;
+      lastEmbeddedArtworkKnown = true;
+      if (ar.hadLocalArt) clearLocalArtworkPayload();
+      paintDefaultArtworkPreview();
+      scheduleFixPageSave();
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prevLabel;
+    }
+  }
 }
 
 // ---- Event listeners ----
@@ -896,6 +1304,7 @@ document.getElementById("fix-search-manual-q")?.addEventListener("keydown", (e) 
 });
 $("#fix-clear-btn").addEventListener("click", clearAll);
 $("#fix-save-btn").addEventListener("click", saveTags);
+document.getElementById("fix-artwork-update-btn")?.addEventListener("click", saveArtworkOnly);
 $("#fix-rename-to-tags").addEventListener("change", updateRenamePreview);
 ["fix-title", "fix-artist"].forEach((id) => {
   document.getElementById(id).addEventListener("input", updateRenamePreview);
@@ -951,6 +1360,9 @@ async function initFixPage() {
   }
   updateRenamePreview();
   wireFixPagePersistence();
+  wireFixArtworkDropzone();
+  wireFixArtworkLightbox();
+  wireFixFileListArrowNav();
   scheduleFixPageSave();
 }
 

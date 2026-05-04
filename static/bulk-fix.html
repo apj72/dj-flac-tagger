@@ -127,6 +127,17 @@
     </main>
   </div>
 
+  <div id="bf-confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bf-confirm-title">
+    <div class="modal-card modal-card--confirm">
+      <h3 id="bf-confirm-title"></h3>
+      <div id="bf-confirm-body" class="bulk-confirm-body hint"></div>
+      <div class="modal-actions">
+        <button type="button" id="bf-confirm-ok" class="btn btn-primary">OK</button>
+        <button type="button" id="bf-confirm-cancel" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="bf-folder-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bf-folder-modal-title">
     <div class="modal-card" style="max-width:32rem">
       <h3 id="bf-folder-modal-title">Choose folder</h3>
@@ -143,5 +154,6 @@
   </div>
 
   <script src="/static/bulk-fix.js"></script>
+  <script src="/static/player.js"></script>
 </body>
 </html>

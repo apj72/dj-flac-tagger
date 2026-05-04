@@ -127,7 +127,7 @@
         </table>
       </div>
       <p>
-        <strong>Fix search API:</strong> <code>GET /api/search?q=…</code> merges Apple + Discogs + Bandcamp. Optional <code>source=apple_music|discogs|bandcamp</code> and <code>limit</code> restrict to one catalogue (used by Fix Metadata fallback UI). For <strong>SoundCloud</strong> or <strong>Beatport</strong>, paste full track URLs into <strong>Fetch from URL</strong> / Bulk Fix rows — those hosts are not in the combined text search endpoint.
+        <strong>Fix search API:</strong> <code>GET /api/search?q=…</code> merges Apple + Discogs + Bandcamp and can include <strong>SoundCloud</strong> hits in the combined result set. Optional <code>source=apple_music|discogs|bandcamp|soundcloud</code> and <code>limit</code> restrict to one catalogue (used by Fix Metadata fallback UI). <strong>Beatport</strong> is typically used by pasting full track URLs into <strong>Fetch from URL</strong> / Bulk Fix rows.
       </p>
 
       <h2>Supported file roles</h2>
@@ -184,7 +184,9 @@
         <li><code>POST /api/probe</code>, <code>POST /api/analyse</code> — audio metrics</li>
         <li><code>POST /api/extract</code> — extract from video</li>
         <li><code>POST /api/fetch-metadata</code> — full metadata from URL; optional track hints</li>
-        <li><code>POST /api/retag</code> — save one file from Fix</li>
+        <li><code>POST /api/retag</code> — save one file from Fix (tags, optional artwork, optional rename)</li>
+        <li><code>POST /api/retag-artwork</code> — embed cover only; JSON <code>filepath</code> plus <code>artwork_base64</code>/<code>artwork_mime</code> or <code>artwork_url</code></li>
+        <li><code>GET /api/stream-audio?path=…</code> — stream local audio for the in-browser preview bar (Range-capable)</li>
         <li><code>POST /api/normalise</code> / <code>POST /api/normalise-flac</code> — loudness encode</li>
         <li><code>POST /api/convert-wav-to-flac</code>, <code>POST /api/convert-wav-bulk</code> — WAV batching</li>
         <li><code>GET /api/bulk-fix/scan</code>, <code>POST /api/bulk-fix/scan-paths</code>, <code>POST /api/bulk-fix/suggest</code>, <code>POST /api/bulk-fix/apply</code></li>
@@ -193,7 +195,7 @@
 
       <h2>UI state in the browser</h2>
       <p>
-        <strong><code>djmm.pageState</code></strong> in <code>localStorage</code> holds debounced drafts for Extract, Fix, Inspect, Normalise, and Settings. Settings clears its draft after a successful save so the next load matches the server. <strong>WAV → FLAC</strong> and <strong>Bulk Fix</strong> use additional keys (batch offsets, <code>djmm.bulkFixHandoff</code>, etc.). Nothing is synced to the cloud by the stock app.
+        <strong><code>djmm.pageState</code></strong> in <code>localStorage</code> holds debounced drafts for Extract, Fix, Inspect, Normalise, and Settings. Settings clears its draft after a successful save so the next load matches the server. <strong>WAV → FLAC</strong> and <strong>Bulk Fix</strong> use additional keys (batch offsets, <code>djmm.bulkFixHandoff</code>, etc.). The audio preview bar stores <strong><code>djmmPlayerVolume</code></strong> separately. Nothing is synced to the cloud by the stock app.
       </p>
 
       <h2>Branches</h2>

@@ -24,6 +24,12 @@ function esc(s) {
     .replace(/"/g, "&quot;");
 }
 
+function escAttr(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;");
+}
+
 function inspectDefaultBrowseDir(cfg) {
   const d = ((cfg.inspect_default_dir || "") + "").trim();
   if (d) return d;
@@ -112,6 +118,80 @@ async function loadInsFolderInModal(path) {
   });
 }
 
+/** Arrow keys: move selection in the file list (same behaviour as Fix Metadata). */
+function inspectPageFocusedFieldConsumesArrowKeys(el) {
+  if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName.toLowerCase();
+  if (tag === "textarea") return true;
+  if (tag === "select") return true;
+  if (tag === "input") {
+    const type = (el.type || "text").toLowerCase();
+    const textual = new Set([
+      "",
+      "text",
+      "search",
+      "url",
+      "email",
+      "password",
+      "tel",
+      "number",
+      "date",
+      "time",
+      "datetime-local",
+      "month",
+      "week",
+    ]);
+    return textual.has(type);
+  }
+  return false;
+}
+
+function wireInspectFileListArrowNav() {
+  if (window.__inspectFileListKbWired) return;
+  window.__inspectFileListKbWired = true;
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      if (!document.body.classList.contains("page-inspect")) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+      if (inspectPageFocusedFieldConsumesArrowKeys(e.target)) return;
+      const modal = document.getElementById("ins-folder-modal");
+      if (
+        modal &&
+        !modal.classList.contains("hidden") &&
+        e.target &&
+        typeof e.target.closest === "function" &&
+        e.target.closest("#ins-folder-modal")
+      ) {
+        return;
+      }
+
+      const list = document.getElementById("ins-file-list");
+      if (!list) return;
+      const items = [...list.querySelectorAll(".file-item")];
+      if (!items.length) return;
+
+      e.preventDefault();
+
+      let cur = items.findIndex((row) => row.classList.contains("selected"));
+      let next = cur;
+      if (e.key === "ArrowDown") next = cur < 0 ? 0 : Math.min(cur + 1, items.length - 1);
+      else if (e.key === "ArrowUp") next = cur < 0 ? items.length - 1 : Math.max(cur - 1, 0);
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = items.length - 1;
+
+      const row = items[next];
+      if (row) {
+        void selectFile(row);
+        row.scrollIntoView({ block: "nearest", behavior: "auto" });
+      }
+    },
+    true
+  );
+}
+
 async function browseFiles() {
   const dir = $("#ins-dir").value.trim();
   if (!dir) return;
@@ -139,8 +219,8 @@ async function browseFiles() {
   $("#ins-file-list").innerHTML = data.files
     .map(
       (f) =>
-        `<div class="file-item" data-path="${f.path}">
-          <span class="file-name">${f.name}</span>
+        `<div class="file-item" role="option" aria-selected="false" data-path="${escAttr(f.path)}">
+          <span class="file-name">${esc(f.name)}</span>
           <span class="file-size">${f.size_mb} MB</span>
         </div>`
     )
@@ -153,8 +233,12 @@ async function browseFiles() {
 }
 
 async function selectFile(el) {
-  $("#ins-file-list").querySelectorAll(".file-item").forEach((e) => e.classList.remove("selected"));
+  $("#ins-file-list").querySelectorAll(".file-item").forEach((e) => {
+    e.classList.remove("selected");
+    e.setAttribute("aria-selected", "false");
+  });
   el.classList.add("selected");
+  el.setAttribute("aria-selected", "true");
   selectedFile = el.dataset.path;
 
   $("#ins-details-layout").classList.remove("hidden");
@@ -179,6 +263,14 @@ async function selectFile(el) {
   renderMetadata(data);
   renderArtwork(data);
   scheduleInspectPageSave();
+
+  if (window.DJMM && typeof window.DJMM.setPlayerTrack === "function") {
+    const fileLabel = selectedFile.split("/").pop() || "Track";
+    const a = (data.artist || "").trim();
+    const t = (data.title || "").trim();
+    const label = a && t ? `${a} — ${t}` : t || a || fileLabel;
+    window.DJMM.setPlayerTrack(selectedFile, label);
+  }
 }
 
 /** Clear read-only metadata / artwork / file-detail panels without changing the folder listing selection. */
@@ -345,5 +437,6 @@ async function initInspect() {
     }
   }
   scheduleInspectPageSave();
+  wireInspectFileListArrowNav();
 }
 initInspect();

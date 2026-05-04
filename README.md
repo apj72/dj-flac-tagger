@@ -16,6 +16,8 @@ A local web tool for DJs to turn recordings into a clean, tagged library in **mu
 
 **On branch `v2` today:** **tab bar icons** with hover/focus labels; Extract **Rename** / **Delete** for source recordings (delete → Finder Trash on macOS; `POST /api/source-recording/rename` | `delete`), **SoundCloud** and **Beatport** URLs in **Fetch metadata**; **Bulk Fix → Reset form** to clear saved browser state; plus **Bulk Fix** (batch FLAC metadata, Bandcamp search, duplicate-name warnings, optional sibling `.wav` hints, **best-match pre-selection** after fetch), batch **WAV → FLAC** with offsets and **browser-stored batch progress**, **conversion-order handoff** to Bulk Fix for flat output (see [UI state](#ui-state-browser)), in-app **bulk convert confirmation** (no native `confirm` dialog), **per-tab UI drafts** for Extract / Fix / Inspect / Normalise / Settings in `localStorage`, **Inspect** folder picker, last browsed folder remembered between **Fix Metadata** and **Inspect**, and **UTF-8–safe** HTML/JSON scraping so accented titles (e.g. Apple Music) write correctly to tags.
 
+**Also on `v2`:** A fixed **audio preview bar** on every tab streams the selected file via **`GET /api/stream-audio`** (manual Play / Pause, draggable timeline, volume stored in `localStorage`). **Fix Metadata** supports a separate **Artwork image URL**, **Update artwork** (cover only, `POST /api/retag-artwork`), **click the cover** for a full-screen preview, and save rules that **prefer your local or URL cover** over release art; **Fix** and **Inspect** file lists use **arrow keys / Home / End** to move selection (like a focusable list), not only scroll.
+
 ## Recording
 
 This workflow assumes you capture mixes or vinyl rips as **video recordings** (often `.mkv`) using **[OBS Studio](https://obsproject.com/)** with a virtual audio device such as **[BlackHole](https://existential.audio/blackhole/)** on macOS. **OBS** is a practical choice because it is **free and open source**, can **record video** when you want a visual timeline or camera view, and supports **streaming** as well as local capture — one familiar tool for several setups.
@@ -47,10 +49,17 @@ The app does **not** use cookies for form memory. **Extract**, **Fix Metadata**,
 - **Settings:** After you click **Save Settings**, the settings draft is cleared so the next load matches the server.
 - **WAV → FLAC** and **Bulk Fix** use **additional** keys (e.g. bulk folder/target memory, batch offset handoff, `djmm.bulkFixHandoff` after a flat-folder convert) so large workflows stay separate from the generic page store.
 - **Bulk Fix** also exposes **Reset form** — clears folder fields, loaded batch, `djmm.bulkFixState`, `djmm.bulkFixDir`, and any pending WAV→FLAC **`djmm.bulkFixHandoff`** for a clean slate in this browser profile.
+- **Audio preview bar** (`static/player.js`): included on all main tabs; loads the current selection when the format is supported. **No autoplay** — use **Play** / **Pause**. Keyboard shortcuts on the timeline when focused: arrows, Home/End, Space to toggle playback.
+
+### Audio preview bar (all tabs)
+
+When you select a **playable** audio file on **Extract**, **Fix**, **Inspect**, **Normalise**, or **WAV → FLAC**, the bottom bar offers **Play** / **Pause**, a **seekable** timeline (click or drag; supports HTTP range requests), **volume** (remembered as `djmmPlayerVolume` in `localStorage`), and a **buffer** hint while data loads. **Video-only** sources on Extract (e.g. `.mkv`) show that in-browser preview is not available for that type. Playback uses the browser’s codecs (e.g. FLAC support varies by browser).
 
 ### Fix Metadata
 
-Browse audio files (multiple formats), auto-search iTunes, Discogs, and Bandcamp, fetch from URLs, edit fields, **save tags and artwork**. The **URL field** is saved into the file and into the **processing log** (when you used a URL or artwork URL) so you can trace the source. **Saved metadata URL** appears on **Inspect** for FLAC/OGG/MP3 where supported.
+Browse audio files (multiple formats), auto-search iTunes, Discogs, and Bandcamp, fetch from URLs, edit fields, **save tags and artwork**. The **Fetch from URL** field (metadata source) is separate from the **Artwork image URL** under the cover: you can paste a **direct image link** and use **Update artwork** to embed **only** the cover without rewriting other tags, or rely on **Save Tags & Artwork** with priority **local file → artwork URL → release art** from search. **Click the cover** for a full-screen preview. The **URL field** (metadata) is saved into the file and into the **processing log** where applicable. **Saved metadata URL** appears on **Inspect** for FLAC/OGG/MP3 where supported.
+
+On the file list, **ArrowUp / ArrowDown / Home / End** move the highlighted file and load it (when you are not typing in a text field or the folder modal is not focused)—same idea as **Inspect**.
 
 When a file has no useful tags, the **suggested search** string is derived from the **filename** using the same rules as **WAV → FLAC** tags and **Bulk Fix** (see [Filename search and tags](#filename-search-and-tags) below). **Rename to tags** can keep configured **trailing suffixes** (e.g. `_warped`) before the extension when set under **Settings → Fix Metadata filename suffixes**.
 
@@ -58,7 +67,7 @@ When a file has no useful tags, the **suggested search** string is derived from 
 
 ### Inspect
 
-Full tag table, artwork preview, **Fix artwork dimensions** for **FLAC** (Rekordbox-friendly; other formats unchanged here). Shows **Saved metadata URL** when present. Pick a folder with **Choose folder…** (server-side navigator), **Default** (Settings destination), then **List files** — useful for reviewing a flat **Converted WAVs** tree after bulk conversion. Deep link: **`/inspect?dir=/path/to/folder`**.
+Full tag table, artwork preview, **Fix artwork dimensions** for **FLAC** (Rekordbox-friendly; other formats unchanged here). Shows **Saved metadata URL** when present. Pick a folder with **Choose folder…** (server-side navigator), **Default** (Settings destination), then **List files** — useful for reviewing a flat **Converted WAVs** tree after bulk conversion. Deep link: **`/inspect?dir=/path/to/folder`**. **Arrow keys / Home / End** change the selected file in the list (same behaviour as **Fix Metadata**) when focus is not in a text field.
 
 ### Normalise
 
@@ -300,9 +309,11 @@ Example (see `config.json.example`):
 | `POST` | `/api/bulk-fix/scan-paths` | Body: `{ "paths": ["/abs/a.flac", ...] }` (max 200). Same item shape as **`/api/bulk-fix/scan`** but **preserves the given path order**; response includes **`"order": "explicit_paths"`**. Used after **WAV → FLAC** flat-folder runs so Bulk Fix loads exactly the files from that batch. |
 | `POST` | `/api/bulk-fix/suggest` | Search results per file path (Apple + Discogs + Bandcamp). |
 | `POST` | `/api/bulk-fix/apply` | Apply metadata from chosen URLs to many files. |
-| `GET` | `/api/search` | iTunes + Discogs + Bandcamp search (used by Fix and Bulk Fix). |
+| `GET` | `/api/search` | Apple Music + Discogs + Bandcamp + **SoundCloud** track search (used by Fix and Bulk Fix). Optional `source=soundcloud` (aliases: `sc`) limits to one catalogue. |
 | `POST` | `/api/fetch-metadata` | Full metadata from a URL; optional **`track_name`** / **`track_name_hint`** to pick a track on multi-track releases. |
 | `POST` | `/api/retag` | Save tags/artwork/rename for one file (Fix Metadata). |
+| `POST` | `/api/retag-artwork` | Embed **cover art only** for one file (tags unchanged). JSON: `filepath`, and either `artwork_base64` + optional `artwork_mime` or `artwork_url`. |
+| `GET` | `/api/stream-audio` | Stream a local file for the in-browser preview (`path` query param). Range requests supported; extensions match browse-audio plus `.wav`. |
 | `GET` | `/api/browse-folders` | Server-side folder picker for paths the browser cannot read. |
 
 Routes **`/convert`**, **`/bulk-fix`**, etc. serve the static HTML shells; the app runs locally (default **http://127.0.0.1:5123**).
@@ -315,7 +326,7 @@ pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
 
-Coverage includes: browse/convert WAV, bulk convert (including **offset/limit**, **`batch_flac_paths`**, and **custom** flat output + tags), **retag** rename, **bulk-fix** scan and **scan-paths** (including duplicate detection and WAV tag hints), **Bandcamp search** parsing (mocked HTML), **fetch-metadata** / **SoundCloud / Beatport** scraping (mocked HTML), normalise API, source-recording rename/delete helpers, and shared helpers. Tests that invoke **ffmpeg** skip automatically if it is missing. Network calls to live Discogs, Apple, or Bandcamp are **not** required in automated tests; bulk **suggest**/**apply** against real services are left to manual checks.
+Coverage includes: browse/convert WAV, bulk convert (including **offset/limit**, **`batch_flac_paths`**, and **custom** flat output + tags), **retag** rename, **retag-artwork** / **stream-audio**, **bulk-fix** scan and **scan-paths** (including duplicate detection and WAV tag hints), **Bandcamp search** parsing (mocked HTML), **SoundCloud search** (mocked API JSON), **fetch-metadata** / **SoundCloud / Beatport** scraping (mocked HTML), normalise API, source-recording rename/delete helpers, and shared helpers. Tests that invoke **ffmpeg** skip automatically if it is missing. Network calls to live Discogs, Apple, Bandcamp, or SoundCloud are **not** required in automated tests; bulk **suggest**/**apply** against real services are left to manual checks.
 
 ## Project structure
 
@@ -340,6 +351,7 @@ dj-meta-manager/
 │   ├── convert.html / convert.js   # WAV → FLAC
 │   ├── bulk-fix.html / bulk-fix.js # Bulk Fix metadata
 │   ├── path-persist.js             # Last audio browse dir (Fix + Inspect) + `djmm.pageState` UI drafts
+│   ├── player.js                   # Bottom audio preview bar (all tabs)
 │   ├── settings.html / settings.js
 │   └── style.css
 └── README.md

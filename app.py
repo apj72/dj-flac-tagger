@@ -1,10 +1,12 @@
 import base64
+import binascii
 import difflib
 import json
 from collections import defaultdict
 import os
 import re
 import time
+import unicodedata
 import shutil
 import subprocess
 import sys
@@ -15,7 +17,7 @@ from urllib.parse import quote_plus, urlunparse, urlparse
 
 import requests
 from bs4 import BeautifulSoup
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 import mutagen
 from mutagen.flac import FLAC, Picture
 from mutagen.mp3 import MP3
@@ -24,6 +26,27 @@ from mutagen.id3 import ID3, APIC, TIT2, TPE1, TPE2, TALB, TDRC, TCON, COMM, TPU
 from mutagen.oggvorbis import OggVorbis
 
 AUDIO_EXTENSIONS = (".flac", ".mp3", ".m4a", ".mp4", ".aac", ".ogg", ".oga", ".wma", ".aiff", ".aif")
+
+# Streamed in the in-browser preview bar (.wav from WAV → FLAC is not listed with browse-audio).
+STREAM_AUDIO_EXTENSIONS = frozenset(
+    (*AUDIO_EXTENSIONS, ".wav"),
+)
+
+
+def _mime_type_for_stream(ext: str) -> str:
+    return {
+        ".flac": "audio/flac",
+        ".mp3": "audio/mpeg",
+        ".m4a": "audio/mp4",
+        ".mp4": "audio/mp4",
+        ".aac": "audio/mp4",
+        ".ogg": "audio/ogg",
+        ".oga": "audio/ogg",
+        ".wav": "audio/wav",
+        ".aiff": "audio/aiff",
+        ".aif": "audio/aiff",
+        ".wma": "audio/x-ms-wma",
+    }.get(ext, "application/octet-stream")
 
 # System-wide extract / normalise output format (see Settings: extract_profile).
 EXTRACT_PROFILES = {
@@ -678,6 +701,55 @@ def _image_dimensions(data):
     return 0, 0
 
 
+_ARTWORK_UPLOAD_MIMES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
+_RETAG_ARTWORK_MAX_BYTES = 10 * 1024 * 1024
+
+
+def _mime_from_image_magic(head: bytes) -> str | None:
+    """Best-effort image type from magic bytes (first ~32 bytes)."""
+    if not head or len(head) < 3:
+        return None
+    if head[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if head[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp"
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    return None
+
+
+def _decode_retag_artwork_base64(raw: str, _mime_hint: str = "") -> tuple[bytes | None, str | None]:
+    """
+    Decode a base64 image from Fix Metadata (whole file or data-URL). Returns (bytes, mime) or
+    (None, None) if invalid, wrong type, or too large.
+    """
+    s = (raw or "").strip()
+    if not s:
+        return None, None
+    if s.startswith("data:") and "base64," in s:
+        try:
+            s = s.split("base64,", 1)[1].strip()
+        except IndexError:
+            return None, None
+    try:
+        data = base64.b64decode(s, validate=False)
+    except (binascii.Error, ValueError):
+        try:
+            data = base64.urlsafe_b64decode(s + "===")
+        except (binascii.Error, ValueError):
+            return None, None
+    except Exception:
+        return None, None
+    if not data or len(data) > _RETAG_ARTWORK_MAX_BYTES:
+        return None, None
+    magic = _mime_from_image_magic(data[:32])
+    if magic is None:
+        return None, None
+    return data, magic
+
+
 def _apply_flac(filepath, metadata, artwork_bytes, artwork_mime):
     audio = FLAC(filepath)
     vorbis_map = {
@@ -1239,6 +1311,42 @@ def _soundcloud_artwork_hires(url: str) -> str:
     return re.sub(r"-large\.(jpg|jpeg|png)(\?[^#]*)?$", r"-t500x500.\1", url, flags=re.I)
 
 
+_soundcloud_api_client_cache: dict = {"id": "", "ts": 0.0}
+_SOUNDSCLOUD_CLIENT_ID_TTL_SEC = 6 * 3600
+
+
+def _soundcloud_api_client_id() -> str:
+    """
+    SoundCloud's public web app embeds an API ``client_id`` in ``window.__sc_hydration`` on
+    https://soundcloud.com/ . It may rotate; callers should tolerate empty return on failure.
+    """
+    now = time.time()
+    cached = (_soundcloud_api_client_cache.get("id") or "").strip()
+    ts = float(_soundcloud_api_client_cache.get("ts") or 0.0)
+    if cached and (now - ts) < _SOUNDSCLOUD_CLIENT_ID_TTL_SEC:
+        return cached
+    try:
+        resp = requests.get("https://soundcloud.com/", headers=HEADERS, timeout=18)
+        resp.raise_for_status()
+        html = _response_text_utf8(resp)
+        m = re.search(r"window\.__sc_hydration\s*=\s*(\[.*?\])\s*;", html, re.S)
+        if not m:
+            return cached
+        blob = json.loads(m.group(1))
+        for item in blob:
+            if not isinstance(item, dict) or item.get("hydratable") != "apiClient":
+                continue
+            data = item.get("data") if isinstance(item.get("data"), dict) else {}
+            new_id = (data.get("id") or "").strip()
+            if new_id:
+                _soundcloud_api_client_cache["id"] = new_id
+                _soundcloud_api_client_cache["ts"] = now
+                return new_id
+    except (json.JSONDecodeError, OSError, requests.RequestException, TypeError, ValueError):
+        pass
+    return cached
+
+
 def scrape_soundcloud(url: str) -> dict:
     """Metadata from a public SoundCloud track URL (embedded ``__sc_hydration`` JSON)."""
     resp = requests.get(url, headers=HEADERS, timeout=15)
@@ -1638,13 +1746,146 @@ def search_bandcamp(query, limit=6):
     return results
 
 
-def peel_fix_retain_suffixes(stem: str, lines: list | None) -> tuple[str, str]:
+def search_soundcloud(query, limit=6):
+    """
+    Search tracks on soundcloud.com via the same ``api-v2`` endpoint the site uses.
+    Results are suitable for ``scrape_soundcloud`` / apply-metadata when the user picks a URL.
+    """
+    results: list[dict] = []
+    q = (query or "").strip()
+    if not q or limit < 1:
+        return results
+    client_id = _soundcloud_api_client_id()
+    if not client_id:
+        return results
+    limit = max(1, min(limit, 25))
+    try:
+        resp = requests.get(
+            "https://api-v2.soundcloud.com/search/tracks",
+            params={
+                "q": q,
+                "limit": limit,
+                "linked_partitioning": "true",
+                "client_id": client_id,
+            },
+            headers=HEADERS,
+            timeout=22,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        for tr in data.get("collection") or []:
+            if len(results) >= limit:
+                break
+            if not isinstance(tr, dict) or tr.get("kind") != "track":
+                continue
+            title = (tr.get("title") or "").strip()
+            url = (tr.get("permalink_url") or "").strip()
+            if not title or not url:
+                continue
+            user = tr.get("user") if isinstance(tr.get("user"), dict) else {}
+            uploader = (user.get("full_name") or user.get("username") or "").strip()
+            pm = tr.get("publisher_metadata") if isinstance(tr.get("publisher_metadata"), dict) else {}
+            artist = (pm.get("artist") or "").strip() or uploader
+            album = (
+                (pm.get("album_title") or pm.get("release_title") or "").strip()
+            )
+            year = ""
+            rd = tr.get("release_date") or tr.get("display_date") or tr.get("created_at") or ""
+            ym = re.search(r"(\d{4})", str(rd))
+            if ym:
+                year = ym.group(1)
+            thumb = ""
+            au = tr.get("artwork_url") or ""
+            if au:
+                thumb = _soundcloud_artwork_hires(str(au).strip())
+            results.append({
+                "title": title,
+                "artist": artist,
+                "album": album,
+                "year": year,
+                "artwork_thumb": thumb,
+                "url": url,
+                "source": "soundcloud",
+            })
+    except Exception:
+        pass
+    return results
+
+
+def normalize_fix_retain_filename_suffixes(raw) -> list[str]:
+    """
+    Coerce config value to a list of rule lines.
+
+    If `config.json` stores a single string (e.g. `_warped`) by mistake, iterating that
+    string would match one character at a time and never strip `_warped` as a whole.
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        out: list[str] = []
+        for x in raw:
+            s = str(x).strip()
+            if s and not s.startswith("#"):
+                out.append(s)
+        return out
+    if isinstance(raw, str):
+        return [ln.strip() for ln in raw.splitlines() if ln.strip() and not ln.strip().startswith("#")]
+    return []
+
+
+def scrub_ableton_warp_marker_from_search_text(
+    s: str,
+    *,
+    filename_stem: str | None = None,
+) -> str:
+    """
+    Remove Ableton Live **Warp** export noise from catalogue search strings.
+
+    Runs regardless of Settings: many users skip configuring ``fix_retain_filename_suffixes``,
+    and loose parsing turns ``…_warped`` into ``… warped`` (no underscore), which literal
+    ``_warped`` rules never match.
+
+    When *filename_stem* ends with ``_warped``, we also peel a lone trailing `` warped``
+    (Ableton spaced form after loose parsing). That is gated so arbitrary tracks legitimately
+    titled ``… warped`` are not rewritten when the underlying file stem had no Ableton warp
+    marker suffix.
+    """
+    if not (s or "").strip():
+        return (s or "").strip()
+    t = unicodedata.normalize("NFC", (s or "").strip())
+    t = t.replace("\uff08", "(").replace("\uff09", ")")
+    t = re.sub(r"(?i)_warped\s*$", "", t).rstrip()
+    t = re.sub(r"(?i)\)warped\s*$", ")", t).rstrip()
+    t = re.sub(r"(?i)\)(?:[-–—_\s])+warped\s*$", ")", t).rstrip()
+    st = (filename_stem or "").strip()
+    if st and re.search(r"(?i)_warped\s*$", st):
+        t = re.sub(r"(?i)\s+warped\s*$", "", t).rstrip()
+    return t
+
+
+def _scrub_bulk_search_hints_dict(
+    d: dict,
+    *,
+    filename_stem: str | None = None,
+) -> dict:
+    """Strip Ableton warp export noise from values used only for catalogue search."""
+    out = dict(d)
+    stem = (filename_stem or "").strip() or None
+    for key in ("query", "title_hint", "artist_hint"):
+        val = out.get(key) or ""
+        if val.strip():
+            out[key] = scrub_ableton_warp_marker_from_search_text(val, filename_stem=stem)
+    return out
+
+
+def peel_fix_retain_suffixes(stem: str, lines: list | str | None) -> tuple[str, str]:
     """
     Repeatedly peel configured suffix patterns from the **end** of stem for search parsing.
     Returns (core_stem, retained_concat) where retained is pieces left-to-right after the core
     (e.g. core ``Track``, retained ``_bpm(120)_warped``).
     """
     cur = (stem or "").strip()
+    lines = normalize_fix_retain_filename_suffixes(lines)
     if not cur or not lines:
         return cur, ""
     peeled_right_to_left: list[str] = []
@@ -1670,8 +1911,18 @@ def peel_fix_retain_suffixes(stem: str, lines: list | None) -> tuple[str, str]:
                     matched_piece = m.group(0)
                     break
             else:
-                if cur.endswith(line):
-                    matched_piece = line
+                lowline = line.lower()
+                n = len(line)
+                matched_piece_l: str | None = None
+                if n <= len(cur) and cur[-n:].lower() == lowline:
+                    matched_piece_l = cur[-n:]
+                elif lowline == "_warped":
+                    # WAV / store tags often use ") warped" while the FLAC filename uses ")_warped".
+                    wm = re.search(r"(?<=\))(?:_\s*|\s+)?warped\s*$", cur, flags=re.I)
+                    if wm is not None:
+                        matched_piece_l = wm.group(0)
+                if matched_piece_l is not None:
+                    matched_piece = matched_piece_l
                     break
         if not matched_piece:
             break
@@ -1717,41 +1968,45 @@ def search_query_from_ableton_stem(stem: str) -> dict:
     Build an online search query from a file stem (matches Fix Metadata / fix.js intent).
     """
     cfg = load_config()
-    core, _ret = peel_fix_retain_suffixes(stem, cfg.get("fix_retain_filename_suffixes") or [])
+    core, _ret = peel_fix_retain_suffixes(
+        stem, cfg.get("fix_retain_filename_suffixes"),
+    )
     p = parse_ableton_style_wav_stem(core)
     if p.get("matched") and (p.get("artist") or "").strip() and (p.get("title") or "").strip():
         a = p["artist"].strip()
         t = p["title"].strip()
         q = f"{a} {t}"
-        return {
+        out = {
             "query": re.sub(r"\s+", " ", q).strip(),
             "title_hint": t,
             "artist_hint": a,
             "pattern_matched": True,
         }
-    if (p.get("title") or "").strip() and not p.get("matched"):
+    elif (p.get("title") or "").strip() and not p.get("matched"):
         loose = p["title"].strip()
-        return {
+        out = {
             "query": loose,
             "title_hint": loose,
             "artist_hint": "",
             "pattern_matched": False,
         }
-    if p.get("loose"):
-        return {
+    elif p.get("loose"):
+        out = {
             "query": p["loose"],
             "title_hint": "",
             "artist_hint": "",
             "pattern_matched": False,
         }
-    tail = _normalize_track_filename_stem(core)
-    t = re.sub(r"\s+", " ", tail.replace("_", " ")).strip()
-    return {
-        "query": t,
-        "title_hint": "",
-        "artist_hint": "",
-        "pattern_matched": False,
-    }
+    else:
+        tail = _normalize_track_filename_stem(core)
+        t = re.sub(r"\s+", " ", tail.replace("_", " ")).strip()
+        out = {
+            "query": t,
+            "title_hint": "",
+            "artist_hint": "",
+            "pattern_matched": False,
+        }
+    return _scrub_bulk_search_hints_dict(out, filename_stem=stem)
 
 
 def _read_wav_embedded_tags(path: str) -> dict:
@@ -1797,20 +2052,29 @@ def bulk_fix_search_info_for_flac(flac_path: str) -> dict:
     wti = (wt.get("title") or "").strip()
     wal = (wt.get("album") or "").strip()
     merged = {**base}
+    cfg_bf = load_config()
+    peel_lines = normalize_fix_retain_filename_suffixes(
+        cfg_bf.get("fix_retain_filename_suffixes"),
+    )
     merged["wav_sibling"] = wav_sibling if os.path.isfile(wav_sibling) else ""
     tag_blob = {k: v for k, v in {"artist": wa, "title": wti, "album": wal}.items() if v}
     merged["wav_tags"] = tag_blob or None
     if wa and wti:
-        q = f"{wa} {wti}"
-        merged["query"] = re.sub(r"\s+", " ", q).strip()
-        merged["title_hint"] = wti
-        merged["artist_hint"] = wa
+        q = re.sub(r"\s+", " ", f"{wa} {wti}").strip()
+        qp, _ = peel_fix_retain_suffixes(q, peel_lines)
+        merged["query"] = qp.strip()
+        wtp, _ = peel_fix_retain_suffixes(wti, peel_lines)
+        wap, _ = peel_fix_retain_suffixes(wa, peel_lines)
+        merged["title_hint"] = wtp.strip()
+        merged["artist_hint"] = wap.strip()
     else:
         if wti and not (merged.get("title_hint") or "").strip():
-            merged["title_hint"] = wti
+            wtp, _ = peel_fix_retain_suffixes(wti, peel_lines)
+            merged["title_hint"] = wtp.strip()
         if wa and not (merged.get("artist_hint") or "").strip():
-            merged["artist_hint"] = wa
-    return merged
+            wap, _ = peel_fix_retain_suffixes(wa, peel_lines)
+            merged["artist_hint"] = wap.strip()
+    return _scrub_bulk_search_hints_dict(merged, filename_stem=stem)
 
 
 def _best_track_in_list(tracklist: list, title_hint: str) -> dict:
@@ -1935,7 +2199,7 @@ def convert_wav_page():
 
 
 def _normalize_search_source(raw: str) -> str:
-    """Return apple_music | discogs | bandcamp, or '' for combined search."""
+    """Return apple_music | discogs | bandcamp | soundcloud, or '' for combined search."""
     s = (raw or "").strip().lower()
     if s in ("apple", "apple_music", "itunes"):
         return "apple_music"
@@ -1943,16 +2207,18 @@ def _normalize_search_source(raw: str) -> str:
         return "discogs"
     if s == "bandcamp":
         return "bandcamp"
+    if s in ("soundcloud", "sc"):
+        return "soundcloud"
     return ""
 
 
 @app.route("/api/search")
 def search():
-    """Search iTunes, Discogs, and Bandcamp for a track by query string.
+    """Search iTunes, Discogs, Bandcamp, and SoundCloud for a track by query string.
 
     Query params:
       q — search text (required for non-empty results)
-      source — optional: apple_music (aliases: apple, itunes), discogs, bandcamp.
+      source — optional: apple_music (aliases: apple, itunes), discogs, bandcamp, soundcloud (sc).
                When set, only that catalogue is queried.
       limit — optional max hits per source (default 3 when source is set, else ignored for combined)
     """
@@ -1971,6 +2237,8 @@ def search():
             results = search_itunes(q, limit=lim)
         elif source_key == "discogs":
             results = search_discogs(q, limit=lim)
+        elif source_key == "soundcloud":
+            results = search_soundcloud(q, limit=lim)
         else:
             results = search_bandcamp(q, limit=lim)
         return jsonify({"results": results})
@@ -1978,12 +2246,13 @@ def search():
     itunes = search_itunes(q, limit=8)
     discogs = search_discogs(q, limit=5)
     bandcamp = search_bandcamp(q, limit=6)
+    soundcloud = search_soundcloud(q, limit=6)
 
     # De-dupe by title + artist (or album for Discogs) + source so the same work can appear
-    # on Apple, Discogs, and Bandcamp for validation.
+    # on Apple, Discogs, Bandcamp, and SoundCloud for validation.
     seen = set()
     combined = []
-    for r in itunes + discogs + bandcamp:
+    for r in itunes + discogs + bandcamp + soundcloud:
         key = (
             (r.get("title", "") or "").lower().strip(),
             (r.get("artist") or r.get("album") or "").lower().strip(),
@@ -2073,7 +2342,7 @@ def bulk_fix_scan():
 
 @app.route("/api/bulk-fix/suggest", methods=["POST"])
 def bulk_fix_suggest():
-    """For each file path, run the same iTunes + Discogs + Bandcamp search as /api/search (rate-limited)."""
+    """For each file path, run the same iTunes + Discogs + Bandcamp + SoundCloud search as /api/search (rate-limited)."""
     data = request.get_json() or {}
     paths = data.get("paths") or data.get("filepaths") or []
     if not isinstance(paths, list):
@@ -2111,9 +2380,11 @@ def bulk_fix_suggest():
         time.sleep(delay)
         bandcamp = search_bandcamp(q, limit=5)
         time.sleep(delay)
+        soundcloud = search_soundcloud(q, limit=6)
+        time.sleep(delay)
         seen = set()
         combined = []
-        for r in itunes + discogs + bandcamp:
+        for r in itunes + discogs + bandcamp + soundcloud:
             u = (r.get("url") or "").strip()
             key = (
                 (r.get("title", "") or "").lower().strip(),
@@ -2298,6 +2569,9 @@ def get_settings():
     cfg["extract_profiles"] = extract_profile_options()
     cfg["source_dir_resolved"] = resolve(cfg["source_dir"])
     cfg["destination_dir_resolved"] = resolve(cfg["destination_dir"])
+    cfg["fix_retain_filename_suffixes"] = normalize_fix_retain_filename_suffixes(
+        cfg.get("fix_retain_filename_suffixes"),
+    )
     return jsonify(cfg)
 
 
@@ -2351,19 +2625,7 @@ def update_settings():
         except (TypeError, ValueError):
             pass
     if "fix_retain_filename_suffixes" in data:
-        raw = data["fix_retain_filename_suffixes"]
-        lines: list[str] = []
-        if isinstance(raw, list):
-            for x in raw:
-                if isinstance(x, str):
-                    s = x.strip()
-                    if s and not s.startswith("#"):
-                        lines.append(s)
-        elif isinstance(raw, str):
-            for ln in raw.splitlines():
-                s = ln.strip()
-                if s and not s.startswith("#"):
-                    lines.append(s)
+        lines = normalize_fix_retain_filename_suffixes(data["fix_retain_filename_suffixes"])
         for line in lines:
             if line.lower().startswith("regex:"):
                 pat = line[6:].strip()
@@ -2380,6 +2642,9 @@ def update_settings():
     cfg["extract_profiles"] = extract_profile_options()
     cfg["source_dir_resolved"] = resolve(cfg["source_dir"])
     cfg["destination_dir_resolved"] = resolve(cfg["destination_dir"])
+    cfg["fix_retain_filename_suffixes"] = normalize_fix_retain_filename_suffixes(
+        cfg.get("fix_retain_filename_suffixes"),
+    )
     return jsonify(cfg)
 
 
@@ -2987,13 +3252,20 @@ def _retained_suffix_from_filepath(filepath: str) -> str:
     if not stem:
         return ""
     cfg = load_config()
-    _c, retained = peel_fix_retain_suffixes(stem, cfg.get("fix_retain_filename_suffixes") or [])
+    _c, retained = peel_fix_retain_suffixes(
+        stem, cfg.get("fix_retain_filename_suffixes"),
+    )
     return retained
 
 
 @app.route("/api/retag", methods=["POST"])
 def retag():
-    """Re-apply metadata and artwork to an existing audio file from a log entry."""
+    """Re-apply metadata and artwork to an existing audio file.
+
+    JSON body may include ``artwork_base64`` (+ optional ``artwork_mime``) to embed a cover from
+    the browser (Fix Metadata: local file / drag-and-drop). That takes precedence over
+    ``artwork_url`` when both are sent.
+    """
     data = request.get_json()
     filepath = data.get("filepath")
     metadata = dict(data.get("metadata") or {})
@@ -3036,8 +3308,20 @@ def retag():
                     "error": f"That filename is already in use: {planned_new_name}.",
                 }), 409
 
+    artwork_uploaded = False
+    artwork_raw_b64 = (data.get("artwork_base64") or "").strip()
     artwork_bytes, artwork_mime = None, None
-    if artwork_url:
+    if artwork_raw_b64:
+        artwork_bytes, artwork_mime = _decode_retag_artwork_base64(
+            artwork_raw_b64,
+            (data.get("artwork_mime") or "").strip(),
+        )
+        if not artwork_bytes:
+            return jsonify({
+                "error": "Invalid cover image: use JPEG, PNG, WebP, or GIF (max 10 MB).",
+            }), 400
+        artwork_uploaded = True
+    elif artwork_url:
         try:
             artwork_bytes, artwork_mime = fetch_artwork(artwork_url)
         except Exception as e:
@@ -3063,7 +3347,7 @@ def retag():
                     "error": f"Tags were saved, but rename failed: {e}",
                 }), 500
 
-    if record_in_log and (metadata_source_url or artwork_url):
+    if record_in_log and (metadata_source_url or artwork_url or artwork_uploaded):
         log_extraction({
             "kind": "fix",
             "filename": os.path.basename(out_path),
@@ -3071,6 +3355,7 @@ def retag():
             "target_path": out_path,
             "metadata": metadata,
             "artwork_url": artwork_url,
+            "local_artwork": artwork_uploaded,
             "metadata_source_url": metadata_source_url,
             "metadata_source_type": infer_metadata_source_type(metadata_source_url),
         })
@@ -3080,6 +3365,63 @@ def retag():
         "filepath": out_path,
         "renamed": renamed,
     })
+
+
+@app.route("/api/retag-artwork", methods=["POST"])
+def retag_artwork():
+    """Embed cover art only; does not change text tags or rename the file."""
+    data = request.get_json()
+    filepath = data.get("filepath")
+    if not filepath or not os.path.isfile(filepath):
+        return jsonify({"error": f"File not found: {filepath}"}), 404
+
+    artwork_raw_b64 = (data.get("artwork_base64") or "").strip()
+    artwork_url = (data.get("artwork_url") or "").strip()
+    artwork_bytes, artwork_mime = None, None
+    artwork_uploaded = False
+
+    if artwork_raw_b64:
+        artwork_bytes, artwork_mime = _decode_retag_artwork_base64(
+            artwork_raw_b64,
+            (data.get("artwork_mime") or "").strip(),
+        )
+        if not artwork_bytes:
+            return jsonify({
+                "error": "Invalid cover image: use JPEG, PNG, WebP, or GIF (max 10 MB).",
+            }), 400
+        artwork_uploaded = True
+    elif artwork_url:
+        try:
+            artwork_bytes, artwork_mime = fetch_artwork(artwork_url)
+        except Exception as e:
+            return jsonify({"error": f"Artwork fetch failed: {e}"}), 500
+    else:
+        return jsonify({
+            "error": "Provide artwork_base64 (and optional artwork_mime) or artwork_url.",
+        }), 400
+
+    if not artwork_bytes:
+        return jsonify({"error": "No artwork data to embed."}), 400
+
+    try:
+        apply_metadata(filepath, {}, artwork_bytes, artwork_mime)
+    except Exception as e:
+        return jsonify({"error": f"Tagging failed: {e}"}), 500
+
+    if data.get("record_in_log", False) and (artwork_url or artwork_uploaded):
+        log_extraction({
+            "kind": "fix_artwork",
+            "filename": os.path.basename(filepath),
+            "output_path": filepath,
+            "target_path": filepath,
+            "metadata": {},
+            "artwork_url": artwork_url,
+            "local_artwork": artwork_uploaded,
+            "metadata_source_url": "",
+            "metadata_source_type": infer_metadata_source_type(artwork_url),
+        })
+
+    return jsonify({"status": "ok", "filepath": filepath})
 
 
 @app.route("/api/retag-batch", methods=["POST"])
@@ -3731,6 +4073,25 @@ def convert_wav_to_flac():
 
 # Keep old endpoint as alias for backwards compatibility
 app.add_url_rule("/api/browse-flacs", endpoint="browse_flacs_compat", view_func=browse_audio)
+
+
+@app.route("/api/stream-audio")
+def stream_audio():
+    """Stream a local audio file for the in-browser preview player (HTML5 audio; Range-aware)."""
+    raw = (request.args.get("path") or "").strip()
+    if not raw:
+        return jsonify({"error": "path query parameter required"}), 400
+    try:
+        path = os.path.realpath(resolve(raw))
+    except (OSError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+    if not os.path.isfile(path):
+        return jsonify({"error": "File not found"}), 404
+    ext = Path(path).suffix.lower()
+    if ext not in STREAM_AUDIO_EXTENSIONS:
+        return jsonify({"error": "Unsupported type for streaming"}), 415
+    mt = _mime_type_for_stream(ext)
+    return send_file(path, mimetype=mt, conditional=True, max_age=0)
 
 
 @app.route("/api/read-tags", methods=["POST"])
