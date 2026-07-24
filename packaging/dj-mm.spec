@@ -16,7 +16,7 @@ datas = [
 ]
 binaries = []
 hiddenimports = []
-for pkg in ("werkzeug", "flask"):
+for pkg in ("werkzeug", "flask", "webview"):
     tmp_ret = collect_all(pkg)
     datas += tmp_ret[0]
     binaries += tmp_ret[1]
