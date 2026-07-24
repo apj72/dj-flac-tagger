@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote_plus, urlunparse, urlparse
@@ -238,6 +239,46 @@ def log_extraction(entry):
     entries.append(entry)
     save_log(entries)
     return len(entries) - 1
+
+
+# ---------------------------------------------------------------------------
+# Logged tracks (Apple Music Now Playing captures)
+# ---------------------------------------------------------------------------
+
+def _default_logged_tracks_path():
+    if getattr(sys, "frozen", False):
+        return str(writable_app_data_dir() / "logged_tracks.json")
+    return str(Path(__file__).resolve().parent / "logged_tracks.json")
+
+
+LOGGED_TRACKS_PATH = _default_logged_tracks_path()
+
+
+def load_logged_tracks():
+    try:
+        with open(LOGGED_TRACKS_PATH) as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or "tracks" not in data:
+            return {"schema_version": 1, "tracks": []}
+        return data
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"schema_version": 1, "tracks": []}
+
+
+def save_logged_tracks(data):
+    dir_path = os.path.dirname(LOGGED_TRACKS_PATH) or "."
+    fd, tmp = tempfile.mkstemp(dir=dir_path, prefix=".logged_tracks_", suffix=".json")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+        os.replace(tmp, LOGGED_TRACKS_PATH)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 SOURCE_URL_VORBIS = "DJMETAMANAGER_SOURCE_URL"
@@ -656,6 +697,160 @@ def trash_file(filepath):
         f'(POSIX file "{filepath}" as alias)'
     )
     subprocess.run(["osascript", "-e", script], capture_output=True, text=True, check=True)
+
+
+# ---------------------------------------------------------------------------
+# Apple Music Now Playing capture
+# ---------------------------------------------------------------------------
+
+def _run_osascript(script, timeout=10):
+    result = subprocess.run(
+        ["osascript", "-e", script],
+        capture_output=True, text=True, timeout=timeout,
+    )
+    return result.stdout.strip(), result.stderr.strip(), result.returncode
+
+
+_APPLE_MUSIC_APPLESCRIPT = '''\
+on escJSON(s)
+    set o to ""
+    set q to ASCII character 34
+    repeat with c in characters of (s as text)
+        set ch to contents of c
+        if ch is "\\\\" then
+            set o to o & "\\\\\\\\"
+        else if ch is q then
+            set o to o & "\\\\" & q
+        else if ch is (ASCII character 10) then
+            set o to o & "\\\\n"
+        else if ch is (ASCII character 13) then
+            set o to o & "\\\\r"
+        else if ch is (ASCII character 9) then
+            set o to o & "\\\\t"
+        else
+            set o to o & ch
+        end if
+    end repeat
+    return o
+end escJSON
+
+tell application "Music"
+    if not running then
+        return "{\\"error\\": \\"not_running\\"}"
+    end if
+    set ps to (player state as text)
+    if ps is "stopped" then
+        return "{\\"error\\": \\"nothing_playing\\", \\"playbackState\\": \\"stopped\\"}"
+    end if
+    set pp to player position
+    set ct to current track
+    set tTitle to my escJSON(name of ct)
+    set tArtist to my escJSON(artist of ct)
+    set tAlbum to my escJSON(album of ct)
+    try
+        set tAlbumArtist to my escJSON(album artist of ct)
+    on error
+        set tAlbumArtist to ""
+    end try
+    try
+        set tDuration to duration of ct
+    on error
+        set tDuration to 0
+    end try
+    try
+        set tTrackNum to track number of ct
+    on error
+        set tTrackNum to 0
+    end try
+    try
+        set tDiscNum to disc number of ct
+    on error
+        set tDiscNum to 0
+    end try
+    try
+        set tGenre to my escJSON(genre of ct)
+    on error
+        set tGenre to ""
+    end try
+    try
+        set tYear to (year of ct) as text
+    on error
+        set tYear to ""
+    end try
+    try
+        set tComposer to my escJSON(composer of ct)
+    on error
+        set tComposer to ""
+    end try
+    try
+        set tPersistentId to persistent ID of ct
+    on error
+        set tPersistentId to ""
+    end try
+    return "{\\"playbackState\\": \\"" & ps & "\\", \\"playerPosition\\": " & pp & ", \\"persistentId\\": \\"" & tPersistentId & "\\", \\"title\\": \\"" & tTitle & "\\", \\"artist\\": \\"" & tArtist & "\\", \\"album\\": \\"" & tAlbum & "\\", \\"albumArtist\\": \\"" & tAlbumArtist & "\\", \\"genre\\": \\"" & tGenre & "\\", \\"year\\": \\"" & tYear & "\\", \\"composer\\": \\"" & tComposer & "\\", \\"duration\\": " & tDuration & ", \\"trackNumber\\": " & tTrackNum & ", \\"discNumber\\": " & tDiscNum & "}"
+end tell
+'''
+
+
+def capture_apple_music_now_playing():
+    if sys.platform != "darwin":
+        raise RuntimeError("Apple Music capture is only available on macOS")
+
+    try:
+        stdout, stderr, rc = _run_osascript(_APPLE_MUSIC_APPLESCRIPT, timeout=10)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Timed out communicating with Music.app")
+    except FileNotFoundError:
+        raise RuntimeError("osascript not found — is this macOS?")
+
+    if rc != 0:
+        if "-1743" in stderr:
+            raise PermissionError(
+                "DJ MetaManager needs permission to read the current track from Music. "
+                "Enable access in System Settings → Privacy & Security → Automation."
+            )
+        raise RuntimeError(f"AppleScript error: {stderr}")
+
+    if not stdout:
+        raise RuntimeError("No response from Music.app")
+
+    try:
+        raw = json.loads(stdout)
+    except json.JSONDecodeError:
+        raise RuntimeError(f"Unexpected response from Music.app: {stdout[:200]}")
+
+    if "error" in raw:
+        err = raw["error"]
+        if err == "not_running":
+            raise RuntimeError("Music is not running.")
+        if err == "nothing_playing":
+            raise RuntimeError("Nothing is currently playing in Music.")
+        raise RuntimeError(f"Music error: {err}")
+
+    title = raw.get("title", "")
+    if not title:
+        raise RuntimeError("Music returned a track with no title.")
+
+    return {
+        "id": str(uuid.uuid4()),
+        "source": "apple_music_now_playing",
+        "capturedAt": datetime.now().isoformat(),
+        "appleMusicPersistentId": raw.get("persistentId") or None,
+        "playbackState": raw.get("playbackState", "unknown"),
+        "playerPosition": raw.get("playerPosition", 0),
+        "metadata": {
+            "title": title,
+            "artist": raw.get("artist", ""),
+            "album": raw.get("album", ""),
+            "albumArtist": raw.get("albumArtist", ""),
+            "genre": raw.get("genre", ""),
+            "year": raw.get("year", ""),
+            "composer": raw.get("composer", ""),
+            "duration": raw.get("duration", 0),
+            "trackNumber": raw.get("trackNumber") or None,
+            "discNumber": raw.get("discNumber") or None,
+        },
+    }
 
 
 def apply_metadata(filepath, metadata, artwork_bytes=None, artwork_mime=None):
@@ -2852,6 +3047,68 @@ def fetch_artwork_route():
         return jsonify({"error": str(e)}), 500
 
 
+# ---------------------------------------------------------------------------
+# Apple Music Now Playing & Logged Tracks API
+# ---------------------------------------------------------------------------
+
+@app.route("/api/platform")
+def get_platform():
+    return jsonify({"platform": sys.platform})
+
+
+@app.route("/api/apple-music/now-playing", methods=["POST"])
+def apple_music_now_playing():
+    if sys.platform != "darwin":
+        return jsonify({"error": "Apple Music capture requires macOS"}), 501
+    try:
+        entry = capture_apple_music_now_playing()
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 400
+
+    data = load_logged_tracks()
+    pid = entry.get("appleMusicPersistentId")
+    if pid:
+        for existing in data["tracks"]:
+            if existing.get("appleMusicPersistentId") == pid:
+                try:
+                    delta = (
+                        datetime.fromisoformat(entry["capturedAt"])
+                        - datetime.fromisoformat(existing["capturedAt"])
+                    ).total_seconds()
+                    if abs(delta) < 30:
+                        return jsonify({"track": existing, "duplicate": True})
+                except (ValueError, TypeError):
+                    pass
+
+    data["tracks"].append(entry)
+    save_logged_tracks(data)
+    return jsonify({"track": entry})
+
+
+@app.route("/api/logged-tracks")
+def get_logged_tracks():
+    return jsonify(load_logged_tracks())
+
+
+@app.route("/api/logged-tracks/<track_id>", methods=["DELETE"])
+def delete_logged_track(track_id):
+    data = load_logged_tracks()
+    before = len(data["tracks"])
+    data["tracks"] = [t for t in data["tracks"] if t.get("id") != track_id]
+    if len(data["tracks"]) == before:
+        return jsonify({"error": "Track not found"}), 404
+    save_logged_tracks(data)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/logged-tracks", methods=["DELETE"])
+def clear_logged_tracks():
+    save_logged_tracks({"schema_version": 1, "tracks": []})
+    return jsonify({"ok": True})
+
+
 @app.route("/api/extract", methods=["POST"])
 def extract():
     data = request.get_json()
@@ -2861,6 +3118,7 @@ def extract():
     metadata = data.get("metadata", {})
     artwork_url = data.get("artwork_url", "")
     metadata_source_url = (data.get("metadata_source_url") or "").strip()
+    logged_track_id = (data.get("logged_track_id") or "").strip() or None
 
     if not filepath or not os.path.isfile(filepath):
         return jsonify({"error": "Source file not found"}), 404
@@ -3024,6 +3282,18 @@ def extract():
     if open_pn and pn_app:
         post_extract_open_app(pn_app, output_path)
 
+    logged_track_removed = False
+    if logged_track_id:
+        try:
+            lt_data = load_logged_tracks()
+            before = len(lt_data["tracks"])
+            lt_data["tracks"] = [t for t in lt_data["tracks"] if t.get("id") != logged_track_id]
+            if len(lt_data["tracks"]) < before:
+                save_logged_tracks(lt_data)
+                logged_track_removed = True
+        except Exception:
+            pass
+
     result = {
         "output_path": output_path,
         "filename": filename,
@@ -3038,6 +3308,7 @@ def extract():
         "log_index": log_index,
         "expected_pn_path": expected_pn_path,
         "expected_pn_flac_path": expected_pn_path,
+        "logged_track_removed": logged_track_removed,
     }
     if normalise:
         result["target_lufs"] = tgt_lufs

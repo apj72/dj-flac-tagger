@@ -20,6 +20,8 @@ function extensionForExtractProfile(profileKey) {
 let selectedFile = null;
 let currentTracklist = [];
 let currentLoudnormParams = null;
+let loggedTracks = [];
+let selectedLoggedTrackId = null;
 /** Mirrors Settings → extract MKV audio analysis (client-side meters on Extract tab). */
 let extractMkvAudioAnalysisEnabled = true;
 
@@ -63,6 +65,7 @@ function collectExtractPageState() {
     deleteSource: $("#delete-source").checked,
     openPlatinumNotes: $("#open-platinum-notes").checked,
     watchPnRepair: $("#watch-pn-repair").checked,
+    selectedLoggedTrackId,
     currentTracklist,
     metaForTracklist: {
       artist: $("#meta-artist").value,
@@ -105,6 +108,7 @@ function applyExtractPageStateFields(st) {
   if (st.deleteSource != null) $("#delete-source").checked = st.deleteSource;
   if (st.openPlatinumNotes != null) $("#open-platinum-notes").checked = st.openPlatinumNotes;
   if (st.watchPnRepair != null) $("#watch-pn-repair").checked = st.watchPnRepair;
+  if (st.selectedLoggedTrackId != null) selectedLoggedTrackId = st.selectedLoggedTrackId;
 }
 
 function wireExtractPagePersistence() {
@@ -142,6 +146,16 @@ async function loadExtractPrefs() {
   if (dest) $("#retag-dir").value = dest;
   extractMkvAudioAnalysisEnabled = cfg.extract_mkv_audio_analysis_enabled !== false;
   refreshExtractMkvAnalysisSettingsHint();
+
+  try {
+    const platResp = await fetch("/api/platform");
+    const platData = await platResp.json();
+    if (platData.platform === "darwin") {
+      const npSection = document.getElementById("now-playing-section");
+      if (npSection) npSection.classList.remove("hidden");
+      await loadLoggedTracks();
+    }
+  } catch (_) { /* non-critical */ }
 }
 
 // ---- Browse files ----
@@ -731,6 +745,7 @@ async function extractAndTag() {
       normalise,
       loudnorm_params: normalise ? currentLoudnormParams : null,
       open_platinum_notes: $("#open-platinum-notes").checked,
+      logged_track_id: selectedLoggedTrackId || null,
     }),
   });
 
@@ -783,6 +798,14 @@ async function extractAndTag() {
         '<div id="pn-watch-msg" class="hint" style="margin-top:0.75rem">Waiting for Platinum Notes output…</div>'
       );
       pollAndRepairPn(data.output_path, data.log_index, data.copied_to || "");
+    }
+    if (data.logged_track_removed) {
+      selectedLoggedTrackId = null;
+      loadLoggedTracks();
+      result.querySelector(".result-detail")?.insertAdjacentHTML(
+        "beforeend",
+        "<br>Processed successfully and removed from logged tracks."
+      );
     }
     if (data.source_trashed) {
       browseFiles();
@@ -995,6 +1018,233 @@ async function pollAndRepairPn(baseFlacPath, logIndex, copiedTo) {
       "Timed out waiting for Platinum Notes. When the _PN file exists, use Processing Log to re-tag that file, or run Repair from the API.";
   }
 }
+
+// ---- Apple Music Now Playing ----
+
+async function captureNowPlaying() {
+  const statusEl = document.getElementById("now-playing-status");
+  const captureBtn = document.getElementById("now-playing-capture-btn");
+  if (!statusEl || !captureBtn) return;
+  captureBtn.disabled = true;
+  captureBtn.innerHTML = '<span class="spinner"></span> Capturing…';
+  statusEl.classList.remove("hidden");
+  statusEl.textContent = "Querying Music…";
+
+  try {
+    const resp = await fetch("/api/apple-music/now-playing", { method: "POST" });
+    const data = await resp.json();
+    if (data.error) {
+      statusEl.textContent = data.error;
+      return;
+    }
+    const m = data.track.metadata || {};
+    if (data.duplicate) {
+      statusEl.textContent = `Already logged: ${m.artist} — ${m.title}`;
+    } else {
+      statusEl.textContent = `Captured: ${m.artist} — ${m.title}`;
+    }
+    await loadLoggedTracks();
+    const sel = document.getElementById("logged-tracks-select");
+    if (sel) {
+      sel.value = data.track.id;
+      onLoggedTrackSelect();
+    }
+  } catch (e) {
+    statusEl.textContent = "Failed to capture: " + e.message;
+  } finally {
+    captureBtn.disabled = false;
+    captureBtn.textContent = "Now Playing";
+    setTimeout(() => statusEl.classList.add("hidden"), 5000);
+  }
+}
+
+async function loadLoggedTracks() {
+  try {
+    const resp = await fetch("/api/logged-tracks");
+    const data = await resp.json();
+    loggedTracks = data.tracks || [];
+    renderLoggedTracksDropdown();
+  } catch (_) {
+    loggedTracks = [];
+  }
+}
+
+function renderLoggedTracksDropdown() {
+  const bar = document.getElementById("logged-tracks-bar");
+  const sel = document.getElementById("logged-tracks-select");
+  if (!bar || !sel) return;
+
+  if (!loggedTracks.length) {
+    bar.classList.add("hidden");
+    document.getElementById("logged-track-preview")?.classList.add("hidden");
+    selectedLoggedTrackId = null;
+    updateLoggedTrackButtons();
+    return;
+  }
+
+  bar.classList.remove("hidden");
+  const opts = loggedTracks.slice().reverse().map((t) => {
+    const m = t.metadata || {};
+    const time = t.capturedAt
+      ? new Date(t.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : "";
+    const label = `${m.artist || "Unknown"} — ${m.title || "Untitled"} [${time}]`;
+    return `<option value="${t.id}">${escHtml(label)}</option>`;
+  });
+  sel.innerHTML = '<option value="">Select a logged track…</option>' + opts.join("");
+
+  if (selectedLoggedTrackId) {
+    sel.value = selectedLoggedTrackId;
+    if (!sel.value) selectedLoggedTrackId = null;
+  }
+  updateLoggedTrackButtons();
+  updateLoggedTrackPreview();
+}
+
+function onLoggedTrackSelect() {
+  const sel = document.getElementById("logged-tracks-select");
+  selectedLoggedTrackId = (sel && sel.value) || null;
+  updateLoggedTrackButtons();
+  updateLoggedTrackPreview();
+  scheduleExtractPageSave();
+}
+
+function updateLoggedTrackButtons() {
+  const hasSelection = !!selectedLoggedTrackId;
+  const useBtn = document.getElementById("logged-track-use-btn");
+  const delBtn = document.getElementById("logged-track-delete-btn");
+  if (useBtn) useBtn.disabled = !hasSelection;
+  if (delBtn) delBtn.disabled = !hasSelection;
+}
+
+function updateLoggedTrackPreview() {
+  const preview = document.getElementById("logged-track-preview");
+  if (!preview) return;
+  if (!selectedLoggedTrackId) {
+    preview.classList.add("hidden");
+    return;
+  }
+  const track = loggedTracks.find((t) => t.id === selectedLoggedTrackId);
+  if (!track) {
+    preview.classList.add("hidden");
+    return;
+  }
+  const m = track.metadata || {};
+  const el = (id, val) => {
+    const e = document.getElementById(id);
+    if (e) e.textContent = val || "—";
+  };
+  el("lt-preview-title", m.title);
+  el("lt-preview-artist", m.artist);
+  el("lt-preview-album", m.album);
+  el("lt-preview-time", track.capturedAt ? new Date(track.capturedAt).toLocaleString() : null);
+  el("lt-preview-state", track.playbackState);
+
+  const thumbEl = document.getElementById("lt-preview-thumb");
+  const artRow = document.getElementById("lt-preview-artwork-row");
+  const artVal = document.getElementById("lt-preview-artwork-value");
+  if (thumbEl) thumbEl.innerHTML = "";
+  if (artRow) artRow.style.display = "none";
+  if (artVal) artVal.textContent = "";
+
+  preview.classList.remove("hidden");
+}
+
+function setLoggedTrackArtwork(url) {
+  const thumbEl = document.getElementById("lt-preview-thumb");
+  const artRow = document.getElementById("lt-preview-artwork-row");
+  const artVal = document.getElementById("lt-preview-artwork-value");
+  if (!thumbEl) return;
+  if (url) {
+    const proxyUrl = `/api/fetch-artwork?url=${encodeURIComponent(url)}`;
+    thumbEl.innerHTML = `<img src="${proxyUrl}" alt="Cover art" onerror="this.parentElement.innerHTML=''" />`;
+    if (artRow) artRow.style.display = "flex";
+    if (artVal) artVal.textContent = "Available";
+  } else {
+    thumbEl.innerHTML = "";
+    if (artRow) artRow.style.display = "none";
+  }
+}
+
+async function useLoggedTrackAsMetadata() {
+  if (!selectedLoggedTrackId) return;
+  const track = loggedTracks.find((t) => t.id === selectedLoggedTrackId);
+  if (!track) return;
+  const m = track.metadata || {};
+
+  clearAllFields();
+
+  if (m.title) $("#meta-title").value = m.title;
+  if (m.artist) $("#meta-artist").value = m.artist;
+  if (m.albumArtist) $("#meta-albumartist").value = m.albumArtist;
+  if (m.album) $("#meta-album").value = m.album;
+  if (m.year) $("#meta-date").value = m.year;
+  if (m.genre) $("#meta-genre").value = m.genre;
+
+  const searchHint = [m.artist, m.title].filter(Boolean).join(" - ");
+  if (searchHint) $("#track-name").value = searchHint;
+
+  updateExtractButton();
+  scheduleExtractPageSave();
+
+  // Search Apple Music for artwork
+  if (searchHint) {
+    const status = $("#fetch-status");
+    status.classList.remove("hidden");
+    status.innerHTML = '<span class="spinner"></span> Searching Apple Music for artwork…';
+    try {
+      const q = encodeURIComponent(searchHint);
+      const resp = await fetch(`/api/search?q=${q}&source=apple_music&limit=1`);
+      const data = await resp.json();
+      const hit = (data.results || [])[0];
+      if (hit && hit.artwork_thumb) {
+        const hiRes = hit.artwork_thumb.replace(/\/\d+x\d+[^/]*\.\w+$/, "/1200x1200bb.jpg");
+        $("#artwork-url").value = hiRes;
+        loadArtworkPreview(hiRes);
+        setLoggedTrackArtwork(hiRes);
+        if (hit.url) $("#track-url").value = hit.url;
+        status.textContent = "Found artwork from Apple Music.";
+      } else {
+        status.textContent = "No artwork found on Apple Music.";
+      }
+    } catch (_) {
+      status.textContent = "Artwork search failed.";
+    }
+    setTimeout(() => status.classList.add("hidden"), 4000);
+    scheduleExtractPageSave();
+  }
+}
+
+async function deleteLoggedTrack() {
+  if (!selectedLoggedTrackId) return;
+  try {
+    await fetch("/api/logged-tracks/" + selectedLoggedTrackId, { method: "DELETE" });
+    selectedLoggedTrackId = null;
+    await loadLoggedTracks();
+  } catch (_) { /* ignore */ }
+}
+
+async function clearAllLoggedTracks() {
+  const ok = await extractShowConfirm(
+    "Clear logged tracks",
+    "Remove all logged Apple Music tracks?",
+    "Clear All",
+    true,
+  );
+  if (!ok) return;
+  try {
+    await fetch("/api/logged-tracks", { method: "DELETE" });
+    selectedLoggedTrackId = null;
+    await loadLoggedTracks();
+  } catch (_) { /* ignore */ }
+}
+
+document.getElementById("now-playing-capture-btn")?.addEventListener("click", captureNowPlaying);
+document.getElementById("logged-tracks-select")?.addEventListener("change", onLoggedTrackSelect);
+document.getElementById("logged-track-use-btn")?.addEventListener("click", useLoggedTrackAsMetadata);
+document.getElementById("logged-track-delete-btn")?.addEventListener("click", deleteLoggedTrack);
+document.getElementById("logged-tracks-clear-btn")?.addEventListener("click", clearAllLoggedTracks);
+
 
 // ---- Init ----
 loadExtractPrefs().then(async () => {

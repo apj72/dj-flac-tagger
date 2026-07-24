@@ -85,6 +85,56 @@
           <input type="text" id="track-name" placeholder="Pump Up the Jam (Felix.cw Remix)" />
         </div>
         <button id="fetch-btn" class="btn btn-primary">Fetch Metadata</button>
+
+        <!-- Apple Music Now Playing (macOS only) -->
+        <div id="now-playing-section" class="now-playing-section hidden">
+          <div class="now-playing-divider"></div>
+          <div class="now-playing-header">
+            <span class="now-playing-label">Apple Music — Now Playing</span>
+            <button id="now-playing-capture-btn" class="btn btn-secondary btn-sm">Now Playing</button>
+          </div>
+          <div id="now-playing-status" class="status hidden"></div>
+          <div id="logged-tracks-bar" class="logged-tracks-bar hidden">
+            <select id="logged-tracks-select" class="logged-tracks-select">
+              <option value="">No logged tracks</option>
+            </select>
+            <button id="logged-track-use-btn" class="btn btn-primary btn-sm" disabled>Use as Metadata</button>
+            <button id="logged-track-delete-btn" class="btn btn-secondary btn-sm" disabled title="Delete selected logged track">Delete</button>
+            <button id="logged-tracks-clear-btn" class="btn btn-danger btn-sm" title="Clear all logged tracks">Clear All</button>
+          </div>
+          <div id="logged-track-preview" class="logged-track-preview hidden">
+            <div class="logged-track-preview-content">
+              <div class="logged-track-preview-fields">
+                <div class="logged-track-preview-row">
+                  <span class="logged-track-preview-label">Track</span>
+                  <span id="lt-preview-title" class="logged-track-preview-value"></span>
+                </div>
+                <div class="logged-track-preview-row">
+                  <span class="logged-track-preview-label">Artist</span>
+                  <span id="lt-preview-artist" class="logged-track-preview-value"></span>
+                </div>
+                <div class="logged-track-preview-row">
+                  <span class="logged-track-preview-label">Album</span>
+                  <span id="lt-preview-album" class="logged-track-preview-value"></span>
+                </div>
+                <div class="logged-track-preview-row">
+                  <span class="logged-track-preview-label">Captured</span>
+                  <span id="lt-preview-time" class="logged-track-preview-value"></span>
+                </div>
+                <div class="logged-track-preview-row">
+                  <span class="logged-track-preview-label">State</span>
+                  <span id="lt-preview-state" class="logged-track-preview-value"></span>
+                </div>
+                <div class="logged-track-preview-row" id="lt-preview-artwork-row" style="display:none">
+                  <span class="logged-track-preview-label">Artwork</span>
+                  <span id="lt-preview-artwork-value" class="logged-track-preview-value"></span>
+                </div>
+              </div>
+              <div id="lt-preview-thumb" class="logged-track-preview-thumb"></div>
+            </div>
+          </div>
+        </div>
+
         <div id="fetch-status" class="status hidden"></div>
       </section>
 

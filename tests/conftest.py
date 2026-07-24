@@ -16,6 +16,7 @@ def app_module(monkeypatch, tmp_path):
 
     monkeypatch.setattr(app_mod, "CONFIG_PATH", str(tmp_path / "config.json"))
     monkeypatch.setattr(app_mod, "LOG_PATH", str(tmp_path / "processing_log.json"))
+    monkeypatch.setattr(app_mod, "LOGGED_TRACKS_PATH", str(tmp_path / "logged_tracks.json"))
     (tmp_path / "config.json").write_text(
         json.dumps(
             {
