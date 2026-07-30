@@ -150,9 +150,17 @@
         <h2><span class="step">3</span> Metadata <button id="clear-btn" class="btn btn-secondary btn-sm btn-clear">Clear All</button></h2>
         <div class="metadata-layout">
           <div class="artwork-panel">
-            <div id="artwork-preview" class="artwork-placeholder">
-              <span>No artwork</span>
+            <div id="artwork-dropzone" class="artwork-placeholder artwork-dropzone">
+              <div id="artwork-preview" class="artwork-preview-inner">
+                <span>Drop image here<br />or use buttons below</span>
+              </div>
             </div>
+            <input type="file" id="artwork-file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+            <div class="artwork-actions">
+              <button type="button" id="artwork-choose-btn" class="btn btn-secondary btn-sm">Choose image</button>
+              <button type="button" id="artwork-clear-btn" class="btn btn-secondary btn-sm">Clear</button>
+            </div>
+            <p id="artwork-hint" class="artwork-hint">JPEG, PNG, WebP, or GIF (max 10 MB)</p>
             <div class="field-row">
               <label for="artwork-url">Artwork URL</label>
               <input type="url" id="artwork-url" placeholder="https://..." />

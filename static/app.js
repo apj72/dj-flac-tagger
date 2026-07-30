@@ -24,6 +24,7 @@ let loggedTracks = [];
 let selectedLoggedTrackId = null;
 /** Mirrors Settings → extract MKV audio analysis (client-side meters on Extract tab). */
 let extractMkvAudioAnalysisEnabled = true;
+let localArtworkPayload = null;
 
 function filepathLooksLikeMkv(p) {
   if (!p || typeof p !== "string") return false;
@@ -577,7 +578,7 @@ function clearAllFields() {
   $("#meta-label").value = "";
   $("#meta-catno").value = "";
   $("#artwork-url").value = "";
-  $("#artwork-preview").innerHTML = "<span>No artwork</span>";
+  clearLocalArtwork();
   $("#track-url").value = "";
   $("#track-name").value = "";
   $("#tracklist-section").classList.add("hidden");
@@ -701,9 +702,106 @@ async function fetchMetadata() {
 // ---- Artwork preview ----
 function loadArtworkPreview(url) {
   if (!url) return;
+  localArtworkPayload = null;
   const container = $("#artwork-preview");
   const proxyUrl = `/api/fetch-artwork?url=${encodeURIComponent(url)}`;
   container.innerHTML = `<img src="${proxyUrl}" alt="Cover art" onerror="this.parentElement.innerHTML='<span>Failed to load</span>'" />`;
+  const hint = document.getElementById("artwork-hint");
+  if (hint) hint.textContent = "JPEG, PNG, WebP, or GIF (max 10 MB)";
+}
+
+// ---- Local artwork drag-and-drop ----
+function setLocalArtworkFromFile(file) {
+  const hint = document.getElementById("artwork-hint");
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) {
+    if (hint) hint.textContent = "Image too large (max 10 MB).";
+    return;
+  }
+  const ok = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+  let mime = (file.type || "").trim().toLowerCase();
+  if (!ok.has(mime)) {
+    const n = (file.name || "").toLowerCase();
+    if (n.endsWith(".jpg") || n.endsWith(".jpeg")) mime = "image/jpeg";
+    else if (n.endsWith(".png")) mime = "image/png";
+    else if (n.endsWith(".webp")) mime = "image/webp";
+    else if (n.endsWith(".gif")) mime = "image/gif";
+  }
+  if (!ok.has(mime)) {
+    if (hint) hint.textContent = "Use a JPEG, PNG, WebP, or GIF image.";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const s = reader.result;
+    if (typeof s !== "string") return;
+    const m = /^data:([^;]+);base64,(.+)$/i.exec(s);
+    if (!m) {
+      if (hint) hint.textContent = "Could not read that image.";
+      return;
+    }
+    const declMime = (m[1] || "").trim().toLowerCase().split(";")[0];
+    const useMime = ok.has(declMime) ? declMime : mime;
+    localArtworkPayload = { b64: m[2].replace(/\s/g, ""), mime: useMime, dataUrl: s };
+    $("#artwork-url").value = "";
+    $("#artwork-preview").innerHTML = `<img src="${s}" alt="Local cover" />`;
+    if (hint) hint.textContent = "Local image ready — will be embedded on extract.";
+    scheduleExtractPageSave();
+  };
+  reader.onerror = () => {
+    if (hint) hint.textContent = "Could not read that file.";
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearLocalArtwork() {
+  localArtworkPayload = null;
+  $("#artwork-preview").innerHTML = '<span>Drop image here<br />or use buttons below</span>';
+  const hint = document.getElementById("artwork-hint");
+  if (hint) hint.textContent = "JPEG, PNG, WebP, or GIF (max 10 MB)";
+}
+
+function wireArtworkDropzone() {
+  const zone = document.getElementById("artwork-dropzone");
+  const fin = document.getElementById("artwork-file");
+  const choose = document.getElementById("artwork-choose-btn");
+  const clearBtn = document.getElementById("artwork-clear-btn");
+  if (!zone || !fin) return;
+
+  zone.addEventListener("click", () => fin.click());
+  if (choose) choose.addEventListener("click", () => fin.click());
+  fin.addEventListener("change", () => {
+    const f = fin.files && fin.files[0];
+    fin.value = "";
+    if (f) setLocalArtworkFromFile(f);
+  });
+
+  ["dragenter", "dragover"].forEach((ev) => {
+    zone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.add("dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach((ev) => {
+    zone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.remove("dragover");
+    });
+  });
+  zone.addEventListener("drop", (e) => {
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) setLocalArtworkFromFile(f);
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      clearLocalArtwork();
+      $("#artwork-url").value = "";
+      scheduleExtractPageSave();
+    });
+  }
 }
 
 // ---- Extract ----
@@ -733,20 +831,26 @@ async function extractAndTag() {
   const deleteSource = $("#delete-source").checked;
   const normalise = $("#normalise").checked;
 
+  const payload = {
+    filepath: selectedFile,
+    metadata,
+    artwork_url: localArtworkPayload ? "" : artworkUrl,
+    metadata_source_url,
+    delete_source: deleteSource,
+    normalise,
+    loudnorm_params: normalise ? currentLoudnormParams : null,
+    open_platinum_notes: $("#open-platinum-notes").checked,
+    logged_track_id: selectedLoggedTrackId || null,
+  };
+  if (localArtworkPayload) {
+    payload.artwork_base64 = localArtworkPayload.b64;
+    payload.artwork_mime = localArtworkPayload.mime;
+  }
+
   const resp = await fetch("/api/extract", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      filepath: selectedFile,
-      metadata,
-      artwork_url: artworkUrl,
-      metadata_source_url,
-      delete_source: deleteSource,
-      normalise,
-      loudnorm_params: normalise ? currentLoudnormParams : null,
-      open_platinum_notes: $("#open-platinum-notes").checked,
-      logged_track_id: selectedLoggedTrackId || null,
-    }),
+    body: JSON.stringify(payload),
   });
 
   const data = await resp.json();
@@ -1270,5 +1374,6 @@ loadExtractPrefs().then(async () => {
     loadHistory();
   }
   wireExtractPagePersistence();
+  wireArtworkDropzone();
   scheduleExtractPageSave();
 });
