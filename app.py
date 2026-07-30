@@ -1,6 +1,8 @@
+import atexit
 import base64
 import binascii
 import difflib
+import hashlib
 import json
 from collections import defaultdict
 import os
@@ -3214,7 +3216,12 @@ def extract():
                         loudness_verify_warning = None
 
     artwork_bytes, artwork_mime = None, None
-    if artwork_url:
+    raw_b64 = (data.get("artwork_base64") or "").strip()
+    if raw_b64:
+        artwork_bytes, artwork_mime = _decode_retag_artwork_base64(
+            raw_b64, data.get("artwork_mime", "")
+        )
+    if not artwork_bytes and artwork_url:
         try:
             artwork_bytes, artwork_mime = fetch_artwork(artwork_url)
         except Exception:
@@ -4363,6 +4370,80 @@ def stream_audio():
         return jsonify({"error": "Unsupported type for streaming"}), 415
     mt = _mime_type_for_stream(ext)
     return send_file(path, mimetype=mt, conditional=True, max_age=0)
+
+
+_PREVIEW_CACHE_DIR = os.path.join(tempfile.gettempdir(), "djmm_preview_cache")
+
+
+def _preview_cache_path(src_path: str) -> str:
+    """Return a deterministic cache path for a transcoded preview of *src_path*."""
+    mtime = os.path.getmtime(src_path)
+    key = f"{os.path.realpath(src_path)}\0{mtime}"
+    h = hashlib.sha256(key.encode()).hexdigest()[:16]
+    os.makedirs(_PREVIEW_CACHE_DIR, exist_ok=True)
+    return os.path.join(_PREVIEW_CACHE_DIR, f"{h}.m4a")
+
+
+def _cleanup_preview_cache(max_age_secs: int = 86400) -> None:
+    try:
+        if not os.path.isdir(_PREVIEW_CACHE_DIR):
+            return
+        now = time.time()
+        for name in os.listdir(_PREVIEW_CACHE_DIR):
+            fp = os.path.join(_PREVIEW_CACHE_DIR, name)
+            try:
+                if now - os.path.getmtime(fp) > max_age_secs:
+                    os.unlink(fp)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+atexit.register(_cleanup_preview_cache)
+
+
+@app.route("/api/stream-preview")
+def stream_preview():
+    """Transcode video audio to AAC and stream for browser preview."""
+    raw = (request.args.get("path") or "").strip()
+    if not raw:
+        return jsonify({"error": "path query parameter required"}), 400
+    try:
+        path = os.path.realpath(resolve(raw))
+    except (OSError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+    if not os.path.isfile(path):
+        return jsonify({"error": "File not found"}), 404
+    ext = Path(path).suffix.lower()
+    if ext not in VIDEO_SOURCE_EXTENSIONS:
+        return jsonify({"error": "Unsupported type for preview"}), 415
+
+    cache = _preview_cache_path(path)
+    if not os.path.isfile(cache):
+        fd, tmp = tempfile.mkstemp(suffix=".m4a", dir=_PREVIEW_CACHE_DIR)
+        os.close(fd)
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-hide_banner", "-y",
+                    "-i", path,
+                    "-vn", "-map", "0:a:0",
+                    "-c:a", "aac", "-b:a", "128k",
+                    tmp,
+                ],
+                capture_output=True, text=True, check=True, timeout=300,
+            )
+            os.replace(tmp, cache)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            msg = getattr(e, "stderr", "") or str(e)
+            return jsonify({"error": f"Transcode failed: {msg[:300]}"}), 500
+
+    return send_file(cache, mimetype="audio/mp4", conditional=True, max_age=0)
 
 
 @app.route("/api/read-tags", methods=["POST"])

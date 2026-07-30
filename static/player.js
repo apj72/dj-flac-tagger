@@ -4,6 +4,7 @@
  */
 (function () {
   const PATH_OK = /\.(flac|mp3|m4a|mp4|aac|ogg|oga|wav|aiff|aif|wma)$/i;
+  const VIDEO_OK = /\.(mkv|mp4|mov|avi|webm)$/i;
 
   let audio = null;
   let els = {};
@@ -23,8 +24,12 @@
     return Number.isFinite(d) && d > 0 ? d : 0;
   }
 
+  function isPlayable(p) {
+    return PATH_OK.test(p) || VIDEO_OK.test(p);
+  }
+
   function syncTransportButtons() {
-    const ok = !!(audio.src && PATH_OK.test(lastPath));
+    const ok = !!(audio.src && isPlayable(lastPath));
     const dur = durationSafe();
     const playing = !audio.paused && !audio.ended;
     els.playBtn.disabled = !ok || playing;
@@ -313,7 +318,7 @@
     window.DJMM = window.DJMM || {};
     window.DJMM.setPlayerTrack = function (path, title) {
       if (!path || typeof path !== "string") return;
-      if (!PATH_OK.test(path)) {
+      if (!isPlayable(path)) {
         audio.pause();
         audio.removeAttribute("src");
         audio.load();
@@ -346,14 +351,16 @@
       }
       lastPath = path;
 
+      const isVideo = VIDEO_OK.test(path) && !PATH_OK.test(path);
+      const endpoint = isVideo ? "/api/stream-preview" : "/api/stream-audio";
+
       audio.pause();
-      audio.src = `/api/stream-audio?path=${encodeURIComponent(path)}`;
+      audio.src = `${endpoint}?path=${encodeURIComponent(path)}`;
       audio.load();
-      /* No autoplay — user presses Play */
 
       els.buffer.style.width = "0%";
       setTimelineUi(0, 0);
-      els.timeTotal.textContent = "…";
+      els.timeTotal.textContent = isVideo ? "(transcoding…)" : "…";
       syncTransportButtons();
     };
   }
