@@ -44,9 +44,6 @@ function initConvertHelpTips() {
 }
 
 let selectedWav = null;
-let folderModalPath = "";
-/** Which field the folder modal writes to: "convert-dir" | "convert-bulk-root" | "convert-bulk-target-dir" */
-let folderModalFieldId = "convert-dir";
 const BULK_TARGET_LS = "djmm.convertBulkTargetDir";
 /** Per resolved root: saved batch position after a successful limited bulk convert */
 const BULK_WAV_PROGRESS_LS = "djmm.bulkWavProgressByRoot";
@@ -437,6 +434,7 @@ async function performBulkConvert(root, limited, off, perRun, outMode, rec, sk) 
     body.offset = off;
     body.limit = perRun;
   }
+  body.stream = true;
   let data;
   try {
     const resp = await fetch("/api/convert-wav-bulk", {
@@ -444,7 +442,29 @@ async function performBulkConvert(root, limited, off, perRun, outMode, rec, sk) 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    data = await resp.json();
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let lastLine = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop();
+      for (const ln of lines) {
+        if (!ln.trim()) continue;
+        lastLine = ln;
+        try {
+          const msg = JSON.parse(ln);
+          if (msg.type === "progress") {
+            setConvertBulkProgress(true, `Converting ${msg.current} / ${msg.total}: ${msg.file}`);
+          }
+        } catch (_) {}
+      }
+    }
+    if (buf.trim()) lastLine = buf.trim();
+    data = JSON.parse(lastLine);
   } catch (e) {
     setConvertBulkProgress(false);
     out.classList.remove("hidden");
@@ -570,18 +590,7 @@ async function loadSettingsHints() {
   }
 }
 
-function closeFolderModal() {
-  const el = document.getElementById("convert-folder-modal");
-  if (el) el.classList.add("hidden");
-  document.removeEventListener("keydown", onFolderModalKeydown);
-}
-
-function onFolderModalKeydown(e) {
-  if (e.key === "Escape") closeFolderModal();
-}
-
-async function openFolderModal(fieldId = "convert-dir") {
-  folderModalFieldId = fieldId;
+async function openConvertFolderPicker(fieldId) {
   const inp = document.getElementById(fieldId);
   let start = (inp && inp.value.trim()) || "";
   if (!start) {
@@ -593,54 +602,29 @@ async function openFolderModal(fieldId = "convert-dir") {
       start = (cfg.destination_dir || "").trim() || "~";
     }
   }
-  document.getElementById("convert-folder-modal").classList.remove("hidden");
-  document.addEventListener("keydown", onFolderModalKeydown);
-  await loadFolderInModal(start);
-}
-
-async function loadFolderInModal(path) {
-  const listEl = $("#convert-modal-dir-list");
-  const pathEl = $("#convert-modal-path");
-  const upBtn = $("#convert-modal-up");
-  listEl.innerHTML = '<div class="status">Loading…</div>';
-  upBtn.disabled = true;
-
-  const resp = await fetch(`/api/browse-folders?path=${encodeURIComponent(path)}`);
-  const data = await resp.json();
-  if (data.error) {
-    listEl.innerHTML = `<div class="status">${data.error}</div>`;
-    pathEl.textContent = path;
-    folderModalPath = path;
-    return;
-  }
-  folderModalPath = data.path;
-  pathEl.textContent = data.path;
-  if (data.parent) {
-    upBtn.disabled = false;
-    upBtn.onclick = () => loadFolderInModal(data.parent);
-  } else {
-    upBtn.disabled = true;
-    upBtn.onclick = null;
-  }
-
-  if (!data.directories || data.directories.length === 0) {
-    listEl.innerHTML = '<div class="status">No subfolders (you can still use this folder)</div>';
-    return;
-  }
-  const paths = data.directories.map((d) => d.path);
-  const esc = (s) =>
-    String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  listEl.innerHTML = data.directories
-    .map(
-      (d, i) =>
-        `<button type="button" class="modal-dir-item" data-idx="${i}">${esc(d.name)}/</button>`
-    )
-    .join("");
-  listEl.querySelectorAll(".modal-dir-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const i = parseInt(btn.dataset.idx, 10);
-      if (!Number.isNaN(i) && paths[i]) loadFolderInModal(paths[i]);
-    });
+  DJMM.openFolderPicker({
+    startPath: start,
+    onSelect(path) {
+      const el = document.getElementById(fieldId);
+      if (el) el.value = path;
+      if (fieldId === "convert-dir") {
+        browseWav();
+      } else if (fieldId === "convert-bulk-root") {
+        lastBulkScanCount = 0;
+        const st = document.getElementById("convert-bulk-scan-status");
+        if (st) {
+          st.classList.add("hidden");
+          st.textContent = "";
+        }
+        const suffix = tryApplyBulkWavProgressForResolvedRoot(path);
+        if (suffix && st) {
+          st.classList.remove("hidden");
+          st.textContent = suffix.trim();
+        }
+      }
+      updateBulkRunEnabled();
+      scheduleSaveConvertBulkUi();
+    },
   });
 }
 
@@ -837,40 +821,12 @@ async function runBulkConvert() {
 }
 
 document.getElementById("convert-browse-btn").addEventListener("click", browseWav);
-document.getElementById("convert-choose-folder-btn").addEventListener("click", () => openFolderModal("convert-dir"));
-document.getElementById("convert-bulk-choose-btn").addEventListener("click", () => openFolderModal("convert-bulk-root"));
-document.getElementById("convert-bulk-target-choose-btn")?.addEventListener("click", () => openFolderModal("convert-bulk-target-dir"));
+document.getElementById("convert-choose-folder-btn").addEventListener("click", () => openConvertFolderPicker("convert-dir"));
+document.getElementById("convert-bulk-choose-btn").addEventListener("click", () => openConvertFolderPicker("convert-bulk-root"));
+document.getElementById("convert-bulk-target-choose-btn")?.addEventListener("click", () => openConvertFolderPicker("convert-bulk-target-dir"));
 document.getElementById("convert-default-dir-btn").addEventListener("click", resetDirToDefault);
 document.getElementById("convert-dir").addEventListener("keydown", (e) => {
   if (e.key === "Enter") browseWav();
-});
-document.getElementById("convert-modal-select").addEventListener("click", () => {
-  if (folderModalPath) {
-    const el = document.getElementById(folderModalFieldId);
-    if (el) el.value = folderModalPath;
-    closeFolderModal();
-    if (folderModalFieldId === "convert-dir") {
-      browseWav();
-    } else if (folderModalFieldId === "convert-bulk-root") {
-      lastBulkScanCount = 0;
-      const st = document.getElementById("convert-bulk-scan-status");
-      if (st) {
-        st.classList.add("hidden");
-        st.textContent = "";
-      }
-      const suffix = tryApplyBulkWavProgressForResolvedRoot(folderModalPath);
-      if (suffix && st) {
-        st.classList.remove("hidden");
-        st.textContent = suffix.trim();
-      }
-    }
-  }
-  updateBulkRunEnabled();
-  scheduleSaveConvertBulkUi();
-});
-document.getElementById("convert-modal-cancel").addEventListener("click", closeFolderModal);
-document.getElementById("convert-folder-modal").addEventListener("click", (e) => {
-  if (e.target && e.target.id === "convert-folder-modal") closeFolderModal();
 });
 document.getElementById("convert-bulk-confirm-ok")?.addEventListener("click", () => {
   const fn = bulkConvertConfirmHandler;

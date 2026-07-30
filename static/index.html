@@ -42,6 +42,7 @@
         <div class="dir-bar">
           <input type="text" id="dir-input" placeholder="~/DJ-Mixes" />
           <button id="browse-btn" class="btn btn-secondary">Browse</button>
+          <button id="extract-choose-folder-btn" type="button" class="btn btn-secondary" title="Open folder navigator">Choose folder…</button>
         </div>
         <div id="file-list" class="file-list"></div>
         <div id="probe-info" class="probe-info hidden"></div>
@@ -254,6 +255,9 @@
             <button id="retag-all-btn" class="btn btn-secondary btn-sm">Re-tag All in Folder</button>
             <label for="retag-dir" class="retag-label">Target folder:</label>
             <input type="text" id="retag-dir" class="retag-dir-input" placeholder="~/Music/DJ-library" />
+            <span class="history-controls-spacer"></span>
+            <button id="delete-selected-log-btn" class="btn btn-danger btn-sm" disabled>Delete Selected</button>
+            <button id="clear-log-btn" class="btn btn-danger btn-sm">Clear Log</button>
           </div>
           <div id="history-list" class="history-list"></div>
           <div id="retag-status" class="status hidden"></div>
@@ -297,6 +301,7 @@
   </div>
 
   <script src="/static/path-persist.js"></script>
+  <script src="/static/folder-picker.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/player.js"></script>
 </body>

@@ -1,7 +1,5 @@
 const $ = (sel) => document.querySelector(sel);
 
-let settingsFolderModalPath = "";
-let settingsFolderModalTargetInputId = "";
 
 function linesToRetainSuffixArray(text) {
   return (text || "")
@@ -20,6 +18,8 @@ function collectSettingsPageDraft() {
     fix_metadata_default_dir: $("#cfg-fix-default").value,
     inspect_default_dir: $("#cfg-inspect-default").value,
     extract_profile: $("#cfg-extract-profile").value,
+    mp3_bitrate: $("#cfg-mp3-bitrate").value,
+    aac_bitrate: $("#cfg-aac-bitrate").value,
     platinum_notes_app: $("#cfg-pn-app").value,
     pn_output_suffix: $("#cfg-pn-suffix").value,
     target_lufs: $("#cfg-target-lufs").value,
@@ -50,6 +50,15 @@ function applySettingsDraft(st) {
     const sel = $("#cfg-extract-profile");
     if ([...sel.options].some((o) => o.value === st.extract_profile)) sel.value = st.extract_profile;
   }
+  if (st.mp3_bitrate != null) {
+    const sel = $("#cfg-mp3-bitrate");
+    if (sel && [...sel.options].some((o) => o.value === st.mp3_bitrate)) sel.value = st.mp3_bitrate;
+  }
+  if (st.aac_bitrate != null) {
+    const sel = $("#cfg-aac-bitrate");
+    if (sel && [...sel.options].some((o) => o.value === st.aac_bitrate)) sel.value = st.aac_bitrate;
+  }
+  updateBitrateVisibility();
   if (st.platinum_notes_app != null) $("#cfg-pn-app").value = st.platinum_notes_app;
   if (st.pn_output_suffix != null) $("#cfg-pn-suffix").value = st.pn_output_suffix;
   if (st.target_lufs != null) $("#cfg-target-lufs").value = st.target_lufs;
@@ -61,6 +70,23 @@ function applySettingsDraft(st) {
   if (st.fix_retain_filename_suffixes_text != null) {
     $("#cfg-fix-retain-suffixes").value = st.fix_retain_filename_suffixes_text;
   }
+}
+
+function updateBitrateVisibility() {
+  const profile = $("#cfg-extract-profile").value;
+  $("#mp3-bitrate-row").style.display = profile === "mp3" ? "" : "none";
+  $("#aac-bitrate-row").style.display = profile === "aac" ? "" : "none";
+}
+
+function fillBitrateSelects(cfg) {
+  const mp3Sel = $("#cfg-mp3-bitrate");
+  const aacSel = $("#cfg-aac-bitrate");
+  const mp3Opts = cfg.mp3_bitrate_options || ["128", "192", "256", "320"];
+  const aacOpts = cfg.aac_bitrate_options || ["128", "192", "256", "320"];
+  mp3Sel.innerHTML = mp3Opts.map((b) => `<option value="${b}">${b}</option>`).join("");
+  aacSel.innerHTML = aacOpts.map((b) => `<option value="${b}">${b}</option>`).join("");
+  mp3Sel.value = cfg.mp3_bitrate || "320";
+  aacSel.value = cfg.aac_bitrate || "256";
 }
 
 function fillExtractProfileSelect(cfg) {
@@ -78,6 +104,8 @@ async function loadSettings() {
   const resp = await fetch("/api/settings");
   const cfg = await resp.json();
   fillExtractProfileSelect(cfg);
+  fillBitrateSelects(cfg);
+  updateBitrateVisibility();
   $("#cfg-source").value = cfg.source_dir || "";
   $("#cfg-dest").value = cfg.destination_dir || "";
   $("#cfg-fix-default").value = cfg.fix_metadata_default_dir || "";
@@ -108,6 +136,8 @@ async function saveSettings() {
       fix_metadata_default_dir: $("#cfg-fix-default").value.trim(),
       inspect_default_dir: $("#cfg-inspect-default").value.trim(),
       extract_profile: $("#cfg-extract-profile").value,
+      mp3_bitrate: $("#cfg-mp3-bitrate").value,
+      aac_bitrate: $("#cfg-aac-bitrate").value,
       platinum_notes_app: $("#cfg-pn-app").value.trim(),
       pn_output_suffix: $("#cfg-pn-suffix").value.trim() || "_PN",
       target_lufs: $("#cfg-target-lufs").value.trim(),
@@ -176,6 +206,8 @@ function wireSettingsPersistence() {
     "cfg-fix-default",
     "cfg-inspect-default",
     "cfg-extract-profile",
+    "cfg-mp3-bitrate",
+    "cfg-aac-bitrate",
     "cfg-pn-app",
     "cfg-pn-suffix",
     "cfg-target-lufs",
@@ -187,17 +219,6 @@ function wireSettingsPersistence() {
   document.getElementById("cfg-loudness-verify")?.addEventListener("change", scheduleSettingsPageSave);
   document.getElementById("cfg-mkv-extract-analysis")?.addEventListener("change", scheduleSettingsPageSave);
   document.getElementById("cfg-fix-retain-suffixes")?.addEventListener("input", scheduleSettingsPageSave);
-}
-
-function closeSettingsFolderModal() {
-  const el = $("#settings-folder-modal");
-  if (el) el.classList.add("hidden");
-  settingsFolderModalTargetInputId = "";
-  document.removeEventListener("keydown", onSettingsFolderModalKeydown);
-}
-
-function onSettingsFolderModalKeydown(e) {
-  if (e.key === "Escape") closeSettingsFolderModal();
 }
 
 async function resolveStartPathForSetting(inputId) {
@@ -226,84 +247,26 @@ async function resolveStartPathForSetting(inputId) {
   }
 }
 
-async function openFolderModalForSetting(inputId) {
-  settingsFolderModalTargetInputId = inputId;
-  const modal = $("#settings-folder-modal");
-  modal.classList.remove("hidden");
-  document.addEventListener("keydown", onSettingsFolderModalKeydown);
-  const start = await resolveStartPathForSetting(inputId);
-  await loadSettingsFolderInModal(start || "~");
-}
-
-async function loadSettingsFolderInModal(path) {
-  const listEl = $("#settings-modal-dir-list");
-  const pathEl = $("#settings-modal-path");
-  const upBtn = $("#settings-modal-up");
-  listEl.innerHTML = '<div class="status">Loading…</div>';
-  upBtn.disabled = true;
-
-  const resp = await fetch(`/api/browse-folders?path=${encodeURIComponent(path)}`);
-  const data = await resp.json();
-  if (data.error) {
-    listEl.innerHTML = `<div class="status">${data.error}</div>`;
-    pathEl.textContent = path;
-    settingsFolderModalPath = path;
-    return;
-  }
-  settingsFolderModalPath = data.path;
-  pathEl.textContent = data.path;
-  if (data.parent) {
-    upBtn.disabled = false;
-    upBtn.onclick = () => loadSettingsFolderInModal(data.parent);
-  } else {
-    upBtn.disabled = true;
-    upBtn.onclick = null;
-  }
-
-  if (!data.directories || data.directories.length === 0) {
-    listEl.innerHTML = '<div class="status">No subfolders (you can still use this folder)</div>';
-    return;
-  }
-  const paths = data.directories.map((d) => d.path);
-  const esc = (s) =>
-    String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  listEl.innerHTML = data.directories
-    .map(
-      (d, i) =>
-        `<button type="button" class="modal-dir-item" data-idx="${i}">${esc(d.name)}/</button>`
-    )
-    .join("");
-  listEl.querySelectorAll(".modal-dir-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const i = parseInt(btn.dataset.idx, 10);
-      if (!Number.isNaN(i) && paths[i]) loadSettingsFolderInModal(paths[i]);
-    });
-  });
-}
-
 function wireSettingsFolderNavigator() {
   document.querySelectorAll(".settings-folder-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-target");
-      if (id) void openFolderModalForSetting(id);
+    btn.addEventListener("click", async () => {
+      const inputId = btn.getAttribute("data-target");
+      if (!inputId) return;
+      const start = await resolveStartPathForSetting(inputId);
+      DJMM.openFolderPicker({
+        startPath: start || "~",
+        onSelect(path) {
+          const inp = document.getElementById(inputId);
+          if (inp) inp.value = path;
+          scheduleSettingsPageSave();
+        },
+      });
     });
-  });
-  $("#settings-modal-cancel").addEventListener("click", closeSettingsFolderModal);
-  $("#settings-modal-select").addEventListener("click", () => {
-    const tid = settingsFolderModalTargetInputId;
-    if (tid && settingsFolderModalPath) {
-      const inp = $("#" + tid);
-      if (inp) inp.value = settingsFolderModalPath;
-      scheduleSettingsPageSave();
-    }
-    closeSettingsFolderModal();
-  });
-  $("#settings-folder-modal").addEventListener("click", (e) => {
-    if (e.target && e.target.id === "settings-folder-modal") closeSettingsFolderModal();
   });
 }
 
 $("#save-settings-btn").addEventListener("click", saveSettings);
+$("#cfg-extract-profile").addEventListener("change", updateBitrateVisibility);
 loadSettings().then(() => {
   wireThemeControl();
   wirePageBackgroundControl();

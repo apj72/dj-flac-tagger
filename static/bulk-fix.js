@@ -2,7 +2,6 @@ const $ = (sel) => document.querySelector(sel);
 const BF_DIR_LS = "djmm.bulkFixDir";
 const BF_STATE_LS = "djmm.bulkFixState";
 
-let folderModalPath = "";
 /** Current batch rows (from last successful load) */
 let batchRows = [];
 /** Last successful scan: offset, page size, total (for next-offset UI + restore) */
@@ -68,16 +67,6 @@ function bfShowConfirm(title, bodyHtml, okText, destructive) {
   });
 }
 
-function closeFolderModal() {
-  const el = document.getElementById("bf-folder-modal");
-  if (el) el.classList.add("hidden");
-  document.removeEventListener("keydown", onFolderModalKeydown);
-}
-
-function onFolderModalKeydown(e) {
-  if (e.key === "Escape") closeFolderModal();
-}
-
 async function openFolderModal() {
   let start = $("#bf-dir").value.trim();
   if (!start) {
@@ -85,52 +74,11 @@ async function openFolderModal() {
     const cfg = await resp.json();
     start = (cfg.destination_dir || "").trim() || "~";
   }
-  document.getElementById("bf-folder-modal").classList.remove("hidden");
-  document.addEventListener("keydown", onFolderModalKeydown);
-  await loadFolderInModal(start);
-}
-
-async function loadFolderInModal(path) {
-  const listEl = $("#bf-modal-dir-list");
-  const pathEl = $("#bf-modal-path");
-  const upBtn = $("#bf-modal-up");
-  listEl.innerHTML = '<div class="status">Loading…</div>';
-  upBtn.disabled = true;
-
-  const resp = await fetch(`/api/browse-folders?path=${encodeURIComponent(path)}`);
-  const data = await resp.json();
-  if (data.error) {
-    listEl.innerHTML = `<div class="status">${esc(data.error)}</div>`;
-    pathEl.textContent = path;
-    folderModalPath = path;
-    return;
-  }
-  folderModalPath = data.path;
-  pathEl.textContent = data.path;
-  if (data.parent) {
-    upBtn.disabled = false;
-    upBtn.onclick = () => loadFolderInModal(data.parent);
-  } else {
-    upBtn.disabled = true;
-    upBtn.onclick = null;
-  }
-
-  if (!data.directories || data.directories.length === 0) {
-    listEl.innerHTML = '<div class="status">No subfolders (you can still use this folder)</div>';
-    return;
-  }
-  const paths = data.directories.map((d) => d.path);
-  listEl.innerHTML = data.directories
-    .map(
-      (d, i) =>
-        `<button type="button" class="modal-dir-item" data-idx="${i}">${esc(d.name)}/</button>`
-    )
-    .join("");
-  listEl.querySelectorAll(".modal-dir-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const i = parseInt(btn.dataset.idx, 10);
-      if (!Number.isNaN(i) && paths[i]) loadFolderInModal(paths[i]);
-    });
+  DJMM.openFolderPicker({
+    startPath: start,
+    onSelect(path) {
+      $("#bf-dir").value = path;
+    },
   });
 }
 
@@ -148,8 +96,6 @@ async function resetBulkFixFormFactory() {
     true,
   );
   if (!ok) return;
-
-  closeFolderModal();
 
   if (bfSaveTimer) {
     clearTimeout(bfSaveTimer);
@@ -947,16 +893,6 @@ document.getElementById("bf-default-btn").addEventListener("click", () => {
 });
 document.getElementById("bf-reset-form-btn").addEventListener("click", () => {
   void resetBulkFixFormFactory();
-});
-document.getElementById("bf-modal-select").addEventListener("click", () => {
-  if (folderModalPath) {
-    $("#bf-dir").value = folderModalPath;
-    closeFolderModal();
-  }
-});
-document.getElementById("bf-modal-cancel").addEventListener("click", closeFolderModal);
-document.getElementById("bf-folder-modal").addEventListener("click", (e) => {
-  if (e.target && e.target.id === "bf-folder-modal") closeFolderModal();
 });
 document.getElementById("bf-load-batch-btn").addEventListener("click", loadBatch);
 document.getElementById("bf-next-batch-btn").addEventListener("click", () => {

@@ -928,6 +928,21 @@ function updateExtractButton() {
 
 // ---- Event listeners ----
 $("#browse-btn").addEventListener("click", browseFiles);
+document.getElementById("extract-choose-folder-btn")?.addEventListener("click", async () => {
+  let start = $("#dir-input").value.trim();
+  if (!start) {
+    const resp = await fetch("/api/settings");
+    const cfg = await resp.json();
+    start = cfg.source_dir_resolved || "~";
+  }
+  DJMM.openFolderPicker({
+    startPath: start,
+    onSelect(path) {
+      $("#dir-input").value = path;
+      browseFiles();
+    },
+  });
+});
 $("#dir-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") browseFiles();
 });
@@ -1002,10 +1017,13 @@ function renderHistory() {
   });
 }
 
-function updateRetagButton() {
+function updateLogActionButtons() {
   const checked = document.querySelectorAll(".log-check:checked");
   $("#retag-selected-btn").disabled = checked.length === 0;
+  const delBtn = document.getElementById("delete-selected-log-btn");
+  if (delBtn) delBtn.disabled = checked.length === 0;
 }
+function updateRetagButton() { updateLogActionButtons(); }
 
 async function retagSelected() {
   const indices = [...document.querySelectorAll(".log-check:checked")].map((cb) =>
@@ -1068,6 +1086,34 @@ $("#history-toggle").addEventListener("click", () => {
 });
 $("#retag-selected-btn").addEventListener("click", retagSelected);
 $("#retag-all-btn").addEventListener("click", retagAll);
+
+document.getElementById("delete-selected-log-btn")?.addEventListener("click", async () => {
+  const indices = [...document.querySelectorAll(".log-check:checked")].map((cb) =>
+    parseInt(cb.dataset.idx)
+  );
+  if (!indices.length) return;
+  if (!confirm(`Delete ${indices.length} log ${indices.length === 1 ? "entry" : "entries"}?`)) return;
+  const resp = await fetch("/api/log", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ indices }),
+  });
+  const data = await resp.json();
+  showRetagStatus(`Deleted ${data.deleted} ${data.deleted === 1 ? "entry" : "entries"}.`, false);
+  loadHistory();
+});
+
+document.getElementById("clear-log-btn")?.addEventListener("click", async () => {
+  if (!confirm("Clear the entire processing log? This cannot be undone.")) return;
+  const resp = await fetch("/api/log", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const data = await resp.json();
+  showRetagStatus(`Cleared ${data.deleted} ${data.deleted === 1 ? "entry" : "entries"}.`, false);
+  loadHistory();
+});
 
 async function pollAndRepairPn(baseFlacPath, logIndex, copiedTo) {
   const watchEl = $("#pn-watch-msg");

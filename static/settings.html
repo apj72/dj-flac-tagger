@@ -55,6 +55,16 @@
           <select id="cfg-extract-profile"></select>
           <p class="hint" style="margin-top:0.35rem">System-wide choice: extracted audio from video and the Normalise tab use this format. Metadata and Inspect stay format-agnostic.</p>
         </div>
+        <div class="field-row inline-fields" id="bitrate-row">
+          <div class="field-row" id="mp3-bitrate-row" style="display:none">
+            <label for="cfg-mp3-bitrate">MP3 bitrate (kbps)</label>
+            <select id="cfg-mp3-bitrate"></select>
+          </div>
+          <div class="field-row" id="aac-bitrate-row" style="display:none">
+            <label for="cfg-aac-bitrate">AAC bitrate (kbps)</label>
+            <select id="cfg-aac-bitrate"></select>
+          </div>
+        </div>
         <div class="field-row">
           <label for="cfg-source">Source folder (OBS recordings)</label>
           <div class="dir-bar">
@@ -137,22 +147,8 @@
     </main>
   </div>
 
-  <div id="settings-folder-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-folder-modal-title">
-    <div class="modal-card">
-      <h3 id="settings-folder-modal-title">Choose folder</h3>
-      <div class="modal-path mono" id="settings-modal-path"></div>
-      <div class="modal-nav">
-        <button type="button" id="settings-modal-up" class="btn btn-secondary btn-sm">Enclosing folder</button>
-      </div>
-      <div id="settings-modal-dir-list" class="modal-dir-list"></div>
-      <div class="modal-actions">
-        <button type="button" id="settings-modal-select" class="btn btn-primary">Use this folder</button>
-        <button type="button" id="settings-modal-cancel" class="btn btn-secondary">Cancel</button>
-      </div>
-    </div>
-  </div>
-
   <script src="/static/path-persist.js"></script>
+  <script src="/static/folder-picker.js"></script>
   <script src="/static/settings.js"></script>
   <script src="/static/player.js"></script>
 </body>

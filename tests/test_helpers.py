@@ -81,7 +81,10 @@ def test_pn_output_candidate_paths_includes_dest_and_library_copy(
 
 
 def test_resolve_extract_profile_key(app_module):
-    assert app_module.resolve_extract_profile_key({"extract_profile": "mp3_320"}) == "mp3_320"
+    assert app_module.resolve_extract_profile_key({"extract_profile": "mp3_320"}) == "mp3"
+    assert app_module.resolve_extract_profile_key({"extract_profile": "mp3"}) == "mp3"
+    assert app_module.resolve_extract_profile_key({"extract_profile": "aac_256"}) == "aac"
+    assert app_module.resolve_extract_profile_key({"extract_profile": "aac"}) == "aac"
     assert app_module.resolve_extract_profile_key({"extract_profile": "bogus"}) == "flac"
 
 

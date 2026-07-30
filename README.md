@@ -12,7 +12,7 @@
 
 A local web tool for DJs to turn recordings into a clean, tagged library in **multiple audio formats**. Record vinyl or other sources through OBS with BlackHole, then extract audio from video containers, auto-tag with metadata and artwork from Discogs, Bandcamp, Apple Music, Spotify, **SoundCloud**, **Beatport**, or other pages, and export to **FLAC (lossless)**, **MP3**, or **AAC (M4A)** — whatever you choose in Settings — ready for Rekordbox, Traktor, or any DJ software.
 
-**Fix Metadata** and **Inspect** work across **FLAC, MP3, M4A/AAC, OGG**, and more for browsing and editing. **Normalise** applies **EBU R128** loudness to existing files and re-encodes using the same **system-wide format** as Extract. A **Settings** tab controls paths, output format, and loudness targets.
+**Fix Metadata** and **Inspect** work across **FLAC, MP3, M4A/AAC, AIFF, OGG**, and more for browsing and editing. **Normalise** applies **EBU R128** loudness to existing files (single or **bulk folder**) and re-encodes using the same **system-wide format** as Extract. A **Settings** tab controls paths, output format, **MP3/AAC bitrate**, and loudness targets.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -78,14 +78,16 @@ When a file has no useful tags, the **suggested search** string is derived from 
 
 ### Inspect
 
-Full tag table, artwork preview, **Fix artwork dimensions** for **FLAC** (Rekordbox-friendly; other formats unchanged here). Shows **Saved metadata URL** when present. Pick a folder with **Choose folder…** (server-side navigator), **Default** (Settings destination), then **List files** — useful for reviewing a flat **Converted WAVs** tree after bulk conversion. Deep link: **`/inspect?dir=/path/to/folder`**. **Arrow keys / Home / End** change the selected file in the list (same behaviour as **Fix Metadata**) when focus is not in a text field.
+Full tag table, artwork preview, **Fix artwork dimensions** for **FLAC**, **MP3**, **M4A**, and **AIFF** (Rekordbox-friendly). Shows **Saved metadata URL** when present. Pick a folder with **Choose folder…** (server-side navigator), **Default** (Settings destination), then **List files** — useful for reviewing a flat **Converted WAVs** tree after bulk conversion. Deep link: **`/inspect?dir=/path/to/folder`**. **Arrow keys / Home / End** change the selected file in the list (same behaviour as **Fix Metadata**) when focus is not in a text field.
 
 ### Normalise
 
 Pick a **supported audio file**, analyse levels, then **normalise** to your **Settings** LUFS target. Output uses **the same extract format as Settings** (FLAC, MP3, or AAC/M4A): **`{stem}{suffix}{extension}`** (default suffix `_LUFS14`). **Tags and artwork are copied** from the source.
 
 - **FLAC:** Prefers the Xiph **`flac`** CLI when installed (`brew install flac`): **`flac --best -e -p`**. Otherwise FFmpeg’s FLAC encoder (`-compression_level 12`). **16-bit** at the source sample rate/layout. Normalised files are often **larger** than the original at the same rate/bit-depth because the waveform is harder to compress — that is normal and still lossless.
-- **MP3 / AAC:** Encoded with FFmpeg after loudnorm (lossy).
+- **MP3 / AAC:** Encoded with FFmpeg after loudnorm (lossy). Bitrate follows **Settings → MP3 bitrate / AAC bitrate**.
+
+**Bulk normalise:** Browse a folder, scan for supported audio files, then normalise all of them in one run. Progress streams to the browser via **NDJSON** so you can watch each file complete in real time.
 
 **Sample rate and channel layout** follow the source where applicable so outputs stay e.g. **48 kHz**, not accidentally upsampled.
 
@@ -104,6 +106,8 @@ If you use **Extract → open in Platinum Notes → watch for processed output**
 - **Source / destination** folders  
 - **Fix Metadata / Inspect default folders** (optional; when empty, the **destination** folder is used for the initial path and **Default** on those tabs)  
 - **Extract format** — global default for **Extract** output and **Normalise** re-encode  
+- **MP3 bitrate** — CBR bitrate for MP3 output (128 / 192 / 256 / 320 kbps; default 320)  
+- **AAC bitrate** — CBR bitrate for AAC/M4A output (128 / 192 / 256 kbps; default 256)  
 - **Extract — analyse .MKV audio levels** — when off, skips the automatic full-file loudness meters on the Extract tab for `.mkv` only (faster for long recordings); **normalised extract** still analyses on the server  
 - **Fix Metadata — filename suffixes** — list of literals or `regex:` lines (`fix_retain_filename_suffixes` in `config.json`): peeled from the end of the stem **before** building search queries; **re-appended** when renaming to `Artist - Title` (see [Filename search and tags](#filename-search-and-tags))  
 - **Platinum Notes** app name and **`_PN` output suffix**  
@@ -280,9 +284,9 @@ Normalisation uses **two-pass EBU R128** with your configured **I** and **TP** t
 | Role | Formats |
 |------|---------|
 | **Extract** (from video) & **Normalise** (re-encode) | **FLAC**, **MP3**, **AAC (M4A)** — selected under **Settings → extract format** |
-| **Fix** & **Inspect** (tags / artwork) | **FLAC** — Vorbis comments, pictures · **MP3** — ID3v2, APIC · **M4A / AAC / MP4** — iTunes atoms, `covr` · **OGG** — Vorbis comments, `metadata_block_picture` |
+| **Fix** & **Inspect** (tags / artwork) | **FLAC** — Vorbis comments, pictures · **MP3** — ID3v2, APIC · **AIFF** — ID3v2 (same as MP3) · **M4A / AAC / MP4** — iTunes atoms, `covr` · **OGG** — Vorbis comments, `metadata_block_picture` |
 
-**Inspect: Fix artwork dimensions** applies to **FLAC** only (other formats skip this).
+**Inspect: Fix artwork dimensions** applies to **FLAC**, **MP3**, **AIFF**, and **M4A** (resizes oversized cover art for Rekordbox compatibility).
 
 **Unicode:** Metadata scraped from Apple Music, Bandcamp, Spotify, SoundCloud, Beatport, and generic pages is decoded as **UTF-8** so accented titles (e.g. **André**) are not mangled when written to tags.
 
@@ -320,7 +324,9 @@ Example (see `config.json.example`):
 | `POST` | `/api/bulk-fix/scan-paths` | Body: `{ "paths": ["/abs/a.flac", ...] }` (max 200). Same item shape as **`/api/bulk-fix/scan`** but **preserves the given path order**; response includes **`"order": "explicit_paths"`**. Used after **WAV → FLAC** flat-folder runs so Bulk Fix loads exactly the files from that batch. |
 | `POST` | `/api/bulk-fix/suggest` | Search results per file path (Apple + Discogs + Bandcamp). |
 | `POST` | `/api/bulk-fix/apply` | Apply metadata from chosen URLs to many files. |
-| `GET` | `/api/search` | Apple Music + Discogs + Bandcamp + **SoundCloud** track search (used by Fix and Bulk Fix). Optional `source=soundcloud` (aliases: `sc`) limits to one catalogue. |
+| `POST` | `/api/scan-normalise-bulk` | Scan a folder for audio files eligible for bulk normalisation. |
+| `POST` | `/api/normalise-bulk` | Normalise all audio files in a folder; streams progress as **NDJSON** lines. |
+| `GET` | `/api/search` | Apple Music + Discogs + Bandcamp + **SoundCloud** + **Beatport** track search (used by Fix and Bulk Fix). Optional `source=soundcloud` (aliases: `sc`) or `source=beatport` (aliases: `bp`) limits to one catalogue. |
 | `POST` | `/api/fetch-metadata` | Full metadata from a URL; optional **`track_name`** / **`track_name_hint`** to pick a track on multi-track releases. |
 | `POST` | `/api/retag` | Save tags/artwork/rename for one file (Fix Metadata). |
 | `POST` | `/api/retag-artwork` | Embed **cover art only** for one file (tags unchanged). JSON: `filepath`, and either `artwork_base64` + optional `artwork_mime` or `artwork_url`. |
@@ -337,7 +343,7 @@ pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
 
-Coverage includes: browse/convert WAV, bulk convert (including **offset/limit**, **`batch_flac_paths`**, and **custom** flat output + tags), **retag** rename, **retag-artwork** / **stream-audio**, **bulk-fix** scan and **scan-paths** (including duplicate detection and WAV tag hints), **Bandcamp search** parsing (mocked HTML), **SoundCloud search** (mocked API JSON), **fetch-metadata** / **SoundCloud / Beatport** scraping (mocked HTML), normalise API, source-recording rename/delete helpers, and shared helpers. Tests that invoke **ffmpeg** skip automatically if it is missing. Network calls to live Discogs, Apple, Bandcamp, or SoundCloud are **not** required in automated tests; bulk **suggest**/**apply** against real services are left to manual checks.
+**201 tests** covering: browse/convert WAV, bulk convert (including **offset/limit**, **`batch_flac_paths`**, and **custom** flat output + tags), **retag** rename, **retag-artwork** / **stream-audio**, **bulk-fix** scan and **scan-paths** (including duplicate detection and WAV tag hints), **Bandcamp search** parsing (mocked HTML), **SoundCloud search** (mocked API JSON), **Beatport search** (mocked HTML), **fetch-metadata** / **SoundCloud / Beatport** scraping (mocked HTML), normalise API, source-recording rename/delete helpers, shared helpers, **AIFF metadata** apply/read/routing, **fix-artwork** for FLAC/MP3/M4A/AIFF, **bitrate configuration** and profile key migration, **NDJSON streaming** for bulk normalise/convert, **path traversal defense** (unit + integration), and **extract route** coverage. Tests that invoke **ffmpeg** skip automatically if it is missing. Network calls to live Discogs, Apple, Bandcamp, or SoundCloud are **not** required in automated tests; bulk **suggest**/**apply** against real services are left to manual checks.
 
 ## Project structure
 
@@ -346,14 +352,18 @@ dj-meta-manager/
 ├── docs/user-guide/       # Modular HTML user guide (see index.html)
 ├── scripts/
 │   └── rekordbox_wavs_missing_in_library.py  # List Ableton-style .wav tree entries with no match in a flat .flac library
-├── app.py                 # Flask API — ffmpeg, scrapers, mutagen
+├── app.py                 # Flask routes and server entry point
+├── config.py              # Constants, configuration, paths, filename helpers, path validation
+├── audio.py               # FFmpeg/ffprobe operations, audio processing, preview cache
+├── metadata.py            # Mutagen tag read/write, artwork embedding (FLAC/MP3/AIFF/M4A/OGG)
+├── scrapers.py            # Web scrapers: Discogs, Bandcamp, Apple Music, Spotify, SoundCloud, Beatport
 ├── config.json            # Local settings (not in repo)
 ├── config.json.example
 ├── processing_log.json    # Local log (not in repo)
 ├── requirements.txt
 ├── requirements-dev.txt   # pytest
 ├── start.sh / stop.sh     # Background server helpers
-├── tests/                 # pytest
+├── tests/                 # pytest (201 tests)
 ├── static/
 │   ├── index.html / app.js          # Extract
 │   ├── fix.html / fix.js            # Fix Metadata
@@ -361,6 +371,7 @@ dj-meta-manager/
 │   ├── normalise.html / normalise.js
 │   ├── convert.html / convert.js   # WAV → FLAC
 │   ├── bulk-fix.html / bulk-fix.js # Bulk Fix metadata
+│   ├── folder-picker.js            # Shared folder navigator modal (window.DJMM)
 │   ├── path-persist.js             # Last audio browse dir (Fix + Inspect) + `djmm.pageState` UI drafts
 │   ├── player.js                   # Bottom audio preview bar (all tabs)
 │   ├── theme-init.js               # `<head>` theme + scenic background prefs (`localStorage`) before paint

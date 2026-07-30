@@ -9,6 +9,9 @@ function collectNormalisePageState() {
     normDir: $("#norm-dir").value,
     normSuffix: $("#norm-suffix").value,
     selectedFile,
+    normBulkDir: ($("#norm-bulk-dir") || {}).value || "",
+    normBulkSuffix: ($("#norm-bulk-suffix") || {}).value || "_norm",
+    normBulkRecursive: document.getElementById("norm-bulk-recursive")?.checked || false,
   };
 }
 
@@ -253,7 +256,187 @@ async function runNormalise() {
   scheduleNormalisePageSave();
 }
 
+// ---------------------------------------------------------------------------
+// Batch Normalise
+// ---------------------------------------------------------------------------
+
+let lastBulkNormScanCount = 0;
+let bulkNormScannedFiles = [];
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function updateBulkNormRunEnabled() {
+  const btn = document.getElementById("norm-bulk-run-btn");
+  if (btn) btn.disabled = lastBulkNormScanCount < 1;
+}
+
+function setBulkNormProgress(visible, label) {
+  const wrap = document.getElementById("norm-bulk-progress-wrap");
+  const lab = document.getElementById("norm-bulk-progress-label");
+  if (!wrap) return;
+  wrap.classList.toggle("hidden", !visible);
+  wrap.setAttribute("aria-busy", visible ? "true" : "false");
+  if (lab && label) lab.textContent = label;
+}
+
+async function runBulkNormScan() {
+  const root = ($("#norm-bulk-dir")?.value || "").trim();
+  const st = document.getElementById("norm-bulk-scan-status");
+  st.classList.remove("hidden");
+  if (!root) {
+    st.textContent = "Set a folder first.";
+    lastBulkNormScanCount = 0;
+    bulkNormScannedFiles = [];
+    updateBulkNormRunEnabled();
+    return;
+  }
+  st.textContent = "Scanning…";
+  const rec = document.getElementById("norm-bulk-recursive")?.checked || false;
+  const u = new URL("/api/scan-normalise-bulk", window.location.origin);
+  u.searchParams.set("dir", root);
+  u.searchParams.set("recursive", rec ? "1" : "0");
+  const resp = await fetch(u);
+  const data = await resp.json();
+  if (data.error) {
+    st.textContent = data.error;
+    lastBulkNormScanCount = 0;
+    bulkNormScannedFiles = [];
+    updateBulkNormRunEnabled();
+    return;
+  }
+  lastBulkNormScanCount = data.count;
+  st.textContent = `Found ${data.count} audio file(s) under ${data.root}`;
+  $("#norm-bulk-dir").value = data.root;
+  bulkNormScannedFiles = [];
+  updateBulkNormRunEnabled();
+  scheduleNormalisePageSave();
+}
+
+async function runBulkNorm() {
+  const root = ($("#norm-bulk-dir")?.value || "").trim();
+  if (!root) return;
+  const rec = document.getElementById("norm-bulk-recursive")?.checked || false;
+
+  const out = document.getElementById("norm-bulk-result");
+  const btn = document.getElementById("norm-bulk-run-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Normalising…';
+  out.classList.add("hidden");
+
+  let suffix = ($("#norm-bulk-suffix")?.value || "_norm").trim() || "_norm";
+  if (!suffix.startsWith("_")) suffix = "_" + suffix;
+
+  setBulkNormProgress(true, "Normalising audio files (this may take a while)…");
+
+  let data;
+  try {
+    const resp = await fetch("/api/normalise-bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        root_dir: root,
+        recursive: rec,
+        suffix: suffix,
+        stream: true,
+      }),
+    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let lastLine = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop();
+      for (const ln of lines) {
+        if (!ln.trim()) continue;
+        lastLine = ln;
+        try {
+          const msg = JSON.parse(ln);
+          if (msg.type === "progress") {
+            setBulkNormProgress(true, `Normalising ${msg.current} / ${msg.total}: ${msg.file}`);
+          }
+        } catch (_) {}
+      }
+    }
+    if (buf.trim()) lastLine = buf.trim();
+    data = JSON.parse(lastLine);
+  } catch (e) {
+    setBulkNormProgress(false);
+    out.classList.remove("hidden");
+    out.className = "result error";
+    out.innerHTML = `<div class="result-title">Error</div><div class="result-detail">${escHtml(String(e.message || e))}</div>`;
+    btn.disabled = false;
+    btn.textContent = "Run";
+    updateBulkNormRunEnabled();
+    return;
+  }
+
+  setBulkNormProgress(false);
+  out.classList.remove("hidden");
+
+  if (data.error) {
+    out.className = "result error";
+    out.innerHTML = `<div class="result-title">Error</div><div class="result-detail">${escHtml(data.error)}</div>`;
+  } else {
+    out.className = "result";
+    const s = data.summary || {};
+    const parts = [
+      `Normalised: <strong>${s.normalised ?? 0}</strong>`,
+      `Skipped (already exists): <strong>${s.skipped ?? 0}</strong>`,
+      `Errors: <strong>${s.errors ?? 0}</strong>`,
+    ];
+    let errBlock = "";
+    if (data.errors && data.errors.length) {
+      const lines = data.errors
+        .slice(0, 30)
+        .map((e) => `&bull; <span class="mono">${escHtml((e.source || "").split("/").pop())}</span>: ${escHtml(e.error || "")}`)
+        .join("<br>");
+      errBlock = `<p class="hint" style="margin-top:0.5rem"><strong>Issues:</strong><br/>${lines}</p>`;
+      if (data.errors.length > 30) {
+        errBlock += `<p class="hint">… and ${data.errors.length - 30} more.</p>`;
+      }
+    }
+    const profileNote = data.extract_profile_label
+      ? `<p class="hint" style="margin-top:0.35rem">Output format: ${escHtml(data.extract_profile_label)}</p>`
+      : "";
+    out.innerHTML = `<div class="result-title">Batch normalise complete</div><div class="result-detail">${parts.join(" · ")}</div>${profileNote}${errBlock}`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = "Run";
+  updateBulkNormRunEnabled();
+  scheduleNormalisePageSave();
+}
+
+// ---------------------------------------------------------------------------
+// Event wiring
+// ---------------------------------------------------------------------------
+
 $("#norm-browse-btn").addEventListener("click", browseAudio);
+document.getElementById("norm-choose-folder-btn")?.addEventListener("click", async () => {
+  let start = $("#norm-dir").value.trim();
+  if (!start) {
+    const resp = await fetch("/api/settings");
+    const cfg = await resp.json();
+    start = (cfg.destination_dir || "").trim() || "~";
+  }
+  DJMM.openFolderPicker({
+    startPath: start,
+    onSelect(path) {
+      $("#norm-dir").value = path;
+      browseAudio();
+    },
+  });
+});
 $("#norm-dir").addEventListener("keydown", (e) => {
   if (e.key === "Enter") browseAudio();
 });
@@ -261,11 +444,47 @@ $("#norm-dir").addEventListener("input", scheduleNormalisePageSave);
 $("#norm-suffix").addEventListener("input", scheduleNormalisePageSave);
 $("#norm-run-btn").addEventListener("click", runNormalise);
 
+// Batch normalise wiring
+document.getElementById("norm-bulk-choose-btn")?.addEventListener("click", async () => {
+  let start = ($("#norm-bulk-dir")?.value || "").trim();
+  if (!start) {
+    const resp = await fetch("/api/settings");
+    const cfg = await resp.json();
+    start = (cfg.destination_dir || "").trim() || "~";
+  }
+  DJMM.openFolderPicker({
+    startPath: start,
+    onSelect(path) {
+      $("#norm-bulk-dir").value = path;
+      lastBulkNormScanCount = 0;
+      bulkNormScannedFiles = [];
+      const st = document.getElementById("norm-bulk-scan-status");
+      if (st) { st.classList.add("hidden"); st.textContent = ""; }
+      updateBulkNormRunEnabled();
+      scheduleNormalisePageSave();
+    },
+  });
+});
+document.getElementById("norm-bulk-scan-btn")?.addEventListener("click", runBulkNormScan);
+document.getElementById("norm-bulk-run-btn")?.addEventListener("click", runBulkNorm);
+document.getElementById("norm-bulk-dir")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") runBulkNormScan();
+});
+document.getElementById("norm-bulk-dir")?.addEventListener("input", scheduleNormalisePageSave);
+document.getElementById("norm-bulk-suffix")?.addEventListener("input", scheduleNormalisePageSave);
+document.getElementById("norm-bulk-recursive")?.addEventListener("change", scheduleNormalisePageSave);
+
 loadSettings().then(async () => {
   const st = typeof djmmPageStateGetPage === "function" ? djmmPageStateGetPage("normalise") : null;
   if (st && st.v === 1) {
     if (st.normDir != null) $("#norm-dir").value = st.normDir;
     if (st.normSuffix != null) $("#norm-suffix").value = st.normSuffix;
+    if (st.normBulkDir != null && $("#norm-bulk-dir")) $("#norm-bulk-dir").value = st.normBulkDir;
+    if (st.normBulkSuffix != null && $("#norm-bulk-suffix")) $("#norm-bulk-suffix").value = st.normBulkSuffix;
+    if (st.normBulkRecursive != null) {
+      const rec = document.getElementById("norm-bulk-recursive");
+      if (rec) rec.checked = st.normBulkRecursive;
+    }
   }
   await browseAudio();
   if (st && st.v === 1 && st.selectedFile) {

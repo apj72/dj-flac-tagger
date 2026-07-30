@@ -56,14 +56,15 @@ def test_search_bandcamp_parses_search_page(app_module, monkeypatch):
 def test_api_search_includes_bandcamp_key(client, monkeypatch):
     monkeypatch.setattr(
         "app.search_itunes",
-        lambda q, limit=8: [{"title": "A", "artist": "B", "source": "apple_music", "url": "https://x"}],
+        lambda q, limit=8, **kw: [{"title": "A", "artist": "B", "source": "apple_music", "url": "https://x"}],
     )
-    monkeypatch.setattr("app.search_discogs", lambda q, limit=5: [])
+    monkeypatch.setattr("app.search_discogs", lambda q, limit=5, **kw: [])
     monkeypatch.setattr(
         "app.search_bandcamp",
-        lambda q, limit=6: [{"title": "T1", "artist": "A1", "album": "", "source": "bandcamp", "url": "https://a.bc/track/t"}],
+        lambda q, limit=6, **kw: [{"title": "T1", "artist": "A1", "album": "", "source": "bandcamp", "url": "https://a.bc/track/t"}],
     )
-    monkeypatch.setattr("app.search_soundcloud", lambda q, limit=6: [])
+    monkeypatch.setattr("app.search_soundcloud", lambda q, limit=6, **kw: [])
+    monkeypatch.setattr("app.search_beatport", lambda q, limit=4, **kw: [])
     r = client.get("/api/search?q=test")
     assert r.status_code == 200
     j = r.get_json()
@@ -80,6 +81,8 @@ def test_normalize_search_source(app_module):
     assert app_module._normalize_search_source("bandcamp") == "bandcamp"
     assert app_module._normalize_search_source("soundcloud") == "soundcloud"
     assert app_module._normalize_search_source("SC") == "soundcloud"
+    assert app_module._normalize_search_source("beatport") == "beatport"
+    assert app_module._normalize_search_source("bp") == "beatport"
     assert app_module._normalize_search_source("") == ""
     assert app_module._normalize_search_source("unknown") == ""
 
@@ -87,14 +90,15 @@ def test_normalize_search_source(app_module):
 def test_api_search_source_apple_respects_limit(client, monkeypatch):
     calls = []
 
-    def fake_itunes(q, limit=8):
+    def fake_itunes(q, limit=8, **kw):
         calls.append((q, limit))
         return [{"title": "A", "artist": "B", "source": "apple_music", "url": "https://x"}]
 
     monkeypatch.setattr("app.search_itunes", fake_itunes)
-    monkeypatch.setattr("app.search_discogs", lambda q, limit=5: [])
-    monkeypatch.setattr("app.search_bandcamp", lambda q, limit=6: [])
-    monkeypatch.setattr("app.search_soundcloud", lambda q, limit=6: [])
+    monkeypatch.setattr("app.search_discogs", lambda q, limit=5, **kw: [])
+    monkeypatch.setattr("app.search_bandcamp", lambda q, limit=6, **kw: [])
+    monkeypatch.setattr("app.search_soundcloud", lambda q, limit=6, **kw: [])
+    monkeypatch.setattr("app.search_beatport", lambda q, limit=4, **kw: [])
 
     r = client.get("/api/search?q=foo&source=apple&limit=3")
     assert r.status_code == 200
@@ -105,15 +109,16 @@ def test_api_search_source_apple_respects_limit(client, monkeypatch):
 
 
 def test_api_search_source_discogs_only(client, monkeypatch):
-    monkeypatch.setattr("app.search_itunes", lambda q, limit=8: [])
+    monkeypatch.setattr("app.search_itunes", lambda q, limit=8, **kw: [])
     monkeypatch.setattr(
         "app.search_discogs",
-        lambda q, limit=5: [
+        lambda q, limit=5, **kw: [
             {"title": "Rel", "source": "discogs", "url": "https://d/r/1", "album": "Rel"}
         ],
     )
-    monkeypatch.setattr("app.search_bandcamp", lambda q, limit=6: [])
-    monkeypatch.setattr("app.search_soundcloud", lambda q, limit=6: [])
+    monkeypatch.setattr("app.search_bandcamp", lambda q, limit=6, **kw: [])
+    monkeypatch.setattr("app.search_soundcloud", lambda q, limit=6, **kw: [])
+    monkeypatch.setattr("app.search_beatport", lambda q, limit=4, **kw: [])
 
     r = client.get("/api/search?q=x&source=discogs&limit=2")
     assert r.status_code == 200
@@ -123,15 +128,16 @@ def test_api_search_source_discogs_only(client, monkeypatch):
 
 
 def test_api_search_source_soundcloud_only(client, monkeypatch):
-    monkeypatch.setattr("app.search_itunes", lambda q, limit=8: [])
-    monkeypatch.setattr("app.search_discogs", lambda q, limit=5: [])
-    monkeypatch.setattr("app.search_bandcamp", lambda q, limit=6: [])
+    monkeypatch.setattr("app.search_itunes", lambda q, limit=8, **kw: [])
+    monkeypatch.setattr("app.search_discogs", lambda q, limit=5, **kw: [])
+    monkeypatch.setattr("app.search_bandcamp", lambda q, limit=6, **kw: [])
     monkeypatch.setattr(
         "app.search_soundcloud",
-        lambda q, limit=6: [
+        lambda q, limit=6, **kw: [
             {"title": "SC", "artist": "A", "album": "", "year": "", "artwork_thumb": "", "url": "https://soundcloud.com/a/b", "source": "soundcloud"},
         ],
     )
+    monkeypatch.setattr("app.search_beatport", lambda q, limit=4, **kw: [])
 
     r = client.get("/api/search?q=x&source=soundcloud&limit=2")
     assert r.status_code == 200

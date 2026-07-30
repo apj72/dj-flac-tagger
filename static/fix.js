@@ -484,18 +484,6 @@ async function resetFixDirToDefault() {
 }
 
 // ---- Server-side folder picker (path cannot be read from a browser file dialog) ----
-let folderModalPath = "";
-
-function closeFolderModal() {
-  const el = document.getElementById("fix-folder-modal");
-  if (el) el.classList.add("hidden");
-  document.removeEventListener("keydown", onFolderModalKeydown);
-}
-
-function onFolderModalKeydown(e) {
-  if (e.key === "Escape") closeFolderModal();
-}
-
 async function openFolderModal() {
   let start = $("#fix-dir").value.trim();
   if (!start) {
@@ -503,56 +491,12 @@ async function openFolderModal() {
     const cfg = await resp.json();
     start = fixDefaultBrowseDir(cfg);
   }
-  if (!start) start = "~";
-  const modal = document.getElementById("fix-folder-modal");
-  modal.classList.remove("hidden");
-  document.addEventListener("keydown", onFolderModalKeydown);
-  await loadFolderInModal(start);
-}
-
-async function loadFolderInModal(path) {
-  const listEl = $("#fix-modal-dir-list");
-  const pathEl = $("#fix-modal-path");
-  const upBtn = $("#fix-modal-up");
-  listEl.innerHTML = '<div class="status">Loading…</div>';
-  upBtn.disabled = true;
-
-  const resp = await fetch(`/api/browse-folders?path=${encodeURIComponent(path)}`);
-  const data = await resp.json();
-  if (data.error) {
-    listEl.innerHTML = `<div class="status">${data.error}</div>`;
-    pathEl.textContent = path;
-    folderModalPath = path;
-    return;
-  }
-  folderModalPath = data.path;
-  pathEl.textContent = data.path;
-  if (data.parent) {
-    upBtn.disabled = false;
-    upBtn.onclick = () => loadFolderInModal(data.parent);
-  } else {
-    upBtn.disabled = true;
-    upBtn.onclick = null;
-  }
-
-  if (!data.directories || data.directories.length === 0) {
-    listEl.innerHTML = '<div class="status">No subfolders (you can still use this folder)</div>';
-    return;
-  }
-  const paths = data.directories.map((d) => d.path);
-  const esc = (s) =>
-    String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  listEl.innerHTML = data.directories
-    .map(
-      (d, i) =>
-        `<button type="button" class="modal-dir-item" data-idx="${i}">${esc(d.name)}/</button>`
-    )
-    .join("");
-  listEl.querySelectorAll(".modal-dir-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const i = parseInt(btn.dataset.idx, 10);
-      if (!Number.isNaN(i) && paths[i]) loadFolderInModal(paths[i]);
-    });
+  DJMM.openFolderPicker({
+    startPath: start || "~",
+    onSelect(path) {
+      $("#fix-dir").value = path;
+      browseAudio();
+    },
   });
 }
 
@@ -650,16 +594,7 @@ function wireFixFileListArrowNav() {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
       if (fixPageFocusedFieldConsumesArrowKeys(e.target)) return;
-      const modal = document.getElementById("fix-folder-modal");
-      if (
-        modal &&
-        !modal.classList.contains("hidden") &&
-        e.target &&
-        typeof e.target.closest === "function" &&
-        e.target.closest("#fix-folder-modal")
-      ) {
-        return;
-      }
+      if (DJMM.isFolderPickerOpen()) return;
 
       const list = document.getElementById("fix-file-list");
       if (!list) return;
@@ -927,6 +862,11 @@ async function autoSearch(tags) {
   const data = await resp.json();
 
   status.classList.add("hidden");
+
+  if (data.warnings && data.warnings.length) {
+    status.classList.remove("hidden");
+    status.textContent = data.warnings.join("; ");
+  }
 
   if (!data.results || data.results.length === 0) {
     container.innerHTML =
@@ -1284,17 +1224,6 @@ async function saveArtworkOnly() {
 $("#fix-browse-btn").addEventListener("click", browseAudio);
 document.getElementById("fix-choose-folder-btn").addEventListener("click", openFolderModal);
 document.getElementById("fix-default-dir-btn").addEventListener("click", resetFixDirToDefault);
-document.getElementById("fix-modal-select").addEventListener("click", () => {
-  if (folderModalPath) {
-    $("#fix-dir").value = folderModalPath;
-    closeFolderModal();
-    browseAudio();
-  }
-});
-document.getElementById("fix-modal-cancel").addEventListener("click", closeFolderModal);
-document.getElementById("fix-folder-modal").addEventListener("click", (e) => {
-  if (e.target && e.target.id === "fix-folder-modal") closeFolderModal();
-});
 $("#fix-dir").addEventListener("keydown", (e) => { if (e.key === "Enter") browseAudio(); });
 $("#fix-fetch-btn").addEventListener("click", fetchMetadata);
 $("#fix-url").addEventListener("keydown", (e) => { if (e.key === "Enter") fetchMetadata(); });

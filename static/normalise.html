@@ -43,6 +43,7 @@
         <div class="dir-bar">
           <input type="text" id="norm-dir" placeholder="~/Music/DJ-library" />
           <button id="norm-browse-btn" class="btn btn-secondary">Browse</button>
+          <button id="norm-choose-folder-btn" type="button" class="btn btn-secondary" title="Open folder navigator">Choose folder…</button>
         </div>
         <div id="norm-file-list" class="file-list"></div>
         <div id="norm-probe-info" class="probe-info hidden"></div>
@@ -78,10 +79,55 @@
         <button id="norm-run-btn" class="btn btn-accent" disabled>Normalise (EBU R128)</button>
         <div id="norm-result" class="result hidden"></div>
       </section>
+
+      <section class="card">
+        <h2>
+          <span class="step">3</span> Batch Normalise
+          <span class="help-tip">
+            <button type="button" class="help-tip-btn" aria-label="About batch normalise">?</button>
+            <span class="help-tip-bubble" role="tooltip">
+              Scan a folder for audio files, then normalise them all in one run.
+              Each file is analysed (first pass) and normalised (second pass) using
+              <strong>EBU R128</strong> at your Settings target. Tags and artwork are
+              copied to the new file. Output is written next to each source with the
+              suffix you choose.
+            </span>
+          </span>
+        </h2>
+        <div class="dir-bar">
+          <input type="text" id="norm-bulk-dir" placeholder="/path/to/audio-folder" />
+          <button type="button" id="norm-bulk-choose-btn" class="btn btn-secondary">Choose folder…</button>
+        </div>
+        <div class="field-row" style="margin:0.5rem 0">
+          <label class="inline" style="display:block;margin-bottom:0.35rem">
+            <input type="checkbox" id="norm-bulk-recursive" />
+            <span>Include <strong>subfolders</strong></span>
+          </label>
+        </div>
+        <div class="dir-bar" style="margin:0.5rem 0">
+          <button type="button" id="norm-bulk-scan-btn" class="btn btn-secondary">Scan</button>
+        </div>
+        <p id="norm-bulk-scan-status" class="status hidden" style="margin:0.5rem 0 0"></p>
+        <div class="field-row" style="margin:0.5rem 0">
+          <label for="norm-bulk-suffix">Output filename suffix</label>
+          <input type="text" id="norm-bulk-suffix" value="_norm" placeholder="_norm" style="width:8rem" />
+        </div>
+        <div class="dir-bar" style="margin:0.5rem 0">
+          <button type="button" id="norm-bulk-run-btn" class="btn btn-primary" disabled>Run</button>
+        </div>
+        <div id="norm-bulk-progress-wrap" class="progress-wrap hidden" aria-busy="false" aria-live="polite">
+          <p class="progress-label" id="norm-bulk-progress-label">Normalising…</p>
+          <div class="progress-bar-outer" role="progressbar" aria-label="In progress">
+            <div class="progress-bar-indeterminate"></div>
+          </div>
+        </div>
+        <div id="norm-bulk-result" class="result hidden" style="margin-top:0.5rem"></div>
+      </section>
     </main>
   </div>
 
   <script src="/static/path-persist.js"></script>
+  <script src="/static/folder-picker.js"></script>
   <script src="/static/normalise.js"></script>
   <script src="/static/player.js"></script>
 </body>

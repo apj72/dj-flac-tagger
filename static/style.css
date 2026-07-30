@@ -1157,6 +1157,7 @@ label {
 }
 
 .retag-label { color: var(--text-muted); font-size: 0.85rem; margin-left: 0.5rem; }
+.history-controls-spacer { flex: 1; }
 
 .retag-dir-input {
   flex: 1;
