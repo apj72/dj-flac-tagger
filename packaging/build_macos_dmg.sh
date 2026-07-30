@@ -25,8 +25,21 @@ fi
 RELEASE_DIR="${RELEASE_DIR:-build/releases}"
 mkdir -p "$RELEASE_DIR"
 DMG_PATH="$RELEASE_DIR/$DMG_NAME"
+ICON="$ROOT/packaging/DJMetaManager.icns"
 
-hdiutil create -volname "$VOL_NAME" -srcfolder "$OUT_DIR/$APP_NAME" -ov -format UDZO "$DMG_PATH"
+rm -f "$DMG_PATH"
+
+create-dmg \
+  --volname "$VOL_NAME" \
+  --volicon "$ICON" \
+  --window-pos 200 120 \
+  --window-size 600 400 \
+  --icon-size 100 \
+  --icon "$APP_NAME" 150 185 \
+  --app-drop-link 450 185 \
+  --no-internet-enable \
+  "$DMG_PATH" \
+  "$OUT_DIR/$APP_NAME"
 
 echo "Built: $OUT_DIR/$APP_NAME"
 echo "DMG:   $DMG_PATH"
