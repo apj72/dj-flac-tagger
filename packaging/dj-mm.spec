@@ -70,6 +70,6 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="DJ MetaManager.app",
-    icon=None,
+    icon=str(SPEC_DIR / "DJMetaManager.icns"),
     bundle_identifier="com.djmetamanager.app",
 )

@@ -10,6 +10,7 @@ use this file.  `python app.py` still starts a plain dev server.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 
@@ -17,6 +18,8 @@ import time
 _HOST = "127.0.0.1"
 _PORT = 5123
 _URL = f"http://{_HOST}:{_PORT}"
+_ROOT = os.path.dirname(os.path.abspath(__file__))
+_ICON = os.path.join(_ROOT, "static", "favicon.png")
 
 
 def _start_flask_server(app_module) -> None:
@@ -65,7 +68,8 @@ def main() -> None:
             width=1280,
             height=900,
         )
-        webview.start()
+        icon_path = _ICON if os.path.isfile(_ICON) else None
+        webview.start(icon=icon_path)
     else:
         threading.Thread(target=_open_browser, daemon=True).start()
         _start_flask_server(app_module)
