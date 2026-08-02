@@ -545,6 +545,9 @@ async function browseAudio() {
   $("#fix-file-list").querySelectorAll(".file-item").forEach((el) => {
     el.addEventListener("click", () => selectFlacFile(el));
   });
+  if (DJMM.initFileListSearch) {
+    DJMM.initFileListSearch({ listId: "fix-file-list", onSelect: selectFlacFile, pageClass: "page-fix" });
+  }
   scheduleFixPageSave();
   return data;
 }
@@ -598,7 +601,7 @@ function wireFixFileListArrowNav() {
 
       const list = document.getElementById("fix-file-list");
       if (!list) return;
-      const items = [...list.querySelectorAll(".file-item")];
+      const items = [...list.querySelectorAll(".file-item:not(.file-list-hidden)")];
       if (!items.length) return;
 
       e.preventDefault();

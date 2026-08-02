@@ -721,6 +721,29 @@ label {
 }
 .file-item:hover { background: var(--surface-hover); }
 .file-item.selected { background: var(--accent); color: var(--text-on-accent); }
+.file-item.file-list-hidden { display: none; }
+
+.file-list-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+.file-list-search-input {
+  flex: 1;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.5rem;
+}
+.file-list-search-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.file-list-search-clear {
+  padding: 0.15rem 0.45rem;
+  font-size: 0.85rem;
+  line-height: 1;
+}
 
 .file-item-main {
   min-width: 0;

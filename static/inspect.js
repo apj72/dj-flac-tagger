@@ -107,7 +107,7 @@ function wireInspectFileListArrowNav() {
 
       const list = document.getElementById("ins-file-list");
       if (!list) return;
-      const items = [...list.querySelectorAll(".file-item")];
+      const items = [...list.querySelectorAll(".file-item:not(.file-list-hidden)")];
       if (!items.length) return;
 
       e.preventDefault();
@@ -166,6 +166,9 @@ async function browseFiles() {
   $("#ins-file-list").querySelectorAll(".file-item").forEach((el) => {
     el.addEventListener("click", () => selectFile(el));
   });
+  if (DJMM.initFileListSearch) {
+    DJMM.initFileListSearch({ listId: "ins-file-list", onSelect: selectFile, pageClass: "page-inspect" });
+  }
   scheduleInspectPageSave();
 }
 

@@ -76,6 +76,10 @@ async function browseAudio() {
   $("#norm-file-list").querySelectorAll(".file-item").forEach((el) => {
     el.addEventListener("click", () => selectFile(el));
   });
+  if (DJMM.initFileListSearch) {
+    DJMM.initFileListSearch({ listId: "norm-file-list", onSelect: selectFile, pageClass: "page-normalise" });
+  }
+  wireNormFileListArrowNav();
   scheduleNormalisePageSave();
 }
 
@@ -116,6 +120,55 @@ async function selectFile(el) {
   }
 
   runAnalysis(selectedFile);
+}
+
+function normPageFocusedFieldConsumesArrowKeys(el) {
+  if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName.toLowerCase();
+  if (tag === "textarea" || tag === "select") return true;
+  if (tag === "input") {
+    const type = (el.type || "text").toLowerCase();
+    const textual = new Set(["", "text", "search", "url", "email", "password", "tel", "number", "date", "time", "datetime-local", "month", "week"]);
+    return textual.has(type);
+  }
+  return false;
+}
+
+function wireNormFileListArrowNav() {
+  if (window.__normFileListKbWired) return;
+  window.__normFileListKbWired = true;
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      if (!document.body.classList.contains("page-normalise")) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+      if (normPageFocusedFieldConsumesArrowKeys(e.target)) return;
+      if (DJMM.isFolderPickerOpen()) return;
+
+      const list = document.getElementById("norm-file-list");
+      if (!list) return;
+      const items = [...list.querySelectorAll(".file-item:not(.file-list-hidden)")];
+      if (!items.length) return;
+
+      e.preventDefault();
+
+      let cur = items.findIndex((row) => row.classList.contains("selected"));
+      let next = cur;
+      if (e.key === "ArrowDown") next = cur < 0 ? 0 : Math.min(cur + 1, items.length - 1);
+      else if (e.key === "ArrowUp") next = cur < 0 ? items.length - 1 : Math.max(cur - 1, 0);
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = items.length - 1;
+
+      const row = items[next];
+      if (row) {
+        selectFile(row);
+        row.scrollIntoView({ block: "nearest", behavior: "auto" });
+      }
+    },
+    true
+  );
 }
 
 function formatDuration(secs) {
