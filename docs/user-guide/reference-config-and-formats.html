@@ -34,7 +34,7 @@
 
       <h2>Configuration file (<code>config.json</code>)</h2>
       <p>
-        Start from <code>config.json.example</code>. Typical keys include <code>source_dir</code>, <code>destination_dir</code>, <code>extract_profile</code> (<code>flac</code>, <code>mp3</code>, or <code>aac</code>/<code>m4a</code>), <code>platinum_notes_app</code>, <code>pn_output_suffix</code>, <code>target_lufs</code>, <code>target_true_peak</code>, <code>loudness_verify_enabled</code>, <code>extract_mkv_audio_analysis_enabled</code> (Extract tab: run full loudness analysis when selecting <code>.mkv</code> recordings), and <code>fix_retain_filename_suffixes</code> (Fix / Bulk Fix: strip configured trailing fragments from the filename stem for search, and keep them when renaming to <code>Artist - Title</code>). Positive LUFS input (e.g. <code>11.5</code>) is interpreted as negative integrated loudness where the app supports that shorthand.
+        Start from <code>config.json.example</code>. Typical keys include <code>source_dir</code>, <code>destination_dir</code>, <code>extract_profile</code> (<code>flac</code>, <code>mp3</code>, or <code>aac</code>/<code>m4a</code>), <code>mp3_bitrate</code> (CBR kbps for MP3 output: 128, 192, 256, or 320; default 320), <code>aac_bitrate</code> (CBR kbps for AAC/M4A output: 128, 192, or 256; default 256), <code>platinum_notes_app</code>, <code>pn_output_suffix</code>, <code>target_lufs</code>, <code>target_true_peak</code>, <code>loudness_verify_enabled</code>, <code>extract_mkv_audio_analysis_enabled</code> (Extract tab: run full loudness analysis when selecting <code>.mkv</code> recordings), and <code>fix_retain_filename_suffixes</code> (Fix / Bulk Fix: strip configured trailing fragments from the filename stem for search, and keep them when renaming to <code>Artist - Title</code>). Positive LUFS input (e.g. <code>11.5</code>) is interpreted as negative integrated loudness where the app supports that shorthand.
         From a bundled <strong>macOS .app</strong>, the live file sits under <strong><code>~/Library/Application Support/DJ MetaManager/config.json</code></strong>; see README (macOS app bundle section).
       </p>
 
@@ -127,7 +127,7 @@
         </table>
       </div>
       <p>
-        <strong>Fix search API:</strong> <code>GET /api/search?q=…</code> merges Apple + Discogs + Bandcamp and can include <strong>SoundCloud</strong> hits in the combined result set. Optional <code>source=apple_music|discogs|bandcamp|soundcloud</code> and <code>limit</code> restrict to one catalogue (used by Fix Metadata fallback UI). <strong>Beatport</strong> is typically used by pasting full track URLs into <strong>Fetch from URL</strong> / Bulk Fix rows.
+        <strong>Fix search API:</strong> <code>GET /api/search?q=…</code> merges Apple + Discogs + Bandcamp and can include <strong>SoundCloud</strong> and <strong>Beatport</strong> hits in the combined result set. Optional <code>source=apple_music|discogs|bandcamp|soundcloud|beatport</code> (aliases: <code>sc</code>, <code>bp</code>) and <code>limit</code> restrict to one catalogue (used by Fix Metadata fallback UI). Beatport URLs can also be pasted directly into <strong>Fetch from URL</strong> / Bulk Fix rows.
       </p>
 
       <h2>Supported file roles</h2>
@@ -146,11 +146,11 @@
             </tr>
             <tr>
               <td>Fix &amp; Inspect</td>
-              <td>FLAC (Vorbis + pictures), MP3 (ID3v2 + APIC), M4A/AAC/MP4 (iTunes atoms), OGG (Vorbis comments + METADATA_BLOCK_PICTURE)</td>
+              <td>FLAC (Vorbis + pictures), MP3 (ID3v2 + APIC), AIFF (ID3v2, same as MP3), M4A/AAC/MP4 (iTunes atoms), OGG (Vorbis comments + METADATA_BLOCK_PICTURE)</td>
             </tr>
             <tr>
               <td>Inspect artwork resize</td>
-              <td>FLAC only (Rekordbox-friendly dimensions)</td>
+              <td>FLAC, MP3, AIFF, M4A (Rekordbox-friendly dimensions)</td>
             </tr>
           </tbody>
         </table>
@@ -187,7 +187,9 @@
         <li><code>POST /api/retag</code> — save one file from Fix (tags, optional artwork, optional rename)</li>
         <li><code>POST /api/retag-artwork</code> — embed cover only; JSON <code>filepath</code> plus <code>artwork_base64</code>/<code>artwork_mime</code> or <code>artwork_url</code></li>
         <li><code>GET /api/stream-audio?path=…</code> — stream local audio for the in-browser preview bar (Range-capable)</li>
-        <li><code>POST /api/normalise</code> / <code>POST /api/normalise-flac</code> — loudness encode</li>
+        <li><code>POST /api/normalise</code> / <code>POST /api/normalise-flac</code> — single-file loudness encode</li>
+        <li><code>POST /api/scan-normalise-bulk</code> — scan folder for bulk normalise candidates</li>
+        <li><code>POST /api/normalise-bulk</code> — normalise all files in a folder (NDJSON streaming progress)</li>
         <li><code>POST /api/convert-wav-to-flac</code>, <code>POST /api/convert-wav-bulk</code> — WAV batching</li>
         <li><code>GET /api/bulk-fix/scan</code>, <code>POST /api/bulk-fix/scan-paths</code>, <code>POST /api/bulk-fix/suggest</code>, <code>POST /api/bulk-fix/apply</code></li>
       </ul>

@@ -44,10 +44,10 @@
 
       <h2>MP3 and AAC</h2>
       <p>
-        Lossy formats are <strong>re-encoded</strong> after loudness processing. Choose targets that match how you want your library to behave in loudness-aware DJ software.
+        Lossy formats are <strong>re-encoded</strong> after loudness processing. The bitrate follows your <strong>Settings → MP3 bitrate</strong> (default 320 kbps CBR) or <strong>AAC bitrate</strong> (default 256 kbps CBR). Choose targets that match how you want your library to behave in loudness-aware DJ software.
       </p>
 
-      <h2>Workflow</h2>
+      <h2>Single-file workflow</h2>
       <ol>
         <li>Browse to a folder and select a supported file (same family as Fix/Inspect).</li>
         <li>Run <strong>analyse</strong> to view integrated LUFS and peak.</li>
@@ -55,6 +55,14 @@
         <li>Run <strong>Normalise</strong> and confirm the new file beside the source (or as documented in the UI).</li>
         <li>Use the bottom <strong>audio preview bar</strong> to audition the selected file before or after normalisation (Play/Pause, seek, no autoplay)—see <a href="workflow-fix-and-inspect.html">Fix &amp; Inspect</a> for behaviour details.</li>
       </ol>
+      <p>
+        The file list supports a <strong>filter input</strong> (type to narrow by filename), <strong>arrow-key navigation</strong> (<strong>↑</strong> / <strong>↓</strong>, <strong>Home</strong>, <strong>End</strong>), and <strong>type-to-jump</strong> (press a letter key to jump to the first matching file; repeat to cycle).
+      </p>
+
+      <h2>Bulk normalise</h2>
+      <p>
+        Below the single-file section, <strong>Bulk Normalise</strong> processes an entire folder in one run. Browse to a folder, scan for eligible audio files, set a suffix, and click <strong>Normalise All</strong>. Progress streams to the browser in real time via <strong>NDJSON</strong>—each file's result (success or error) appears as it completes, with a summary at the end showing how many files were normalised, skipped, or failed.
+      </p>
 
       <figure class="guide-figure">
         <img src="assets/images/13-normalise-analyse.png" width="1000" height="700" alt="Normalise tab with analysis">
