@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fix List — DJ MetaManager</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <script src="/static/theme-init.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="page-fix-list">
+  <div class="app">
+    <header>
+      <h1 class="sr-only">DJ MetaManager</h1>
+      <div class="header-logo-wrap">
+        <a href="/" class="header-logo-link" aria-label="DJ MetaManager home">
+          <img src="/static/header-logo-dark-112h.png" alt="" width="366" height="112" class="header-logo header-logo--dark" decoding="async" />
+          <img src="/static/header-logo-light-112h.png" alt="" width="370" height="112" class="header-logo header-logo--light" decoding="async" />
+        </a>
+      </div>
+      <nav class="tab-nav">
+        <a href="/" class="tab-link tab-link--icon-only" data-tooltip="Extract" aria-label="Extract"><span class="tab-icon tab-icon-extract" aria-hidden="true"></span></a>
+        <a href="/fix" class="tab-link tab-link--icon-only" data-tooltip="Fix Metadata" aria-label="Fix Metadata"><span class="tab-icon tab-icon-fix" aria-hidden="true"></span></a>
+        <a href="/inspect" class="tab-link tab-link--icon-only" data-tooltip="Inspect" aria-label="Inspect"><span class="tab-icon tab-icon-inspect" aria-hidden="true"></span></a>
+        <a href="/normalise" class="tab-link tab-link--icon-only" data-tooltip="Normalise" aria-label="Normalise"><span class="tab-icon tab-icon-normalise" aria-hidden="true"></span></a>
+        <a href="/convert" class="tab-link tab-link--icon-only" data-tooltip="WAV/AIFF → FLAC" aria-label="WAV/AIFF to FLAC"><span class="tab-icon tab-icon-convert" aria-hidden="true"></span></a>
+        <a href="/bulk-fix" class="tab-link tab-link--icon-only" data-tooltip="Bulk Fix" aria-label="Bulk Fix"><span class="tab-icon tab-icon-bulk-fix" aria-hidden="true"></span></a>
+        <a href="/fix-list" class="tab-link tab-link--icon-only active" data-tooltip="Fix List" aria-label="Fix List"><span class="tab-icon tab-icon-fix-list" aria-hidden="true"></span></a>
+        <a href="/settings" class="tab-link tab-link--icon-only" data-tooltip="Settings" aria-label="Settings"><span class="tab-icon tab-icon-settings" aria-hidden="true"></span></a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- Card 1: Import -->
+      <section class="card">
+        <h2>
+          <span class="step">1</span> Import fix list
+          <span class="help-tip">
+            <button type="button" class="help-tip-btn" aria-label="About fix list import">?</button>
+            <span class="help-tip-bubble" role="tooltip">Upload a CSV exported from Rekordbox Library Manager. The CSV identifies tracks with missing metadata (title, artist, BPM, key, artwork). DJ MetaManager reads the actual file tags and lets you fix them by searching Discogs, Apple Music, Bandcamp, SoundCloud, and Beatport.</span>
+          </span>
+        </h2>
+        <div class="field-row" style="gap:0.75rem; align-items:flex-end; flex-wrap:wrap">
+          <div>
+            <label for="fl-csv-input" style="display:block;font-size:0.85rem;margin-bottom:0.25rem">CSV file from Rekordbox Library Manager</label>
+            <input type="file" id="fl-csv-input" accept=".csv,text/csv" />
+          </div>
+          <button type="button" id="fl-upload-btn" class="btn btn-primary">Upload &amp; scan</button>
+          <button type="button" id="fl-clear-btn" class="btn btn-secondary">Clear</button>
+        </div>
+        <div id="fl-upload-status" class="status hidden" style="margin-top:0.75rem"></div>
+        <div id="fl-summary" class="hidden" style="margin-top:0.75rem">
+          <div id="fl-summary-content" class="result"></div>
+        </div>
+      </section>
+
+      <!-- Card 2: Track list + detail panel -->
+      <section class="card hidden" id="fl-review-card">
+        <h2>
+          <span class="step">2</span> Select &amp; fix tracks
+          <span class="help-tip">
+            <button type="button" class="help-tip-btn" aria-label="About track review">?</button>
+            <span class="help-tip-bubble" role="tooltip">Click a track in the list to see its details. Use "Fetch matches" to search online for the selected track, pick the best result from the dropdown or paste a URL, then "Apply" to write the metadata. Use "Fetch all matches" to search for every track in the list at once. Tracks marked with coloured badges are missing metadata.</span>
+          </span>
+        </h2>
+
+        <div class="fl-layout">
+          <!-- Left: scrollable track list -->
+          <div class="fl-sidebar">
+            <div class="fl-sidebar-controls">
+              <span id="fl-list-count" class="hint"></span>
+            </div>
+            <div id="fl-progress-wrap" class="progress-wrap hidden" aria-busy="false" aria-live="polite">
+              <p class="progress-label" id="fl-progress-label">Working...</p>
+              <div class="progress-bar-outer" role="progressbar" aria-label="In progress">
+                <div class="progress-bar-indeterminate"></div>
+              </div>
+            </div>
+            <div id="fl-track-list" class="fl-track-list" role="listbox" aria-label="Tracks from fix list" tabindex="0"></div>
+          </div>
+
+          <!-- Right: detail panel for selected track -->
+          <div class="fl-detail" id="fl-detail">
+            <div class="fl-detail-empty">
+              <p class="hint">Select a track from the list to see its details.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Card 3: Export -->
+      <section class="card hidden" id="fl-apply-card">
+        <h2>
+          <span class="step">3</span> Export completed
+          <span class="help-tip">
+            <button type="button" class="help-tip-btn" aria-label="About export">?</button>
+            <span class="help-tip-bubble" role="tooltip">After applying metadata to tracks, download the list of successfully fixed file paths as a CSV. Import that into Rekordbox Library Manager to create a playlist for tag re-import in Rekordbox.</span>
+          </span>
+        </h2>
+        <div id="fl-completed-summary" class="hint" style="margin-bottom:0.5rem"></div>
+        <button type="button" id="fl-export-btn" class="btn btn-primary" disabled>Download completed paths CSV</button>
+      </section>
+    </main>
+  </div>
+
+  <div id="fl-confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="fl-confirm-title">
+    <div class="modal-card modal-card--confirm">
+      <h3 id="fl-confirm-title">Apply metadata?</h3>
+      <div id="fl-confirm-body" class="bulk-confirm-body"></div>
+      <div class="modal-actions">
+        <button type="button" id="fl-confirm-ok" class="btn btn-primary">Apply</button>
+        <button type="button" id="fl-confirm-cancel" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/fix-list.js"></script>
+</body>
+</html>

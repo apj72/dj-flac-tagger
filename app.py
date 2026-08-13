@@ -1,5 +1,7 @@
 import base64
+import csv
 import difflib
+import io
 import json
 from collections import defaultdict
 import os
@@ -529,6 +531,35 @@ def _assert_browse_dir_video_file(filepath, base_dir):
     return True, None
 
 
+_LOSSLESS_CONVERT_EXTS = (".wav", ".aiff", ".aif")
+
+
+def _iter_lossless_paths(root_resolved: str, recursive: bool):
+    """Yield every .wav / .aiff / .aif file under root (non-hidden)."""
+    if not os.path.isdir(root_resolved):
+        return
+    if recursive:
+        for dirpath, _dirnames, filenames in os.walk(root_resolved):
+            for fn in sorted(filenames):
+                if fn.startswith("."):
+                    continue
+                if not any(fn.lower().endswith(e) for e in _LOSSLESS_CONVERT_EXTS):
+                    continue
+                p = os.path.join(dirpath, fn)
+                try:
+                    if os.path.isfile(p):
+                        yield p
+                except OSError:
+                    continue
+    else:
+        try:
+            for f in sorted(Path(root_resolved).iterdir()):
+                if f.is_file() and not f.name.startswith(".") and f.suffix.lower() in _LOSSLESS_CONVERT_EXTS:
+                    yield str(f)
+        except OSError:
+            return
+
+
 def _iter_wav_paths(root_resolved: str, recursive: bool):
     """Yield every .wav file under root (non-hidden). root_resolved must be real. """
     if not os.path.isdir(root_resolved):
@@ -553,6 +584,11 @@ def _iter_wav_paths(root_resolved: str, recursive: bool):
                     yield str(f)
         except OSError:
             return
+
+
+def _list_lossless_paths_sorted(root_resolved: str, recursive: bool) -> list:
+    """Stable sorted list of all .wav/.aiff paths (for batch offset/limit)."""
+    return sorted((p for p in _iter_lossless_paths(root_resolved, recursive)), key=lambda p: p.lower())
 
 
 def _list_wav_paths_sorted(root_resolved: str, recursive: bool) -> list:
@@ -826,6 +862,8 @@ def bulk_fix_suggest():
         time.sleep(delay)
         soundcloud = search_soundcloud(q, limit=6)  # noqa: F405
         time.sleep(delay)
+        beatport = search_beatport(q, limit=5)  # noqa: F405
+        time.sleep(delay)
         seen = set()
         combined = []
         for r in itunes + discogs + bandcamp + soundcloud + beatport:
@@ -906,6 +944,225 @@ def bulk_fix_apply():
         "summary": {"ok": n_ok, "errors": n_err, "skipped": n_sk},
         "results": results,
     })
+
+
+# ---------------------------------------------------------------------------
+# Fix List — CSV-driven batch metadata fix (integration with music_library)
+# ---------------------------------------------------------------------------
+
+@app.route("/fix-list")
+def fix_list_page():
+    return app.send_static_file("fix-list.html")
+
+
+def _read_tags_for_path(filepath):
+    """Read tags from any supported audio file, returning a dict. No path validation."""
+    ext = os.path.splitext(filepath)[1].lower()
+    try:
+        if ext == ".flac":
+            return _read_flac_tags(filepath)  # noqa: F405
+        elif ext == ".mp3":
+            return _read_mp3_tags(filepath)  # noqa: F405
+        elif ext in (".m4a", ".mp4", ".aac"):
+            return _read_mp4_tags(filepath)  # noqa: F405
+        elif ext in (".aiff", ".aif"):
+            return _read_aiff_tags(filepath)  # noqa: F405
+        elif ext in (".ogg", ".oga"):
+            return _read_vorbis_tags(filepath)  # noqa: F405
+        else:
+            return _read_generic_tags(filepath)  # noqa: F405
+    except Exception as e:
+        return {"error": str(e), "has_artwork": False}
+
+
+@app.route("/api/fix-list/upload", methods=["POST"])
+def fix_list_upload():
+    """Parse an uploaded CSV fix list, verify files exist, read actual tags."""
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    f = request.files["file"]
+    text = f.read().decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames or "full_path" not in reader.fieldnames:
+        return jsonify({"error": "CSV must have a 'full_path' column"}), 400
+
+    rows = []
+    for row in reader:
+        if len(rows) >= 500:
+            break
+        rows.append(row)
+    if not rows:
+        return jsonify({"error": "CSV is empty"}), 400
+
+    def to_bool(v):
+        return str(v).strip().lower() in ("true", "1", "yes")
+
+    items = []
+    n_found = 0
+    n_missing_file = 0
+    n_needs_tags = 0
+    n_needs_artwork = 0
+    for row in rows:
+        fp = (row.get("full_path") or "").strip()
+        exists = bool(fp) and os.path.isfile(fp)
+        if exists:
+            n_found += 1
+        else:
+            n_missing_file += 1
+
+        csv_missing = {
+            "title": to_bool(row.get("missing_title", "")),
+            "artist": to_bool(row.get("missing_artist", "")),
+            "bpm": to_bool(row.get("missing_bpm", "")),
+            "key": to_bool(row.get("missing_key", "")),
+        }
+        csv_has_artwork = to_bool(row.get("has_artwork", "true"))
+
+        actual_tags = {}
+        query = ""
+        if exists:
+            actual_tags = _read_tags_for_path(fp)
+            art_bytes, _ = read_embedded_artwork(fp)  # noqa: F405
+            actual_tags["has_artwork"] = art_bytes is not None
+
+            at = (actual_tags.get("artist") or "").strip()
+            tt = (actual_tags.get("title") or "").strip()
+            if at and tt:
+                query = f"{at} {tt}"
+            elif at or tt:
+                query = at or tt
+            else:
+                stem = Path(fp).stem
+                info = search_query_from_ableton_stem(stem)  # noqa: F405
+                query = (info.get("query") or stem).strip()
+
+            if not (actual_tags.get("title") or "").strip() or not (actual_tags.get("artist") or "").strip():
+                n_needs_tags += 1
+            if not actual_tags.get("has_artwork"):
+                n_needs_artwork += 1
+
+        items.append({
+            "full_path": fp,
+            "file_name": row.get("file_name", os.path.basename(fp)),
+            "file_type": row.get("file_type", Path(fp).suffix.lstrip(".").upper() if fp else ""),
+            "file_exists": exists,
+            "csv_missing": csv_missing,
+            "csv_has_artwork": csv_has_artwork,
+            "actual_tags": actual_tags,
+            "query": query,
+            "title_hint": (actual_tags.get("title") or "").strip(),
+            "artist_hint": (actual_tags.get("artist") or "").strip(),
+        })
+
+    return jsonify({
+        "total": len(items),
+        "items": items,
+        "summary": {
+            "total": len(items),
+            "files_found": n_found,
+            "files_missing": n_missing_file,
+            "needs_tags": n_needs_tags,
+            "needs_artwork": n_needs_artwork,
+        },
+    })
+
+
+@app.route("/api/fix-list/suggest", methods=["POST"])
+def fix_list_suggest():
+    """Search online sources for each item using provided query and title_hint."""
+    data = request.get_json() or {}
+    items_in = data.get("items") or []
+    if not isinstance(items_in, list):
+        return jsonify({"error": "items must be a list"}), 400
+    if len(items_in) > 60:
+        return jsonify({"error": "Maximum 60 items per suggest request."}), 400
+
+    delay = 0.12
+    items_out = []
+    for raw in items_in:
+        fp = (raw.get("filepath") or "").strip()
+        q = (raw.get("query") or "").strip()
+        if not q:
+            items_out.append({
+                "filepath": fp,
+                "query": "",
+                "results": [],
+                "error": "Empty search query",
+            })
+            time.sleep(delay)
+            continue
+        if not os.path.isfile(fp):
+            items_out.append({
+                "filepath": fp,
+                "query": q,
+                "results": [],
+                "error": "File not found",
+            })
+            time.sleep(delay)
+            continue
+
+        itunes = search_itunes(q, limit=6)  # noqa: F405
+        time.sleep(delay)
+        discogs = search_discogs(q, limit=4)  # noqa: F405
+        time.sleep(delay)
+        bandcamp = search_bandcamp(q, limit=5)  # noqa: F405
+        time.sleep(delay)
+        soundcloud = search_soundcloud(q, limit=6)  # noqa: F405
+        time.sleep(delay)
+        beatport = search_beatport(q, limit=5)  # noqa: F405
+        time.sleep(delay)
+
+        seen = set()
+        combined = []
+        for r in itunes + discogs + bandcamp + soundcloud + beatport:
+            u = (r.get("url") or "").strip()
+            key = (
+                (r.get("title", "") or "").lower().strip(),
+                (r.get("artist") or r.get("album") or "").lower().strip(),
+                (r.get("source") or "").lower().strip(),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            combined.append({**r, "url": u})
+
+        items_out.append({
+            "filepath": fp,
+            "query": q,
+            "title_hint": (raw.get("title_hint") or "").strip(),
+            "results": combined,
+            "error": None,
+        })
+
+    return jsonify({"items": items_out})
+
+
+@app.route("/api/fix-list/export-completed", methods=["POST"])
+def fix_list_export_completed():
+    """Write a CSV of completed file paths to the logs directory."""
+    data = request.get_json() or {}
+    paths = data.get("paths") or []
+    if not isinstance(paths, list) or not paths:
+        return jsonify({"error": "paths (non-empty list) required"}), 400
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    fname = (data.get("filename") or "").strip() or f"completed_fixes_{ts}.csv"
+    if not fname.endswith(".csv"):
+        fname += ".csv"
+    fname = re.sub(r"[^\w.\-]", "_", fname)
+    log_dir = os.path.dirname(os.path.abspath(__file__))
+    out_path = os.path.join(log_dir, fname)
+
+    output = io.StringIO()
+    w = csv.writer(output)
+    w.writerow(["full_path"])
+    for p in paths:
+        w.writerow([p])
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(output.getvalue())
+
+    return jsonify({"filepath": out_path, "count": len(paths)})
 
 
 @app.route("/api/settings", methods=["GET"])
@@ -1931,7 +2188,7 @@ def browse_audio():
 
 @app.route("/api/browse-wav")
 def browse_wav():
-    """List .wav files in a directory (WAV -> FLAC tab)."""
+    """List .wav and .aiff/.aif files in a directory (WAV/AIFF → FLAC tab)."""
     cfg = load_config()  # noqa: F405
     directory = request.args.get("dir", cfg.get("destination_dir") or cfg.get("source_dir", ""))
     directory = resolve(directory)  # noqa: F405
@@ -1940,7 +2197,7 @@ def browse_wav():
 
     files = []
     for f in sorted(Path(directory).iterdir()):
-        if f.suffix.lower() != ".wav" or not f.is_file():
+        if f.suffix.lower() not in _LOSSLESS_CONVERT_EXTS or not f.is_file():
             continue
         try:
             files.append({
@@ -2047,7 +2304,7 @@ def normalise_bulk():
 
 @app.route("/api/scan-wav-bulk")
 def scan_wav_bulk():
-    """Count .wav files under a root (for bulk convert UI)."""
+    """Count .wav and .aiff/.aif files under a root (for bulk convert UI)."""
     root = (request.args.get("path") or request.args.get("root") or "").strip()
     if not root:
         return jsonify({"error": "path or root query parameter required"}), 400
@@ -2059,7 +2316,7 @@ def scan_wav_bulk():
     if not os.path.isdir(root_r):
         return jsonify({"error": f"Not a directory: {root_r}"}), 404
     n = 0
-    for _p in _iter_wav_paths(root_r, recursive):
+    for _p in _iter_lossless_paths(root_r, recursive):
         n += 1
     return jsonify({
         "root": root_r,
@@ -2071,8 +2328,8 @@ def scan_wav_bulk():
 @app.route("/api/convert-wav-bulk", methods=["POST"])
 def convert_wav_bulk():
     """
-    Recursively convert every .wav under a root. WAVs are not deleted.
-    output=same: each .flac next to its .wav. output=destination: mirroring subpaths under
+    Recursively convert every .wav/.aiff under a root. Sources are not deleted.
+    output=same: each .flac next to its source. output=destination: mirroring subpaths under
     Settings destination. output=custom: all FLACs into target_dir, named from parsed
     slot-BPM-artist-title when possible (flat Rekordbox-style library folder).
     """
@@ -2143,7 +2400,7 @@ def convert_wav_bulk():
             }), 400
         dest_resolved = os.path.realpath(dpath)
 
-    all_wavs = _list_wav_paths_sorted(root_r, rec)
+    all_wavs = _list_lossless_paths_sorted(root_r, rec)
     total_wavs = len(all_wavs)
     if limit is not None:
         wav_queue = all_wavs[offset : offset + limit]
@@ -2197,7 +2454,11 @@ def convert_wav_bulk():
                                       "file": name, "status": "error"}) + "\n"
                 continue
             try:
-                _embed_artist_title_tags_from_wav_stem(out, stem)  # noqa: F405
+                src_ext = Path(wav).suffix.lower()
+                if src_ext in (".aiff", ".aif"):
+                    _copy_audio_tags_and_art(wav, out)  # noqa: F405
+                else:
+                    _embed_artist_title_tags_from_wav_stem(out, stem)  # noqa: F405
             except Exception as te:
                 err_n += 1
                 if len(errors) < err_cap:
@@ -2314,7 +2575,7 @@ def bulk_fix_scan_paths():
 
 @app.route("/api/convert-wav-to-flac", methods=["POST"])
 def convert_wav_to_flac():
-    """Encode a WAV to FLAC with ffmpeg; does not remove or alter the source WAV."""
+    """Encode a WAV or AIFF to FLAC with ffmpeg; does not remove or alter the source."""
     data = request.get_json() or {}
     filepath = (data.get("filepath") or "").strip()
     output_mode = (data.get("output") or "same").strip().lower()
@@ -2322,12 +2583,9 @@ def convert_wav_to_flac():
         output_mode = "same"
     if not filepath or not os.path.isfile(filepath):
         return jsonify({"error": "File not found"}), 404
-    try:
-        filepath = _validate_path_in_allowed_dirs(filepath)  # noqa: F405
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 403
-    if Path(filepath).suffix.lower() != ".wav":
-        return jsonify({"error": "Only .wav source files are supported"}), 400
+    filepath = os.path.realpath(filepath)
+    if Path(filepath).suffix.lower() not in _LOSSLESS_CONVERT_EXTS:
+        return jsonify({"error": "Only .wav and .aiff source files are supported"}), 400
 
     cfg = load_config()  # noqa: F405
     stem = Path(filepath).stem
@@ -2358,7 +2616,11 @@ def convert_wav_to_flac():
 
     tag_error = None
     try:
-        _embed_artist_title_tags_from_wav_stem(output_path, stem)  # noqa: F405
+        src_ext = Path(filepath).suffix.lower()
+        if src_ext in (".aiff", ".aif"):
+            _copy_audio_tags_and_art(filepath, output_path)  # noqa: F405
+        else:
+            _embed_artist_title_tags_from_wav_stem(output_path, stem)  # noqa: F405
     except Exception as e:
         tag_error = str(e)
 

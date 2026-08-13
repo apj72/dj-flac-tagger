@@ -24,7 +24,7 @@ A local web tool for DJs to turn recordings into a clean, tagged library in **mu
 | **`master`** | Stable release; multi-format extract, tag, and normalise as documented below. |
 | **`v2`** | Active development; new features land here first, then merge to `master` when ready. |
 
-**On branch `v2` today:** **tab bar icons** with hover/focus labels; Extract **Rename** / **Delete** for source recordings (delete → Finder Trash on macOS; `POST /api/source-recording/rename` | `delete`), **SoundCloud** and **Beatport** URLs in **Fetch metadata**; **Bulk Fix → Reset form** to clear saved browser state; plus **Bulk Fix** (batch FLAC metadata, Bandcamp search, duplicate-name warnings, optional sibling `.wav` hints, **best-match pre-selection** after fetch), batch **WAV → FLAC** with offsets and **browser-stored batch progress**, **conversion-order handoff** to Bulk Fix for flat output (see [UI state](#ui-state-browser)), in-app **bulk convert confirmation** (no native `confirm` dialog), **per-tab UI drafts** for Extract / Fix / Inspect / Normalise / Settings in `localStorage`, **Inspect** folder picker, last browsed folder remembered between **Fix Metadata** and **Inspect**, and **UTF-8–safe** HTML/JSON scraping so accented titles (e.g. Apple Music) write correctly to tags.
+**On branch `v2` today:** **tab bar icons** with hover/focus labels; Extract **Rename** / **Delete** for source recordings (delete → Finder Trash on macOS; `POST /api/source-recording/rename` | `delete`), **SoundCloud** and **Beatport** URLs in **Fetch metadata**; **Bulk Fix → Reset form** to clear saved browser state; plus **Bulk Fix** (batch FLAC metadata, Bandcamp search, duplicate-name warnings, optional sibling `.wav` hints, **best-match pre-selection** after fetch), batch **WAV/AIFF → FLAC** with offsets and **browser-stored batch progress**, **conversion-order handoff** to Bulk Fix for flat output (see [UI state](#ui-state-browser)), in-app **bulk convert confirmation** (no native `confirm` dialog), **per-tab UI drafts** for Extract / Fix / Inspect / Normalise / Settings in `localStorage`, **Inspect** folder picker, last browsed folder remembered between **Fix Metadata** and **Inspect**, **UTF-8–safe** HTML/JSON scraping so accented titles (e.g. Apple Music) write correctly to tags, and **Fix List** for batch-fixing tracks from a [Rekordbox Library Manager](https://github.com/apj72/music_library) CSV export with **background auto-search**.
 
 **Also on `v2`:** A fixed **audio preview bar** on every tab streams the selected file via **`GET /api/stream-audio`** (manual Play / Pause, draggable timeline, volume stored in `localStorage`). **Fix Metadata** supports a separate **Artwork image URL**, **Update artwork** (cover only, `POST /api/retag-artwork`), **click the cover** for a full-screen preview, and save rules that **prefer your local or URL cover** over release art; **Fix** and **Inspect** file lists use **arrow keys / Home / End** to move selection (like a focusable list), not only scroll.
 
@@ -36,7 +36,7 @@ OBS is still primarily a **video** app: even when you only care about audio, it 
 
 ## What It Does
 
-Seven pages, via tabs at the top (order: **Extract → Fix Metadata → Inspect → Normalise → WAV → FLAC → Bulk Fix → Settings**):
+Eight pages, via tabs at the top (order: **Extract → Fix Metadata → Inspect → Normalise → WAV/AIFF → FLAC → Bulk Fix → Fix List → Settings**):
 
 ### Extract (main workflow)
 
@@ -59,6 +59,7 @@ The app does **not** use cookies for form memory. **Extract**, **Fix Metadata**,
 - **Settings:** After you click **Save Settings**, the settings draft is cleared so the next load matches the server.
 - **WAV → FLAC** and **Bulk Fix** use **additional** keys (e.g. bulk folder/target memory, batch offset handoff, `djmm.bulkFixHandoff` after a flat-folder convert) so large workflows stay separate from the generic page store.
 - **Bulk Fix** also exposes **Reset form** — clears folder fields, loaded batch, `djmm.bulkFixState`, `djmm.bulkFixDir`, and any pending WAV→FLAC **`djmm.bulkFixHandoff`** for a clean slate in this browser profile.
+- **Fix List** persists the full track list, search results, and completed paths under **`djmm.fixListState`** — navigate away and return without losing progress. The **background search queue** automatically resumes for any unfetched tracks on page restore.
 - **Audio preview bar** (`static/player.js`): included on all main tabs; loads the current selection when the format is supported. **No autoplay** — use **Play** / **Pause**. Keyboard shortcuts on the timeline when focused: arrows, Home/End, Space to toggle playback.
 - **Appearance (browser-only):** **Theme** preference is **`djmm.themePreference`** (`dark`, `light`, or `system`). **Full-page scenic background** can be toggled with **`djmm.pageBackgroundEnabled`** (`1`/`0`); Settings → Appearance includes both. See **[Appearance](#appearance)** for assets and styling.
 
@@ -113,12 +114,12 @@ If you use **Extract → open in Platinum Notes → watch for processed output**
 - **Platinum Notes** app name and **`_PN` output suffix**  
 - **Loudness target (LUFS)** and **true peak (dBTP)** — e.g. **-11.5** / **-1** to match Platinum Notes; **-14** / **-1** for streaming-style reference. You may enter **11.5** (positive); it is treated as **-11.5 LUFS**.
 
-### WAV → FLAC
+### WAV/AIFF → FLAC
 
-Convert **WAV** recordings to **FLAC** (ffmpeg, compression level 12). Source WAVs are never deleted.
+Convert **WAV** or **AIFF** recordings to **FLAC** (ffmpeg, compression level 12). Source files are never deleted. AIFF files typically see a **25–30% size reduction** when converted to FLAC (both are lossless). When an AIFF has embedded ID3 tags and artwork, they are **copied to the output FLAC** automatically.
 
-- **Single file** — browse a folder for `.wav`, choose output next to the file or under **Settings → destination**.
-- **Bulk (folder tree)** — convert every `.wav` under a root (optionally recursive). Output modes:
+- **Single file** — browse a folder for `.wav` or `.aiff`, choose output next to the file or under **Settings → destination**.
+- **Bulk (folder tree)** — convert every `.wav` and `.aiff` under a root (optionally recursive). Output modes:
   - **Next to each WAV** — write `<name>.flac` beside the source.
   - **Mirror under destination** — preserve subfolders under your **Settings** destination (avoids name collisions across BPM folders).
   - **One flat folder** — e.g. all converted files into a single destination directory; output names follow **[Filename search and tags](#filename-search-and-tags)** when the **WAV stem** matches a known **Ableton-style** pattern (see below). **Pioneer Rekordbox** does not define a special on-disk filename format: it uses **embedded metadata and its own database**; files are often _also_ given hyphenated “Ableton performance” names when exporting for **Ableton Live** (sample browser / set prep).
@@ -139,6 +140,29 @@ For a **folder of FLACs** (often the same flat folder as **WAV → FLAC** output
 **Optional same-name `.wav`:** If `SomeTrack.wav` sits in the **same folder** as `SomeTrack.flac`, the server reads **embedded WAV tags** (when mutagen can see them — e.g. some BWF/RIFF metadata). If **both** artist and title are present in the WAV, the **search query** uses that pair (often cleaner than the filename alone). If only one of those fields exists, it can still **fill title/artist hints** for track matching without replacing the whole query. Many exports have **no** useful WAV tags, so the filename rules above still do most of the work.
 
 The **WAV → FLAC** tab links here after a flat-folder conversion with **`?dir=...`** and a **handoff** of **`batch_flac_paths`** when available; you can still open **`/bulk-fix?dir=...`** with optional **`offset`** / **`limit`** for ordinary folder paging.
+
+### Fix List (Rekordbox Library Manager integration)
+
+Import a CSV "fix list" exported from [**Rekordbox Library Manager**](https://github.com/apj72/music_library) to batch-fix tracks with missing metadata across your entire Rekordbox library — any format (FLAC, MP3, M4A, AIFF, OGG).
+
+**Workflow:**
+
+1. In **Rekordbox Library Manager**, filter tracks by missing metadata (title, artist, BPM, key, artwork) and export a fix list CSV.
+2. On the **Fix List** tab, upload the CSV. DJ MetaManager reads the actual file tags from disk and shows what is missing.
+3. **Background search** starts automatically — tracks are searched one at a time against Apple Music, Discogs, Bandcamp, SoundCloud, and Beatport. Results appear in the track list as they complete (purple dot = matches ready, spinner = searching). A 1-second delay between tracks respects API rate limits.
+4. Click any track in the left sidebar to see its current tags, search results, and options. The best match is **auto-selected** using the same scoring as Bulk Fix. Change the selection or paste a URL manually.
+5. **Apply** writes metadata and artwork into the audio file. The track shows a tick when done.
+6. **Export completed paths** downloads a CSV of fixed file paths. Import this back into Rekordbox Library Manager to create a temporary Rekordbox playlist — select all tracks in that playlist, right-click → **Reload Tags** to pull the updated metadata into Rekordbox's database.
+
+**State is fully persistent** — if you close the tab and come back, already-fetched results are preserved and the background search resumes from where it left off. No work is lost.
+
+**CSV format** (contract between the two apps):
+
+```csv
+full_path,file_name,title,artist,bpm,key,file_type,missing_title,missing_artist,missing_bpm,missing_key,has_artwork
+```
+
+See [Rekordbox Library Manager](https://github.com/apj72/music_library) for the export side of this integration.
 
 #### Filename search and tags
 
@@ -324,6 +348,9 @@ Example (see `config.json.example`):
 | `POST` | `/api/bulk-fix/scan-paths` | Body: `{ "paths": ["/abs/a.flac", ...] }` (max 200). Same item shape as **`/api/bulk-fix/scan`** but **preserves the given path order**; response includes **`"order": "explicit_paths"`**. Used after **WAV → FLAC** flat-folder runs so Bulk Fix loads exactly the files from that batch. |
 | `POST` | `/api/bulk-fix/suggest` | Search results per file path (Apple + Discogs + Bandcamp). |
 | `POST` | `/api/bulk-fix/apply` | Apply metadata from chosen URLs to many files. |
+| `POST` | `/api/fix-list/upload` | Parse a CSV fix list, verify files exist on disk, read actual tags. |
+| `POST` | `/api/fix-list/suggest` | Search online sources for up to 60 tracks from a fix list (iTunes, Discogs, Bandcamp, SoundCloud, Beatport). |
+| `POST` | `/api/fix-list/export-completed` | Write a CSV of successfully fixed file paths (for Rekordbox Library Manager playlist creation). |
 | `POST` | `/api/scan-normalise-bulk` | Scan a folder for audio files eligible for bulk normalisation. |
 | `POST` | `/api/normalise-bulk` | Normalise all audio files in a folder; streams progress as **NDJSON** lines. |
 | `GET` | `/api/search` | Apple Music + Discogs + Bandcamp + **SoundCloud** + **Beatport** track search (used by Fix and Bulk Fix). Optional `source=soundcloud` (aliases: `sc`) or `source=beatport` (aliases: `bp`) limits to one catalogue. |
@@ -333,7 +360,7 @@ Example (see `config.json.example`):
 | `GET` | `/api/stream-audio` | Stream a local file for the in-browser preview (`path` query param). Range requests supported; extensions match browse-audio plus `.wav`. |
 | `GET` | `/api/browse-folders` | Server-side folder picker for paths the browser cannot read. |
 
-Routes **`/convert`**, **`/bulk-fix`**, etc. serve the static HTML shells; the app runs locally (default **http://127.0.0.1:5123**).
+Routes **`/convert`**, **`/bulk-fix`**, **`/fix-list`**, etc. serve the static HTML shells; the app runs locally (default **http://127.0.0.1:5123**).
 
 ## Development / tests
 
@@ -371,6 +398,7 @@ dj-meta-manager/
 │   ├── normalise.html / normalise.js
 │   ├── convert.html / convert.js   # WAV → FLAC
 │   ├── bulk-fix.html / bulk-fix.js # Bulk Fix metadata
+│   ├── fix-list.html / fix-list.js # Fix List (Rekordbox Library Manager integration)
 │   ├── folder-picker.js            # Shared folder navigator modal (window.DJMM)
 │   ├── path-persist.js             # Last audio browse dir (Fix + Inspect) + `djmm.pageState` UI drafts
 │   ├── player.js                   # Bottom audio preview bar (all tabs)

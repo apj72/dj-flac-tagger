@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WAV → FLAC — DJ MetaManager</title>
+  <title>WAV/AIFF → FLAC — DJ MetaManager</title>
   <link rel="icon" type="image/png" href="/static/favicon.png">
   <script src="/static/theme-init.js"></script>
   <link rel="stylesheet" href="/static/style.css">
@@ -23,8 +23,9 @@
         <a href="/fix" class="tab-link tab-link--icon-only" data-tooltip="Fix Metadata" aria-label="Fix Metadata"><span class="tab-icon tab-icon-fix" aria-hidden="true"></span></a>
         <a href="/inspect" class="tab-link tab-link--icon-only" data-tooltip="Inspect" aria-label="Inspect"><span class="tab-icon tab-icon-inspect" aria-hidden="true"></span></a>
         <a href="/normalise" class="tab-link tab-link--icon-only" data-tooltip="Normalise" aria-label="Normalise"><span class="tab-icon tab-icon-normalise" aria-hidden="true"></span></a>
-        <a href="/convert" class="tab-link tab-link--icon-only active" data-tooltip="WAV → FLAC" aria-label="WAV to FLAC"><span class="tab-icon tab-icon-convert" aria-hidden="true"></span></a>
+        <a href="/convert" class="tab-link tab-link--icon-only active" data-tooltip="WAV/AIFF → FLAC" aria-label="WAV/AIFF to FLAC"><span class="tab-icon tab-icon-convert" aria-hidden="true"></span></a>
         <a href="/bulk-fix" class="tab-link tab-link--icon-only" data-tooltip="Bulk Fix" aria-label="Bulk Fix"><span class="tab-icon tab-icon-bulk-fix" aria-hidden="true"></span></a>
+        <a href="/fix-list" class="tab-link tab-link--icon-only" data-tooltip="Fix List" aria-label="Fix List"><span class="tab-icon tab-icon-fix-list" aria-hidden="true"></span></a>
         <a href="/settings" class="tab-link tab-link--icon-only" data-tooltip="Settings" aria-label="Settings"><span class="tab-icon tab-icon-settings" aria-hidden="true"></span></a>
       </nav>
     </header>
@@ -38,10 +39,10 @@
         <div id="convert-single-panel" class="convert-rollup-panel convert-rollup-panel--hidden" role="region" aria-labelledby="convert-toggle-single">
           <div class="convert-step-block">
             <h3>
-              <span class="step">1</span> Choose folder &amp; WAV file
+              <span class="step">1</span> Choose folder &amp; file
               <span class="help-tip">
                 <button type="button" class="help-tip-btn" aria-label="About this step">?</button>
-                <span class="help-tip-bubble" role="tooltip">The original .wav is never modified. Conversion uses ffmpeg (FLAC lossless, compression level 12). Type a path and click Browse, or use Default / Choose folder (paths come from Settings → destination).</span>
+                <span class="help-tip-bubble" role="tooltip">The original file is never modified. Conversion uses ffmpeg (FLAC lossless, compression level 12). WAV and AIFF are both uncompressed — FLAC gives identical quality at ~50–60% the size. AIFF tags and artwork are copied to the output FLAC. Type a path and click Browse, or use Default / Choose folder (paths come from Settings → destination).</span>
               </span>
             </h3>
             <div class="dir-bar">
@@ -58,13 +59,13 @@
               <span class="step">2</span> Output location
               <span class="help-tip">
                 <button type="button" class="help-tip-btn" aria-label="About output options">?</button>
-                <span class="help-tip-bubble" role="tooltip">Same folder writes a .flac next to each WAV. Destination sends output to your library folder from Settings (see the status line below).</span>
+                <span class="help-tip-bubble" role="tooltip">Same folder writes a .flac next to the source. Destination sends output to your library folder from Settings (see the status line below).</span>
               </span>
             </h3>
             <div class="field-row">
               <label class="inline" style="display:block;margin-bottom:0.5rem">
                 <input type="radio" name="convert-output" id="convert-out-same" value="same" checked />
-                <span>Same folder as the WAV (writes <code>&lt;name&gt;.flac</code> next to the source)</span>
+                <span>Same folder as the source (writes <code>&lt;name&gt;.flac</code> alongside)</span>
               </label>
               <label class="inline" style="display:block">
                 <input type="radio" name="convert-output" id="convert-out-dest" value="destination" />
@@ -89,7 +90,7 @@
           </button>
           <span class="help-tip convert-rollup-head-help">
             <button type="button" class="help-tip-btn" aria-label="About bulk conversion">?</button>
-            <span class="help-tip-bubble" role="tooltip">Converts every .wav under a root folder; optionally includes all subfolders. Original WAVs are never deleted. Use Scan to count files before Run. Output mode is independent of single-file step 2.</span>
+            <span class="help-tip-bubble" role="tooltip">Converts every .wav and .aiff under a root folder; optionally includes all subfolders. Original files are never deleted. AIFF tags and artwork are preserved in the output FLAC. Use Scan to count files before Run. Output mode is independent of single-file step 2.</span>
           </span>
         </div>
         <div id="convert-bulk-panel" class="convert-rollup-panel convert-rollup-panel--hidden" role="region" aria-labelledby="convert-toggle-bulk">
@@ -98,7 +99,7 @@
               <span class="step">4</span> Root folder
               <span class="help-tip">
                 <button type="button" class="help-tip-btn" aria-label="About bulk root">?</button>
-                <span class="help-tip-bubble" role="tooltip">Example: a Rekordbox or export tree. Scan finds all WAV paths in sorted order so batch offset/limit is stable between runs.</span>
+                <span class="help-tip-bubble" role="tooltip">Example: a Rekordbox or export tree. Scan finds all WAV and AIFF paths in sorted order so batch offset/limit is stable between runs.</span>
               </span>
             </h3>
             <div class="dir-bar">
@@ -127,7 +128,7 @@
             <div class="field-row" style="margin:0.5rem 0 0.35rem">
               <label class="inline" style="display:block;margin-bottom:0.35rem">
                 <input type="radio" name="convert-bulk-output" id="convert-bulk-out-same" value="same" checked />
-                <span>Next to each <code>.wav</code> (same tree)</span>
+                <span>Next to each source file (same tree)</span>
               </label>
               <label class="inline" style="display:block;margin-bottom:0.35rem">
                 <input type="radio" name="convert-bulk-output" id="convert-bulk-out-dest" value="destination" />
@@ -142,14 +143,14 @@
               <input type="text" id="convert-bulk-target-dir" placeholder="e.g. ~/Music/FLACs/Converted WAVs" title="All converted FLACs go here" />
               <button type="button" id="convert-bulk-target-choose-btn" class="btn btn-secondary" title="Choose output folder">Choose folder…</button>
             </div>
-            <p id="convert-bulk-output-hint" class="hint" style="margin:0.35rem 0 0.75rem">Mirrored mode keeps different BPM/subfolders from overwriting each other. Flat mode renames when the usual filename pattern matches.</p>
+            <p id="convert-bulk-output-hint" class="hint" style="margin:0.35rem 0 0.75rem">Mirrored mode keeps different subfolders from overwriting each other. Flat mode renames when the usual filename pattern matches. AIFF tags and artwork are always copied to the output FLAC.</p>
           </div>
           <div class="convert-step-block">
             <h3>
               Batching
               <span class="help-tip">
                 <button type="button" class="help-tip-btn" aria-label="About batching">?</button>
-                <span class="help-tip-bubble" role="tooltip">Large libraries: use a batch size and offset. Sorted order is the same every run. Skip-if-exists makes re-runs safe. Clear saved progress forgets the stored offset for this root. After a flat-folder run, open Bulk Fix on that folder. Turning off the limit runs everything in one go—use Scan first.</span>
+                <span class="help-tip-bubble" role="tooltip">Large libraries: use a batch size and offset. Sorted order is the same every run. Skip-if-exists makes re-runs safe. Clear saved progress forgets the stored offset for this root. After a flat-folder run, open Bulk Fix on that folder. Turning off the limit runs everything in one go — use Scan first.</span>
               </span>
             </h3>
             <div class="field-row" style="margin:0.35rem 0 0.5rem; flex-wrap:wrap; align-items:center; gap:0.5rem 1rem">
@@ -171,7 +172,7 @@
               <button type="button" id="convert-bulk-clear-progress-btn" class="btn btn-secondary" title="Remove saved offset/limit for this folder (uses resolved path)">Clear saved progress</button>
             </div>
             <div class="dir-bar" style="margin-top:0.5rem">
-              <button type="button" id="convert-bulk-scan-btn" class="btn btn-secondary">Scan for WAVs</button>
+              <button type="button" id="convert-bulk-scan-btn" class="btn btn-secondary">Scan for WAVs/AIFFs</button>
               <button type="button" id="convert-bulk-run-btn" class="btn btn-primary">Run conversion</button>
             </div>
             <div id="convert-bulk-progress-wrap" class="progress-wrap hidden" aria-busy="false" aria-live="polite">

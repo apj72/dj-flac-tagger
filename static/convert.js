@@ -215,9 +215,9 @@ function updateConvertNextOffsetFromResponse(data) {
   if (v1) v1.textContent = String(nextOff + 1);
   if (det) {
     if (nextOff < total) {
-      det.textContent = `${total} WAV(s) in the sorted list. Next run: set Offset to ${nextOff} — that starts at the ${nextOff + 1}${nth(nextOff + 1)} file when counting 1, 2, 3…`;
+      det.textContent = `${total} file(s) in the sorted list. Next run: set Offset to ${nextOff} — that starts at the ${nextOff + 1}${nth(nextOff + 1)} file when counting 1, 2, 3…`;
     } else {
-      det.textContent = `End of the list (${total} WAV path(s)). You are done unless you add files.`;
+      det.textContent = `End of the list (${total} file(s)). You are done unless you add files.`;
     }
   }
   box.dataset.nextOffset = String(nextOff);
@@ -357,11 +357,11 @@ function buildBulkConvertConfirmHtml(limited, off, perRun, root) {
   const pathBlock = `<div class="bulk-confirm-path mono">${escHtml(root)}</div>`;
   if (limited) {
     const scanHint = lastBulkScanCount
-      ? `Last scan: <strong>${lastBulkScanCount}</strong> WAV file(s) total.`
+      ? `Last scan: <strong>${lastBulkScanCount}</strong> WAV/AIFF file(s) total.`
       : "You have not scanned this session — the server still uses the same sorted file list.";
     return (
       pathBlock +
-      `<p style="margin:0 0 0.35rem">Convert up to <strong>${perRun}</strong> WAV file(s) in <strong>sorted</strong> order, starting at offset <strong>${off}</strong> (0-based).</p>` +
+      `<p style="margin:0 0 0.35rem">Convert up to <strong>${perRun}</strong> file(s) in <strong>sorted</strong> order, starting at offset <strong>${off}</strong> (0-based).</p>` +
       `<p class="hint" style="margin:0 0 0.5rem">${scanHint}</p>` +
       `<p class="hint" style="margin:0">After this run, raise the offset or use <strong>Next offset</strong> until the tree is done.</p>`
     );
@@ -370,20 +370,20 @@ function buildBulkConvertConfirmHtml(limited, off, perRun, root) {
   if (n > 50) {
     return (
       pathBlock +
-      `<p style="margin:0 0 0.35rem">Convert <strong>all ${n}</strong> WAV file(s) in <strong>one</strong> run. This may take a long time and load the machine heavily.</p>` +
+      `<p style="margin:0 0 0.35rem">Convert <strong>all ${n}</strong> WAV/AIFF file(s) in <strong>one</strong> run. This may take a long time and load the machine heavily.</p>` +
       `<p class="hint" style="margin:0">For large libraries, use <strong>Limit each run to a batch</strong> instead.</p>`
     );
   }
   if (lastBulkScanCount) {
     return (
       pathBlock +
-      `<p style="margin:0 0 0.35rem">Convert every <code>.wav</code> under this tree (last scan: <strong>${lastBulkScanCount}</strong> file(s)).</p>` +
+      `<p style="margin:0 0 0.35rem">Convert every <code>.wav</code> and <code>.aiff</code> under this tree (last scan: <strong>${lastBulkScanCount}</strong> file(s)).</p>` +
       `<p class="hint" style="margin:0">This unlimited run processes the full sorted list in one go.</p>`
     );
   }
   return (
     pathBlock +
-    `<p style="margin:0 0 0.35rem">Convert every <code>.wav</code> under this tree.</p>` +
+    `<p style="margin:0 0 0.35rem">Convert every <code>.wav</code> and <code>.aiff</code> under this tree.</p>` +
     `<p class="hint" style="margin:0"><strong>Scan first</strong> to see how many files will be processed.</p>`
   );
 }
@@ -420,7 +420,7 @@ async function performBulkConvert(root, limited, off, perRun, outMode, rec, sk) 
   const btn = document.getElementById("convert-bulk-run-btn");
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Converting…';
-  setConvertBulkProgress(true, "Converting WAVs to FLAC (server is processing the batch)…");
+  setConvertBulkProgress(true, "Converting WAVs/AIFFs to FLAC (server is processing the batch)…");
   const body = {
     root_dir: root,
     output: outMode,
@@ -504,11 +504,11 @@ async function performBulkConvert(root, limited, off, perRun, outMode, rec, sk) 
     let rangeNote = "";
     if (b.total_wavs != null && typeof b.candidates_in_batch === "number") {
       if (b.candidates_in_batch === 0) {
-        rangeNote = `<p class="hint" style="margin-top:0.4rem">No WAV paths in this offset/limit window (${b.total_wavs} total). Raise the offset or clear the range — or you may be finished.</p>`;
+        rangeNote = `<p class="hint" style="margin-top:0.4rem">No WAV/AIFF paths in this offset/limit window (${b.total_wavs} total). Raise the offset or clear the range — or you may be finished.</p>`;
       } else {
         const fromN = b.offset + 1;
         const toN = b.offset + b.candidates_in_batch;
-        rangeNote = `<p class="hint" style="margin-top:0.4rem">Sorted list: this run covered file <strong>${fromN}–${toN}</strong> of <strong>${b.total_wavs}</strong> WAV path(s) ${
+        rangeNote = `<p class="hint" style="margin-top:0.4rem">Sorted list: this run covered file <strong>${fromN}–${toN}</strong> of <strong>${b.total_wavs}</strong> WAV/AIFF path(s) ${
           limited && b.limit != null ? `(batch size ${b.limit})` : ""
         }.</p>`;
       }
@@ -654,7 +654,7 @@ async function browseWav() {
   }
   $("#convert-dir").value = data.directory;
   if (!data.files || data.files.length === 0) {
-    $("#convert-file-list").innerHTML = '<div class="status">No .wav files in this folder</div>';
+    $("#convert-file-list").innerHTML = '<div class="status">No .wav or .aiff files in this folder</div>';
     return;
   }
   const wavPaths = data.files.map((f) => f.path);
@@ -772,7 +772,7 @@ async function runBulkScan() {
     return;
   }
   lastBulkScanCount = data.count;
-  st.textContent = `Found ${data.count} WAV file(s) under ${data.root}`;
+  st.textContent = `Found ${data.count} WAV/AIFF file(s) under ${data.root}`;
   const restored = tryApplyBulkWavProgressForResolvedRoot(data.root);
   if (restored) st.textContent += restored;
   updateBulkRunEnabled();
