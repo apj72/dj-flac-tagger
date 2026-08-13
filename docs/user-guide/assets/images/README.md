@@ -34,8 +34,6 @@ Place exported PNG (or WebP) files in this folder using the **exact filenames** 
 | 19 | `19-bulk-fix-step1-load.png` | **Bulk Fix**: load batch — path, offset, limit, **Load batch** / scan table header. |
 | 20 | `20-bulk-fix-step3-suggest.png` | **Bulk Fix**: after **Fetch online matches** — rows with Match dropdown, shortcuts, duplicate warning if you have one. |
 | 21 | `21-bulk-fix-apply.png` | **Bulk Fix**: **Apply** section, checkboxes, optional rename — ready to apply. |
-| 22 | `22-terminal-start-script.png` | (Optional) Terminal showing `./start.sh` or `python app.py` and the local URL. |
-| 23 | `23-config-json-example.png` | (Optional) Editor showing `config.json` with non-secret example paths. |
 | 24 | `24-fix-list-import.png` | **Fix List**: CSV import step — file picker, Upload & scan, summary stats (total/found/missing). |
 | 25 | `25-fix-list-track-list.png` | **Fix List**: track list with status indicators — ticks (applied), dots (matches ready), spinners (searching), format badges (FLAC/MP3/M4A/AIFF), missing-field badges (T/A/B/K/W). |
 | 26 | `26-fix-list-detail-results.png` | **Fix List**: detail panel showing search results with artwork thumbnails, title/artist/album, coloured source badges (Apple Music, Discogs, Bandcamp, SoundCloud, Beatport), auto-selected best match. |
