@@ -23,4 +23,11 @@ echo "Installing to /Applications..."
 rm -rf "/Applications/$APP_NAME"
 cp -R "$DIST_DIR/$APP_NAME" "/Applications/$APP_NAME"
 
+DATA_DIR="$HOME/Library/Application Support/DJ MetaManager"
+mkdir -p "$DATA_DIR"
+if [[ -f "$ROOT/config.json" && ! -f "$DATA_DIR/config.json" ]]; then
+  echo "Seeding config.json into Application Support..."
+  cp "$ROOT/config.json" "$DATA_DIR/config.json"
+fi
+
 echo "Done. $APP_NAME installed to /Applications."

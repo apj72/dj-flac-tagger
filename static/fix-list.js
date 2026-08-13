@@ -1,5 +1,4 @@
 const $ = (sel) => document.querySelector(sel);
-const FL_STATE_LS = "djmm.fixListState";
 
 let fixListAll = [];
 let selectedIdx = -1;
@@ -10,6 +9,9 @@ let queueRunning = false;
 let queueAbort = false;
 let currentlyFetchingIdx = -1;
 let priorityIdx = -1;
+
+const BATCH_SIZE = 25;
+const BATCH_RESUME_PCT = 0.75;
 
 function esc(s) {
   return String(s ?? "")
@@ -146,15 +148,6 @@ function pickBestMatch(item) {
   return bestUrl;
 }
 
-function sourceLabel(source) {
-  if (source === "discogs") return "Discogs";
-  if (source === "apple_music" || source === "itunes") return "Apple Music";
-  if (source === "bandcamp") return "Bandcamp";
-  if (source === "soundcloud") return "SoundCloud";
-  if (source === "beatport") return "Beatport";
-  return source ? String(source) : "Web";
-}
-
 function formatBadgeHtml(fileType) {
   const ft = (fileType || "").toUpperCase();
   const cls = ft === "FLAC" ? "format-badge format-badge--flac"
@@ -180,14 +173,12 @@ function missingBadgesHtml(item) {
 // ── State persistence ──
 
 function saveState() {
-  try {
-    localStorage.setItem(FL_STATE_LS, JSON.stringify({
-      v: 3,
-      fixListAll,
-      completedPaths,
-      selectedIdx,
-    }));
-  } catch (_) { /* quota */ }
+  const payload = { v: 3, fixListAll, completedPaths, selectedIdx };
+  fetch("/api/fix-list/state", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
 }
 
 function scheduleSave() {
@@ -209,6 +200,8 @@ function updateQueueStatus() {
     text += ` · searching ${fetched}/${total}`;
   } else if (fetched > 0 && fetched >= total) {
     text += ` · all searched`;
+  } else if (!queueRunning && fetched > 0 && fetched < total && batchLimitReached()) {
+    text += ` · paused (fix more tracks to continue)`;
   }
   el.textContent = text;
 }
@@ -309,12 +302,28 @@ function renderDetail() {
   } else if (results.length) {
     resultListHtml = results.map((r, ri) => {
       const u = (r.url || "").trim();
-      const label = [r.title, r.artist || r.album].filter(Boolean).join(" — ");
       const isSelected = selectedUrl && u === selectedUrl;
-      return `<div class="fl-result-item${isSelected ? " fl-result-selected" : ""}" data-ridx="${ri}">
-        <span class="fl-result-source">${esc(sourceLabel(r.source))}</span>
-        <span class="fl-result-title" title="${esc(label)}">${esc(label)}</span>
-        <a href="${esc(u)}" target="_blank" rel="noopener noreferrer" class="fl-result-link" title="Open in new tab">open</a>
+      const srcMap = {
+        discogs: { label: "Discogs", cls: "src-discogs" },
+        apple_music: { label: "Apple Music", cls: "src-apple" },
+        bandcamp: { label: "Bandcamp", cls: "src-bandcamp" },
+        soundcloud: { label: "SoundCloud", cls: "src-soundcloud" },
+        beatport: { label: "Beatport", cls: "src-beatport" },
+      };
+      const sm = srcMap[r.source] || { label: "Web", cls: "src-generic" };
+      const thumbUrl = r.artwork_thumb || r.artwork_url || "";
+      const thumb = thumbUrl
+        ? `<img class="search-thumb" src="${esc(thumbUrl)}" alt="" />`
+        : `<div class="search-thumb"></div>`;
+      const detail = [r.artist, r.album, r.year].filter(Boolean).join(" · ");
+      const labelText = r.label ? ` · ${r.label}` : "";
+      return `<div class="search-item${isSelected ? " selected" : ""}" data-ridx="${ri}">
+        ${thumb}
+        <div class="search-info">
+          <div class="search-title">${esc(r.title || "")}</div>
+          <div class="search-detail">${esc(detail + labelText)}</div>
+        </div>
+        <span class="search-source ${sm.cls}">${sm.label}</span>
       </div>`;
     }).join("");
   } else if (item.fetchError) {
@@ -408,7 +417,7 @@ function bindDetailEvents(item, results) {
     scheduleSave();
   });
 
-  document.querySelectorAll("#fl-detail-results .fl-result-item").forEach((el) => {
+  document.querySelectorAll("#fl-detail-results .search-item").forEach((el) => {
     el.addEventListener("click", (e) => {
       if (e.target.closest("a")) return;
       const ri = parseInt(el.dataset.ridx, 10);
@@ -496,6 +505,16 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function batchLimitReached() {
+  const fetched = fixListAll.filter((it) => it.fetched).length;
+  const done = completedPaths.length;
+  const total = fixListAll.filter((it) => it.file_exists && it.query).length;
+  if (fetched >= total) return false;
+  if (fetched < BATCH_SIZE) return false;
+  const unworked = fetched - done;
+  return unworked > Math.ceil(BATCH_SIZE * (1 - BATCH_RESUME_PCT));
+}
+
 async function runQueue() {
   if (queueRunning) return;
   queueRunning = true;
@@ -504,6 +523,11 @@ async function runQueue() {
   setProgress(true, "Searching for matches in background…");
 
   while (!queueAbort) {
+    if (batchLimitReached()) {
+      setProgress(false);
+      updateQueueStatus();
+      break;
+    }
     const idx = nextUnfetchedIdx();
     if (idx < 0) break;
     await fetchOneTrack(idx);
@@ -569,6 +593,7 @@ async function uploadCSV() {
   setStatus(`Loaded ${fixListAll.length} track(s). Searching for matches in background…`, false);
 
   $("#fl-review-card")?.classList.remove("hidden");
+  $("#fl-detail-card")?.classList.remove("hidden");
   $("#fl-apply-card")?.classList.remove("hidden");
   updateExportCard();
 
@@ -687,6 +712,11 @@ async function applyToCurrentTrack() {
   renderTrackList();
   renderDetail();
   saveState();
+
+  if (!queueRunning && !batchLimitReached()) {
+    const remaining = fixListAll.filter((it) => it.file_exists && it.query && !it.fetched).length;
+    if (remaining > 0) void runQueue();
+  }
 }
 
 function showDetailStatus(text, isError) {
@@ -743,17 +773,19 @@ function clearAll() {
   setProgress(false);
   $("#fl-summary")?.classList.add("hidden");
   $("#fl-review-card")?.classList.add("hidden");
+  $("#fl-detail-card")?.classList.add("hidden");
   $("#fl-apply-card")?.classList.add("hidden");
-  try { localStorage.removeItem(FL_STATE_LS); } catch (_) { /* */ }
+  fetch("/api/fix-list/state", { method: "DELETE" }).catch(() => {});
 }
 
 // ── Restore ──
 
-function restoreState() {
+async function restoreState() {
   let state = null;
   try {
-    const raw = localStorage.getItem(FL_STATE_LS);
-    if (raw) state = JSON.parse(raw);
+    const resp = await fetch("/api/fix-list/state");
+    const data = await resp.json();
+    state = data.state;
   } catch (_) { return; }
   if (!state || (state.v !== 2 && state.v !== 3) || !Array.isArray(state.fixListAll) || !state.fixListAll.length) return;
 
@@ -761,7 +793,6 @@ function restoreState() {
   completedPaths = Array.isArray(state.completedPaths) ? state.completedPaths : [];
   selectedIdx = typeof state.selectedIdx === "number" ? state.selectedIdx : -1;
 
-  // Ensure fetched flag exists on restored items (v2 → v3 migration)
   fixListAll.forEach((it) => {
     if (it.fetched === undefined) {
       it.fetched = (it.results || []).length > 0 || !!it.fetchError;
@@ -784,6 +815,7 @@ function restoreState() {
   }
 
   $("#fl-review-card")?.classList.remove("hidden");
+  $("#fl-detail-card")?.classList.remove("hidden");
   $("#fl-apply-card")?.classList.remove("hidden");
   updateExportCard();
   renderTrackList();
@@ -814,4 +846,4 @@ document.getElementById("fl-upload-btn")?.addEventListener("click", () => void u
 document.getElementById("fl-clear-btn")?.addEventListener("click", clearAll);
 document.getElementById("fl-export-btn")?.addEventListener("click", exportCompletedCSV);
 
-restoreState();
+void restoreState();

@@ -448,15 +448,11 @@ html[data-theme="light"] .header-logo-wrap .header-logo--light {
   color: #fcd34d;
 }
 
-/* Fix List: sidebar + detail layout */
+/* Fix List: stacked layout */
 .fl-layout {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 1rem;
-  min-height: 420px;
-}
-@media (max-width: 860px) {
-  .fl-layout { grid-template-columns: 1fr; }
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 .fl-sidebar {
   display: flex;
@@ -474,7 +470,7 @@ html[data-theme="light"] .header-logo-wrap .header-logo--light {
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
-  max-height: 520px;
+  max-height: 11rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 2px;
@@ -561,14 +557,11 @@ html[data-theme="light"] .header-logo-wrap .header-logo--light {
 }
 
 /* Detail panel */
-.fl-detail {
-  min-height: 200px;
-}
 .fl-detail-empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
+  min-height: 4rem;
 }
 .fl-detail-content { }
 .fl-detail-header {
@@ -621,34 +614,6 @@ html[data-theme="light"] .header-logo-wrap .header-logo--light {
 }
 .fl-detail-results {
   margin-top: 0.5rem;
-}
-.fl-result-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background 0.1s;
-  font-size: 0.85rem;
-}
-.fl-result-item:hover { background: var(--surface-hover); }
-.fl-result-item.fl-result-selected { background: var(--accent); color: var(--text-on-accent); }
-.fl-result-item.fl-result-selected a { color: #fff; }
-.fl-result-source {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-muted);
-  flex-shrink: 0;
-  width: 5.5rem;
-}
-.fl-result-item.fl-result-selected .fl-result-source { color: rgba(255,255,255,0.7); }
-.fl-result-title { flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fl-result-link {
-  font-size: 0.75rem;
-  flex-shrink: 0;
 }
 .fl-detail-manual {
   margin-bottom: 1rem;
@@ -1549,6 +1514,7 @@ label {
 .search-source.src-discogs { background: #333; color: var(--text-on-accent); }
 .search-source.src-bandcamp { background: #1da0c3; color: var(--text-on-accent); }
 .search-source.src-soundcloud { background: #ff5500; color: var(--text-on-accent); }
+.search-source.src-beatport { background: #94d500; color: #000; }
 .search-source.src-generic { background: #666; color: var(--text-on-accent); }
 
 .sr-only {

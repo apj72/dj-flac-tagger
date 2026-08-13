@@ -955,6 +955,13 @@ def fix_list_page():
     return app.send_static_file("fix-list.html")
 
 
+def _fix_list_state_path():
+    if getattr(sys, "frozen", False):
+        return str(writable_app_data_dir() / "fix_list_state.json")  # noqa: F405
+    return str(Path(__file__).resolve().parent / "fix_list_state.json")
+
+
+
 def _read_tags_for_path(filepath):
     """Read tags from any supported audio file, returning a dict. No path validation."""
     ext = os.path.splitext(filepath)[1].lower()
@@ -1163,6 +1170,45 @@ def fix_list_export_completed():
         f.write(output.getvalue())
 
     return jsonify({"filepath": out_path, "count": len(paths)})
+
+
+@app.route("/api/fix-list/state", methods=["GET"])
+def fix_list_load_state():
+    """Load persisted fix-list state from disk."""
+    p = _fix_list_state_path()
+    if not os.path.isfile(p):
+        return jsonify({"state": None})
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return jsonify({"state": json.load(f)})
+    except (json.JSONDecodeError, OSError):
+        return jsonify({"state": None})
+
+
+@app.route("/api/fix-list/state", methods=["POST"])
+def fix_list_save_state():
+    """Persist fix-list state to disk so it survives app rebuilds."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "JSON body required"}), 400
+    p = _fix_list_state_path()
+    try:
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except OSError as exc:
+        return jsonify({"error": str(exc)}), 500
+    return jsonify({"ok": True})
+
+
+@app.route("/api/fix-list/state", methods=["DELETE"])
+def fix_list_clear_state():
+    """Remove persisted fix-list state."""
+    p = _fix_list_state_path()
+    try:
+        os.remove(p)
+    except FileNotFoundError:
+        pass
+    return jsonify({"ok": True})
 
 
 @app.route("/api/settings", methods=["GET"])

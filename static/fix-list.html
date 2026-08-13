@@ -65,7 +65,6 @@
         </h2>
 
         <div class="fl-layout">
-          <!-- Left: scrollable track list -->
           <div class="fl-sidebar">
             <div class="fl-sidebar-controls">
               <span id="fl-list-count" class="hint"></span>
@@ -78,12 +77,14 @@
             </div>
             <div id="fl-track-list" class="fl-track-list" role="listbox" aria-label="Tracks from fix list" tabindex="0"></div>
           </div>
+        </div>
+      </section>
 
-          <!-- Right: detail panel for selected track -->
-          <div class="fl-detail" id="fl-detail">
-            <div class="fl-detail-empty">
-              <p class="hint">Select a track from the list to see its details.</p>
-            </div>
+      <!-- Card 2b: Detail panel for selected track -->
+      <section class="card hidden" id="fl-detail-card">
+        <div class="fl-detail" id="fl-detail">
+          <div class="fl-detail-empty">
+            <p class="hint">Select a track from the list to see its details.</p>
           </div>
         </div>
       </section>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fix List — DJ MetaManager</title>
+  <link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="guide-shell">
+    <div class="guide-nav-wrap">
+      <div class="guide-nav-inner">
+        <a class="guide-brand" href="index.html">DJ MetaManager &mdash; User Guide</a>
+        <nav class="guide-nav" aria-label="Guide pages">
+          <a href="index.html">Home</a>
+          <a href="install-and-setup.html">Install</a>
+          <a href="workflow-extract.html">Extract</a>
+          <a href="workflow-fix-and-inspect.html">Fix &amp; Inspect</a>
+          <a href="workflow-normalise.html">Normalise</a>
+          <a href="workflow-wav-to-flac.html">WAV &rarr; FLAC</a>
+          <a href="workflow-bulk-fix.html">Bulk Fix</a>
+          <a href="workflow-fix-list.html" aria-current="page">Fix List</a>
+          <a href="reference-config-and-formats.html">Reference</a>
+        </nav>
+      </div>
+    </div>
+
+    <main id="main" class="guide-main">
+      <p class="breadcrumb"><a href="index.html">Home</a> &middot; Fix List</p>
+      <h1>Fix List (Rekordbox Library Manager integration)</h1>
+      <p class="lead">
+        The Fix List tab lets you batch-fix tracks with missing metadata across your entire Rekordbox library. It integrates with <a href="https://github.com/apj72/music_library">Rekordbox Library Manager</a> &mdash; import a CSV of tracks that need attention, search for metadata automatically in the background, review and apply fixes one track at a time, then export the completed paths back for Rekordbox playlist creation.
+      </p>
+
+      <div class="callout">
+        <strong>Supported formats.</strong> Fix List works with any audio format in your Rekordbox collection: FLAC, MP3, M4A/AAC, AIFF, and OGG. Unlike Bulk Fix (which targets FLAC folders), Fix List operates on the exact file paths from your Rekordbox database.
+      </div>
+
+      <h2>Overview: the two-app workflow</h2>
+      <p>
+        Fix List bridges two applications:
+      </p>
+      <ol>
+        <li><strong>Rekordbox Library Manager</strong> (<code>music_library</code>) reads the Rekordbox 7 encrypted database, finds tracks with missing title, artist, BPM, key, or artwork, and exports a CSV fix list.</li>
+        <li><strong>DJ MetaManager</strong> imports that CSV, searches online sources (Apple Music, Discogs, Bandcamp, SoundCloud, Beatport) for each track, lets you review and apply metadata, then exports the completed file paths.</li>
+        <li>Back in Rekordbox Library Manager, import the completed paths CSV to create a temporary Rekordbox playlist. Select all tracks in that playlist, right-click, and choose <strong>Reload Tags</strong> so Rekordbox picks up the new metadata.</li>
+      </ol>
+
+      <h2>Step 1: Import the fix list</h2>
+      <p>
+        On the Fix List tab, use the file picker to select the CSV exported from Rekordbox Library Manager, then click <strong>Upload &amp; scan</strong>.
+      </p>
+      <p>
+        DJ MetaManager checks that each file exists on disk, reads the actual embedded tags (not just what the CSV says), and displays a summary: total tracks, files found, how many are missing title/artist, and how many lack artwork.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/24-fix-list-import.png" width="1280" height="800" alt="Fix List import step showing CSV upload, summary statistics, and track list">
+        <figcaption><span class="fig-label">Figure 1.</span> After uploading a CSV, the summary shows 367 tracks found on disk with 163 missing title/artist and 363 missing artwork. The track list and detail panel appear below.</figcaption>
+      </figure>
+
+      <h3>CSV format</h3>
+      <p>
+        The CSV contract between the two apps uses these columns:
+      </p>
+      <pre><code>full_path,file_name,title,artist,bpm,key,file_type,missing_title,missing_artist,missing_bpm,missing_key,has_artwork</code></pre>
+      <p>
+        You do not need to create this file manually &mdash; Rekordbox Library Manager generates it. Each row represents one track in your Rekordbox collection that needs metadata attention.
+      </p>
+
+      <h2>Step 2: Select and fix tracks</h2>
+      <p>
+        After import, the track list shows all loaded files. Each track displays its filename, a format badge (FLAC, MP3, M4A, AIFF), and coloured badges indicating what is missing:
+      </p>
+      <ul>
+        <li><strong>T</strong> &mdash; missing title</li>
+        <li><strong>A</strong> &mdash; missing artist</li>
+        <li><strong>B</strong> &mdash; missing BPM</li>
+        <li><strong>K</strong> &mdash; missing key</li>
+        <li><strong>W</strong> &mdash; missing artwork</li>
+      </ul>
+
+      <figure class="guide-figure">
+        <img src="assets/images/25-fix-list-track-list.png" width="1280" height="800" alt="Fix List showing track list with status indicators and format badges">
+        <figcaption><span class="fig-label">Figure 2.</span> The compact track list shows five items at a time. Green ticks indicate applied tracks, purple dots mean matches are ready for review, and coloured badges show the file format and what metadata is missing.</figcaption>
+      </figure>
+
+      <h3>Background auto-search</h3>
+      <p>
+        As soon as you upload a CSV, DJ MetaManager starts searching for metadata in the background. Tracks are processed one at a time with a 1-second delay between searches to respect API rate limits. You will see:
+      </p>
+      <ul>
+        <li>A <strong>spinner</strong> on the track currently being searched.</li>
+        <li>A <strong>purple dot</strong> when matches have been found and are ready for review.</li>
+        <li>A <strong>green tick</strong> after you have applied metadata to a track.</li>
+      </ul>
+      <p>
+        The status line above the track list shows progress, e.g. <code>367 tracks &middot; 3 fixed &middot; searching 25/367</code>.
+      </p>
+
+      <h3>Batch processing limit</h3>
+      <p>
+        To avoid unnecessary API calls, the background search pauses after 25 tracks have been fetched. The status line shows <code>paused (fix more tracks to continue)</code>. Once you have applied metadata to roughly 75% of the fetched batch (about 19 of 25 tracks), the queue automatically resumes and fetches the next batch. This means the search stays ahead of your work without wasting requests on tracks you may never get to.
+      </p>
+
+      <h3>Selecting a track</h3>
+      <p>
+        Click any track in the list to open its detail panel below. You can also navigate with <strong>Arrow Up</strong> and <strong>Arrow Down</strong> keys when the track list is focused.
+      </p>
+
+      <h3>The detail panel</h3>
+      <p>
+        The detail panel shows everything about the selected track:
+      </p>
+      <ul>
+        <li><strong>Current tags</strong> &mdash; title, artist, album, year, genre, artwork status, and format as read from the actual file on disk.</li>
+        <li><strong>Search results</strong> &mdash; matching releases from Apple Music, Discogs, Bandcamp, SoundCloud, and Beatport, displayed as cards with artwork thumbnails and coloured source badges. The best match is automatically selected using the same scoring algorithm as Bulk Fix.</li>
+        <li><strong>Search query</strong> &mdash; editable; derived from the file tags or filename. Change it and click <strong>Re-fetch</strong> to search again with different terms.</li>
+        <li><strong>Manual URL</strong> &mdash; paste any supported catalogue URL (Discogs release, Bandcamp album, Apple Music link, SoundCloud track, or Beatport track page) to use instead of the search results.</li>
+        <li><strong>Rename to Artist - Title</strong> &mdash; optional checkbox to rename the file after applying metadata.</li>
+        <li><strong>Prev / Next</strong> navigation buttons to step through the track list without scrolling.</li>
+      </ul>
+
+      <figure class="guide-figure">
+        <img src="assets/images/26-fix-list-detail-results.png" width="1280" height="800" alt="Fix List detail panel showing search results with artwork thumbnails and source badges">
+        <figcaption><span class="fig-label">Figure 3.</span> The detail panel for a selected track. Search results show artwork thumbnails, title, artist, album, year, and label information. Coloured badges identify the source: Apple Music (red), Discogs (dark), SoundCloud (orange), Beatport (green). The top result is highlighted as the auto-selected best match.</figcaption>
+      </figure>
+
+      <h3>Fetching matches for a specific track</h3>
+      <p>
+        If the background queue has not reached a track yet, you can click <strong>Fetch now</strong> to jump the queue and search immediately. If the queue is running, the track is moved to the front of the queue; if the queue is paused, the search runs directly. You can also edit the search query and click <strong>Re-fetch</strong> to search with different terms at any time.
+      </p>
+
+      <h3>Applying metadata</h3>
+      <p>
+        Once you have selected a result (or pasted a URL), click <strong>Apply to this track</strong>. A confirmation dialog shows what will be written. After applying:
+      </p>
+      <ul>
+        <li>Tags (title, artist, album, year, genre) and artwork are embedded in the audio file.</li>
+        <li>The track shows a green tick in the list.</li>
+        <li>The current tags section updates to reflect the new metadata.</li>
+        <li>The file path is added to the completed list for export.</li>
+      </ul>
+
+      <h2>Step 3: Export completed paths</h2>
+      <p>
+        After fixing tracks, the export section at the bottom shows how many have been completed. Click <strong>Download completed paths CSV</strong> to save a file containing the full paths of all successfully fixed tracks.
+      </p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/27-fix-list-export.png" width="1280" height="800" alt="Fix List export section showing completed count and download button">
+        <figcaption><span class="fig-label">Figure 4.</span> The export card. Download the completed paths CSV and import it into Rekordbox Library Manager to create a playlist for tag re-import in Rekordbox.</figcaption>
+      </figure>
+
+      <p>
+        Import this CSV back into Rekordbox Library Manager. It creates a temporary Rekordbox playlist containing all the fixed tracks. In Rekordbox, select all tracks in that playlist, right-click, and choose <strong>Reload Tags</strong> to pull the updated metadata into the Rekordbox database.
+      </p>
+
+      <h2>State persistence</h2>
+      <p>
+        Fix List state is saved to the server automatically as you work. This means:
+      </p>
+      <ul>
+        <li>If you navigate to another tab and come back, your track list, search results, and selections are preserved.</li>
+        <li>If you close the app entirely and reopen it (even after a rebuild), the state is restored from disk. The background search resumes from where it left off.</li>
+        <li>Clicking <strong>Clear</strong> removes the saved state and resets the page.</li>
+      </ul>
+
+      <div class="callout">
+        <strong>Tip.</strong> State is stored on the server at <code>fix_list_state.json</code> (in <code>~/Library/Application Support/DJ MetaManager/</code> for the packaged app, or next to <code>app.py</code> in development). This survives app rebuilds, unlike browser-only storage.
+      </div>
+
+      <h2>Tips and best practices</h2>
+      <ul>
+        <li><strong>Work in batches.</strong> With large libraries (hundreds of tracks), the batch limit keeps the search queue manageable. Fix the fetched tracks before moving on; the queue resumes automatically.</li>
+        <li><strong>Check the auto-selected match.</strong> The scoring algorithm is good but not perfect. Glance at the highlighted result before applying &mdash; if it looks wrong, click a different result or paste a URL.</li>
+        <li><strong>Use Re-fetch for difficult tracks.</strong> If the filename does not produce useful search terms, edit the query to something more specific (e.g. add the artist name or a remix subtitle) and click <strong>Re-fetch</strong>.</li>
+        <li><strong>Paste URLs for known releases.</strong> If you know the exact Discogs release page, Bandcamp album, or Apple Music link, paste it in the manual URL field. This is often faster than scrolling through search results.</li>
+        <li><strong>Export early and often.</strong> You can download the completed paths CSV at any time &mdash; it always reflects the current set of fixed tracks. If you need to stop and come back later, the state is preserved.</li>
+      </ul>
+
+      <h2>Differences from Bulk Fix</h2>
+      <div class="guide-table-wrap">
+        <table class="guide-table">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>Bulk Fix</th>
+              <th>Fix List</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Input</td>
+              <td>Folder of FLAC files</td>
+              <td>CSV from Rekordbox Library Manager (any format)</td>
+            </tr>
+            <tr>
+              <td>Scope</td>
+              <td>Files in one directory tree</td>
+              <td>Specific tracks from your Rekordbox database, anywhere on disk</td>
+            </tr>
+            <tr>
+              <td>Search</td>
+              <td>Manual (click Fetch online matches)</td>
+              <td>Automatic background queue with batch limits</td>
+            </tr>
+            <tr>
+              <td>Review</td>
+              <td>Table with all tracks visible, dropdown per row</td>
+              <td>One track at a time with full detail panel</td>
+            </tr>
+            <tr>
+              <td>Sources</td>
+              <td>Apple Music, Discogs, Bandcamp</td>
+              <td>Apple Music, Discogs, Bandcamp, SoundCloud, Beatport</td>
+            </tr>
+            <tr>
+              <td>Output</td>
+              <td>Tags applied directly to files</td>
+              <td>Tags applied + completed paths CSV for Rekordbox re-import</td>
+            </tr>
+            <tr>
+              <td>State</td>
+              <td>Browser localStorage</td>
+              <td>Server-side file (survives app rebuilds)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>API endpoints</h2>
+      <p>
+        For developers and advanced users, Fix List uses these server endpoints:
+      </p>
+      <div class="guide-table-wrap">
+        <table class="guide-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Path</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/fix-list/upload</code></td>
+              <td>Parse CSV, verify files exist, read actual tags from disk</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/fix-list/suggest</code></td>
+              <td>Search online sources for up to 60 tracks (Apple Music, Discogs, Bandcamp, SoundCloud, Beatport)</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/bulk-fix/apply</code></td>
+              <td>Apply metadata from a chosen URL to an audio file (shared with Bulk Fix)</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/fix-list/export-completed</code></td>
+              <td>Write completed file paths CSV to the logs directory</td>
+            </tr>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/api/fix-list/state</code></td>
+              <td>Load persisted fix list state from disk</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/fix-list/state</code></td>
+              <td>Save fix list state to disk</td>
+            </tr>
+            <tr>
+              <td><code>DELETE</code></td>
+              <td><code>/api/fix-list/state</code></td>
+              <td>Clear persisted state</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <footer class="guide-footer">
+      <p>DJ MetaManager user guide &middot; Modular HTML in <code>docs/user-guide/</code></p>
+    </footer>
+  </div>
+</body>
+</html>

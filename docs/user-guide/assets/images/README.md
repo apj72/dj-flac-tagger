@@ -36,6 +36,10 @@ Place exported PNG (or WebP) files in this folder using the **exact filenames** 
 | 21 | `21-bulk-fix-apply.png` | **Bulk Fix**: **Apply** section, checkboxes, optional rename — ready to apply. |
 | 22 | `22-terminal-start-script.png` | (Optional) Terminal showing `./start.sh` or `python app.py` and the local URL. |
 | 23 | `23-config-json-example.png` | (Optional) Editor showing `config.json` with non-secret example paths. |
+| 24 | `24-fix-list-import.png` | **Fix List**: CSV import step — file picker, Upload & scan, summary stats (total/found/missing). |
+| 25 | `25-fix-list-track-list.png` | **Fix List**: track list with status indicators — ticks (applied), dots (matches ready), spinners (searching), format badges (FLAC/MP3/M4A/AIFF), missing-field badges (T/A/B/K/W). |
+| 26 | `26-fix-list-detail-results.png` | **Fix List**: detail panel showing search results with artwork thumbnails, title/artist/album, coloured source badges (Apple Music, Discogs, Bandcamp, SoundCloud, Beatport), auto-selected best match. |
+| 27 | `27-fix-list-export.png` | **Fix List**: export section — completed count, download CSV button for Rekordbox Library Manager playlist creation. |
 
 ## Updating the guide
 

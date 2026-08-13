@@ -59,7 +59,7 @@ The app does **not** use cookies for form memory. **Extract**, **Fix Metadata**,
 - **Settings:** After you click **Save Settings**, the settings draft is cleared so the next load matches the server.
 - **WAV → FLAC** and **Bulk Fix** use **additional** keys (e.g. bulk folder/target memory, batch offset handoff, `djmm.bulkFixHandoff` after a flat-folder convert) so large workflows stay separate from the generic page store.
 - **Bulk Fix** also exposes **Reset form** — clears folder fields, loaded batch, `djmm.bulkFixState`, `djmm.bulkFixDir`, and any pending WAV→FLAC **`djmm.bulkFixHandoff`** for a clean slate in this browser profile.
-- **Fix List** persists the full track list, search results, and completed paths under **`djmm.fixListState`** — navigate away and return without losing progress. The **background search queue** automatically resumes for any unfetched tracks on page restore.
+- **Fix List** persists the full track list, search results, and completed paths **server-side** as `fix_list_state.json` (via `GET/POST/DELETE /api/fix-list/state`). This survives app rebuilds — unlike browser-only `localStorage`. Navigate away and return without losing progress. The **background search queue** automatically resumes for any unfetched tracks on page restore.
 - **Audio preview bar** (`static/player.js`): included on all main tabs; loads the current selection when the format is supported. **No autoplay** — use **Play** / **Pause**. Keyboard shortcuts on the timeline when focused: arrows, Home/End, Space to toggle playback.
 - **Appearance (browser-only):** **Theme** preference is **`djmm.themePreference`** (`dark`, `light`, or `system`). **Full-page scenic background** can be toggled with **`djmm.pageBackgroundEnabled`** (`1`/`0`); Settings → Appearance includes both. See **[Appearance](#appearance)** for assets and styling.
 
@@ -149,12 +149,12 @@ Import a CSV "fix list" exported from [**Rekordbox Library Manager**](https://gi
 
 1. In **Rekordbox Library Manager**, filter tracks by missing metadata (title, artist, BPM, key, artwork) and export a fix list CSV.
 2. On the **Fix List** tab, upload the CSV. DJ MetaManager reads the actual file tags from disk and shows what is missing.
-3. **Background search** starts automatically — tracks are searched one at a time against Apple Music, Discogs, Bandcamp, SoundCloud, and Beatport. Results appear in the track list as they complete (purple dot = matches ready, spinner = searching). A 1-second delay between tracks respects API rate limits.
-4. Click any track in the left sidebar to see its current tags, search results, and options. The best match is **auto-selected** using the same scoring as Bulk Fix. Change the selection or paste a URL manually.
+3. **Background search** starts automatically — tracks are searched one at a time against Apple Music, Discogs, Bandcamp, SoundCloud, and Beatport. Results appear in the track list as they complete (purple dot = matches ready, spinner = searching). A 1-second delay between tracks respects API rate limits. The queue **pauses after 25 tracks** and resumes when ~75% are processed — this avoids wasting API calls on tracks you may not get to.
+4. Click any track to see its current tags, search results (with **artwork thumbnails** and coloured source badges), and options. The best match is **auto-selected** using the same scoring as Bulk Fix. Change the selection or paste a URL manually.
 5. **Apply** writes metadata and artwork into the audio file. The track shows a tick when done.
 6. **Export completed paths** downloads a CSV of fixed file paths. Import this back into Rekordbox Library Manager to create a temporary Rekordbox playlist — select all tracks in that playlist, right-click → **Reload Tags** to pull the updated metadata into Rekordbox's database.
 
-**State is fully persistent** — if you close the tab and come back, already-fetched results are preserved and the background search resumes from where it left off. No work is lost.
+**State is fully persistent** — saved to the server (not browser localStorage), so it survives app rebuilds. If you close the app and reopen it, already-fetched results are preserved and the background search resumes from where it left off. No work is lost.
 
 **CSV format** (contract between the two apps):
 
@@ -162,7 +162,7 @@ Import a CSV "fix list" exported from [**Rekordbox Library Manager**](https://gi
 full_path,file_name,title,artist,bpm,key,file_type,missing_title,missing_artist,missing_bpm,missing_key,has_artwork
 ```
 
-See [Rekordbox Library Manager](https://github.com/apj72/music_library) for the export side of this integration.
+See [Rekordbox Library Manager](https://github.com/apj72/music_library) for the export side of this integration. See the [Fix List user guide](docs/user-guide/workflow-fix-list.html) for detailed documentation with screenshots.
 
 #### Filename search and tags
 
@@ -351,6 +351,9 @@ Example (see `config.json.example`):
 | `POST` | `/api/fix-list/upload` | Parse a CSV fix list, verify files exist on disk, read actual tags. |
 | `POST` | `/api/fix-list/suggest` | Search online sources for up to 60 tracks from a fix list (iTunes, Discogs, Bandcamp, SoundCloud, Beatport). |
 | `POST` | `/api/fix-list/export-completed` | Write a CSV of successfully fixed file paths (for Rekordbox Library Manager playlist creation). |
+| `GET` | `/api/fix-list/state` | Load persisted fix-list state from disk. |
+| `POST` | `/api/fix-list/state` | Save fix-list state to disk (survives app rebuilds). |
+| `DELETE` | `/api/fix-list/state` | Clear persisted fix-list state. |
 | `POST` | `/api/scan-normalise-bulk` | Scan a folder for audio files eligible for bulk normalisation. |
 | `POST` | `/api/normalise-bulk` | Normalise all audio files in a folder; streams progress as **NDJSON** lines. |
 | `GET` | `/api/search` | Apple Music + Discogs + Bandcamp + **SoundCloud** + **Beatport** track search (used by Fix and Bulk Fix). Optional `source=soundcloud` (aliases: `sc`) or `source=beatport` (aliases: `bp`) limits to one catalogue. |
