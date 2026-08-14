@@ -626,6 +626,59 @@ html[data-theme="light"] .header-logo-wrap .header-logo--light {
 .fl-detail-manual input[type="url"] {
   flex: 1 1 auto;
 }
+.fl-edit-meta {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.fl-edit-meta-heading {
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+.fl-edit-layout {
+  display: flex;
+  gap: 1rem;
+}
+.fl-edit-artwork {
+  flex: 0 0 140px;
+}
+.fl-edit-artwork-preview {
+  width: 140px;
+  height: 140px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  overflow: hidden;
+}
+.fl-edit-fields {
+  flex: 1;
+  min-width: 0;
+}
+.fl-confirm-fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.5rem;
+  font-size: 0.85rem;
+  margin: 0.5rem 0 0;
+}
+.fl-confirm-fields dt {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.fl-confirm-fields dd {
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .fl-edit-layout { flex-direction: column; }
+  .fl-edit-artwork { flex: none; }
+}
 .fl-detail-actions {
   display: flex;
   gap: 0.75rem;
@@ -1494,6 +1547,14 @@ label {
   object-fit: cover;
   flex-shrink: 0;
   background: var(--bg);
+}
+.search-thumb--has-art {
+  transition: outline 0.12s, box-shadow 0.12s;
+  cursor: pointer;
+}
+.search-thumb--has-art:hover {
+  outline: 2px solid var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .search-info { flex: 1; min-width: 0; }

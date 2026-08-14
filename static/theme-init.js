@@ -1,6 +1,7 @@
 /* Apply saved appearance before first paint. Load in <head> on every page. */
 (function () {
   var KEY = "djmm.themePreference";
+  var BG_KEY = "djmm.pageBackgroundEnabled";
 
   function resolve(pref) {
     if (pref === "light") return "light";
@@ -11,17 +12,32 @@
     return "dark";
   }
 
+  function applyTheme(pref) {
+    var eff = pref === "light" || pref === "dark" ? pref : resolve("system");
+    document.documentElement.dataset.theme = eff;
+  }
+
+  function saveToServer(key, value) {
+    var body = {};
+    body[key] = value;
+    try {
+      fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).catch(function () {});
+    } catch (_) {}
+  }
+
   var pref = localStorage.getItem(KEY);
   if (pref !== "light" && pref !== "dark" && pref !== "system") pref = "system";
-
-  var effective = pref === "light" || pref === "dark" ? pref : resolve("system");
-  document.documentElement.dataset.theme = effective;
+  applyTheme(pref);
 
   window.djmmApplyThemePreference = function (p) {
     if (p !== "light" && p !== "dark" && p !== "system") p = "system";
     localStorage.setItem(KEY, p);
-    var eff = p === "light" || p === "dark" ? p : resolve("system");
-    document.documentElement.dataset.theme = eff;
+    applyTheme(p);
+    saveToServer("theme_preference", p);
   };
   window.djmmGetThemePreference = function () {
     var x = localStorage.getItem(KEY);
@@ -32,24 +48,22 @@
 
   window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", function () {
     if (localStorage.getItem(KEY) === "system") {
-      document.documentElement.dataset.theme = resolve("system");
+      applyTheme("system");
     }
   });
 
   /* Page background image (scenic hero): on by default; off = solid --bg only */
-  var BG_KEY = "djmm.pageBackgroundEnabled";
-
-  function applyPageBackgroundFromStorage() {
-    var raw = localStorage.getItem(BG_KEY);
-    var off = raw === "0" || raw === "false";
-    document.documentElement.setAttribute("data-page-background", off ? "off" : "on");
+  function applyBg(enabled) {
+    document.documentElement.setAttribute("data-page-background", enabled ? "on" : "off");
   }
 
-  applyPageBackgroundFromStorage();
+  var bgRaw = localStorage.getItem(BG_KEY);
+  applyBg(bgRaw !== "0" && bgRaw !== "false");
 
   window.djmmApplyPageBackgroundEnabled = function (enabled) {
     localStorage.setItem(BG_KEY, enabled ? "1" : "0");
-    document.documentElement.setAttribute("data-page-background", enabled ? "on" : "off");
+    applyBg(enabled);
+    saveToServer("page_background_enabled", !!enabled);
   };
 
   window.djmmGetPageBackgroundEnabled = function () {
@@ -57,4 +71,25 @@
     if (raw === "0" || raw === "false") return false;
     return true;
   };
+
+  /* On fresh load (empty localStorage), restore from server config */
+  var needsRestore = !localStorage.getItem(KEY) && !localStorage.getItem(BG_KEY);
+  if (needsRestore) {
+    fetch("/api/settings")
+      .then(function (r) { return r.json(); })
+      .then(function (cfg) {
+        var tp = cfg.theme_preference;
+        if (tp === "light" || tp === "dark" || tp === "system") {
+          localStorage.setItem(KEY, tp);
+          applyTheme(tp);
+        }
+        if (cfg.page_background_enabled === false) {
+          localStorage.setItem(BG_KEY, "0");
+          applyBg(false);
+        } else if (cfg.page_background_enabled === true) {
+          localStorage.setItem(BG_KEY, "1");
+        }
+      })
+      .catch(function () {});
+  }
 })();

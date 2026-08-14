@@ -99,7 +99,10 @@
           </span>
         </h2>
         <div id="fl-completed-summary" class="hint" style="margin-bottom:0.5rem"></div>
-        <button type="button" id="fl-export-btn" class="btn btn-primary" disabled>Download completed paths CSV</button>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+          <button type="button" id="fl-export-btn" class="btn btn-primary" disabled>Download all completed</button>
+          <button type="button" id="fl-export-new-btn" class="btn btn-secondary" disabled>Download new since last export</button>
+        </div>
       </section>
     </main>
   </div>
@@ -115,6 +118,7 @@
     </div>
   </div>
 
+  <script src="/static/player.js"></script>
   <script src="/static/fix-list.js"></script>
 </body>
 </html>

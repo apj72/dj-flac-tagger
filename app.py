@@ -1157,7 +1157,10 @@ def fix_list_export_completed():
     if not fname.endswith(".csv"):
         fname += ".csv"
     fname = re.sub(r"[^\w.\-]", "_", fname)
-    log_dir = os.path.dirname(os.path.abspath(__file__))
+    if getattr(sys, "frozen", False):
+        log_dir = str(writable_app_data_dir())  # noqa: F405
+    else:
+        log_dir = os.path.dirname(os.path.abspath(__file__))
     out_path = os.path.join(log_dir, fname)
 
     output = io.StringIO()
@@ -1170,6 +1173,7 @@ def fix_list_export_completed():
         f.write(output.getvalue())
 
     return jsonify({"filepath": out_path, "count": len(paths)})
+
 
 
 @app.route("/api/fix-list/state", methods=["GET"])
@@ -1284,6 +1288,12 @@ def update_settings():
                 cfg["loudness_verify_tolerance_tp"] = v
         except (TypeError, ValueError):
             pass
+    if "theme_preference" in data:
+        tp = (data["theme_preference"] or "").strip()
+        if tp in ("dark", "light", "system"):
+            cfg["theme_preference"] = tp
+    if "page_background_enabled" in data:
+        cfg["page_background_enabled"] = bool(data["page_background_enabled"])
     if "fix_retain_filename_suffixes" in data:
         lines = normalize_fix_retain_filename_suffixes(data["fix_retain_filename_suffixes"])  # noqa: F405
         for line in lines:
