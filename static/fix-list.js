@@ -315,6 +315,9 @@ function renderDetail() {
         : `<div class="search-thumb"></div>`;
       const detail = [r.artist, r.album, r.year].filter(Boolean).join(" · ");
       const labelText = r.label ? ` · ${r.label}` : "";
+      const bkmk = (r.url || "").trim()
+        ? `<button type="button" class="search-bookmark" data-ridx="${ri}" title="Save link for later"><svg viewBox="0 0 24 24"><path d="M5 2h14a1 1 0 0 1 1 1v19.143a.5.5 0 0 1-.766.424L12 18.03l-7.234 4.537A.5.5 0 0 1 4 22.143V3a1 1 0 0 1 1-1z" fill="currentColor"/></svg></button>`
+        : "";
       return `<div class="search-item${isSelected ? " selected" : ""}" data-ridx="${ri}">
         ${thumb}
         <div class="search-info">
@@ -322,6 +325,7 @@ function renderDetail() {
           <div class="search-detail">${esc(detail + labelText)}</div>
         </div>
         <span class="search-source ${sm.cls}">${sm.label}</span>
+        ${bkmk}
       </div>`;
     }).join("");
   } else if (item.fetchError) {
@@ -697,6 +701,30 @@ function bindDetailEvents(item, results) {
           artwork_url: existingArt,
         });
       }
+    });
+  });
+
+  document.querySelectorAll("#fl-detail-results .search-bookmark").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const ri = parseInt(btn.dataset.ridx, 10);
+      const r = results[ri];
+      if (!r || !(r.url || "").trim()) return;
+      btn.classList.add("bookmarked");
+      btn.title = "Saved!";
+      fetch("/api/saved-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: r.url,
+          title: r.title || "",
+          artist: r.artist || "",
+          album: r.album || "",
+          source: r.source || "",
+          artwork_thumb: r.artwork_thumb || "",
+          saved_from: "Fix List",
+        }),
+      }).catch(() => {});
     });
   });
 }

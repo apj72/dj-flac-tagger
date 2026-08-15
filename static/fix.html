@@ -26,6 +26,7 @@
         <a href="/convert" class="tab-link tab-link--icon-only" data-tooltip="WAV/AIFF → FLAC" aria-label="WAV/AIFF to FLAC"><span class="tab-icon tab-icon-convert" aria-hidden="true"></span></a>
         <a href="/bulk-fix" class="tab-link tab-link--icon-only" data-tooltip="Bulk Fix" aria-label="Bulk Fix"><span class="tab-icon tab-icon-bulk-fix" aria-hidden="true"></span></a>
         <a href="/fix-list" class="tab-link tab-link--icon-only" data-tooltip="Fix List" aria-label="Fix List"><span class="tab-icon tab-icon-fix-list" aria-hidden="true"></span></a>
+        <a href="/saved-links" class="tab-link tab-link--icon-only" data-tooltip="Saved Links" aria-label="Saved Links"><span class="tab-icon tab-icon-saved-links" aria-hidden="true"></span></a>
         <a href="/settings" class="tab-link tab-link--icon-only" data-tooltip="Settings" aria-label="Settings"><span class="tab-icon tab-icon-settings" aria-hidden="true"></span></a>
       </nav>
     </header>
@@ -144,6 +145,13 @@
       <!-- Search results -->
       <section class="card hidden" id="fix-search-section">
         <h2><span class="step">3</span> Search Results</h2>
+        <div class="fix-search-query-row" style="display:flex;gap:0.5rem;align-items:flex-end;margin-bottom:0.75rem">
+          <div style="flex:1 1 auto">
+            <label for="fix-search-q" style="display:block;font-size:0.8rem;margin-bottom:0.2rem">Search query</label>
+            <input type="text" id="fix-search-q" placeholder="Artist and track name" />
+          </div>
+          <button type="button" id="fix-search-btn" class="btn btn-primary">Re-search</button>
+        </div>
         <div id="fix-search-status" class="status hidden"></div>
         <div id="fix-search-results" class="search-results"></div>
         <div id="fix-search-fallback" class="fix-search-fallback hidden">

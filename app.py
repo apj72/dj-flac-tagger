@@ -1215,6 +1215,79 @@ def fix_list_clear_state():
     return jsonify({"ok": True})
 
 
+# ---------------------------------------------------------------------------
+# Saved Links — bookmark interesting search results for later
+# ---------------------------------------------------------------------------
+
+def _saved_links_path():
+    if getattr(sys, "frozen", False):
+        return str(writable_app_data_dir() / "saved_links.json")  # noqa: F405
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_links.json")
+
+
+def _load_saved_links():
+    p = _saved_links_path()
+    if os.path.exists(p):
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+
+def _save_saved_links(links):
+    p = _saved_links_path()
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(links, f, ensure_ascii=False, indent=2)
+
+
+@app.route("/saved-links")
+def saved_links_page():
+    return app.send_static_file("saved-links.html")
+
+
+@app.route("/api/saved-links", methods=["GET"])
+def get_saved_links():
+    return jsonify(_load_saved_links())
+
+
+@app.route("/api/saved-links", methods=["POST"])
+def add_saved_link():
+    data = request.get_json() or {}
+    url = (data.get("url") or "").strip()
+    if not url:
+        return jsonify({"error": "url required"}), 400
+    links = _load_saved_links()
+    if any(l.get("url") == url for l in links):
+        return jsonify({"ok": True, "duplicate": True, "count": len(links)})
+    entry = {
+        "url": url,
+        "title": (data.get("title") or "").strip(),
+        "artist": (data.get("artist") or "").strip(),
+        "album": (data.get("album") or "").strip(),
+        "source": (data.get("source") or "").strip(),
+        "artwork_thumb": (data.get("artwork_thumb") or "").strip(),
+        "saved_from": (data.get("saved_from") or "").strip(),
+        "timestamp": datetime.now().isoformat(),
+    }
+    links.insert(0, entry)
+    _save_saved_links(links)
+    return jsonify({"ok": True, "count": len(links)})
+
+
+@app.route("/api/saved-links", methods=["DELETE"])
+def delete_saved_link():
+    data = request.get_json() or {}
+    url = (data.get("url") or "").strip()
+    if not url:
+        return jsonify({"error": "url required"}), 400
+    links = _load_saved_links()
+    links = [l for l in links if l.get("url") != url]
+    _save_saved_links(links)
+    return jsonify({"ok": True, "count": len(links)})
+
+
 @app.route("/api/settings", methods=["GET"])
 def get_settings():
     cfg = dict(load_config())  # noqa: F405

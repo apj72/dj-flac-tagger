@@ -762,6 +762,9 @@ function searchResultCardsHtml(results) {
         : `<div class="search-thumb"></div>`;
       const detail = [r.artist, r.album, r.year].filter(Boolean).join(" · ");
       const label = r.label ? ` · ${r.label}` : "";
+      const bkmk = (r.url || "").trim()
+        ? `<button type="button" class="search-bookmark" data-index="${i}" title="Save link for later"><svg viewBox="0 0 24 24"><path d="M5 2h14a1 1 0 0 1 1 1v19.143a.5.5 0 0 1-.766.424L12 18.03l-7.234 4.537A.5.5 0 0 1 4 22.143V3a1 1 0 0 1 1-1z" fill="currentColor"/></svg></button>`
+        : "";
       return `<div class="search-item" data-index="${i}">
         ${thumb}
         <div class="search-info">
@@ -769,6 +772,7 @@ function searchResultCardsHtml(results) {
           <div class="search-detail">${detail}${label}</div>
         </div>
         <span class="search-source ${srcClass}">${srcLabel}</span>
+        ${bkmk}
       </div>`;
     })
     .join("");
@@ -783,6 +787,29 @@ function paintFixSearchResults(container, results) {
   container.innerHTML = searchResultCardsHtml(results);
   container.querySelectorAll(".search-item").forEach((el) => {
     el.addEventListener("click", () => pickSearchResult(el, results));
+  });
+  container.querySelectorAll(".search-bookmark").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const ri = parseInt(btn.dataset.index, 10);
+      const r = results[ri];
+      if (!r || !(r.url || "").trim()) return;
+      btn.classList.add("bookmarked");
+      btn.title = "Saved!";
+      fetch("/api/saved-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: r.url,
+          title: r.title || "",
+          artist: r.artist || "",
+          album: r.album || "",
+          source: r.source || "",
+          artwork_thumb: r.artwork_thumb || "",
+          saved_from: "Fix Metadata",
+        }),
+      }).catch(() => {});
+    });
   });
 }
 
@@ -856,11 +883,22 @@ async function autoSearch(tags) {
     return;
   }
 
+  const qInput = document.getElementById("fix-search-q");
+  if (qInput) qInput.value = q;
+
   section.classList.remove("hidden");
   hideSearchFallback();
+  await runFixSearch(q);
+}
+
+async function runFixSearch(q) {
+  const container = $("#fix-search-results");
+  const status = $("#fix-search-status");
+
   status.classList.remove("hidden");
   status.innerHTML = '<span class="spinner"></span> Searching...';
   container.innerHTML = "";
+
   const resp = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
   const data = await resp.json();
 
@@ -1214,6 +1252,7 @@ async function saveArtworkOnly() {
       if (ar.hadLocalArt) clearLocalArtworkPayload();
       paintDefaultArtworkPreview();
       scheduleFixPageSave();
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   } finally {
     if (btn) {
@@ -1233,6 +1272,16 @@ $("#fix-url").addEventListener("keydown", (e) => { if (e.key === "Enter") fetchM
 document.getElementById("fix-search-manual-btn")?.addEventListener("click", runFixManualSiteSearch);
 document.getElementById("fix-search-manual-q")?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") runFixManualSiteSearch();
+});
+document.getElementById("fix-search-btn")?.addEventListener("click", () => {
+  const q = (document.getElementById("fix-search-q")?.value || "").trim();
+  if (q) runFixSearch(q);
+});
+document.getElementById("fix-search-q")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    const q = (document.getElementById("fix-search-q")?.value || "").trim();
+    if (q) runFixSearch(q);
+  }
 });
 $("#fix-clear-btn").addEventListener("click", clearAll);
 $("#fix-save-btn").addEventListener("click", saveTags);

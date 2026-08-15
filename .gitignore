@@ -5,6 +5,9 @@ __pycache__/
 config.json
 processing_log.json
 logged_tracks.json
+saved_links.json
+fix_list_state.json
+completed_fixes_*.csv
 .dj-meta-manager.pid
 .dj-metamanager.pid
 .dj-flac-tagger.pid

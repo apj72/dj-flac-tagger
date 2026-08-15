@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saved Links — DJ MetaManager</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <script src="/static/theme-init.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="page-saved-links">
+  <div class="app">
+    <header>
+      <h1 class="sr-only">DJ MetaManager</h1>
+      <div class="header-logo-wrap">
+        <a href="/" class="header-logo-link" aria-label="DJ MetaManager home">
+          <img src="/static/header-logo-dark-112h.png" alt="" width="366" height="112" class="header-logo header-logo--dark" decoding="async" />
+          <img src="/static/header-logo-light-112h.png" alt="" width="370" height="112" class="header-logo header-logo--light" decoding="async" />
+        </a>
+      </div>
+      <nav class="tab-nav">
+        <a href="/" class="tab-link tab-link--icon-only" data-tooltip="Extract" aria-label="Extract"><span class="tab-icon tab-icon-extract" aria-hidden="true"></span></a>
+        <a href="/fix" class="tab-link tab-link--icon-only" data-tooltip="Fix Metadata" aria-label="Fix Metadata"><span class="tab-icon tab-icon-fix" aria-hidden="true"></span></a>
+        <a href="/inspect" class="tab-link tab-link--icon-only" data-tooltip="Inspect" aria-label="Inspect"><span class="tab-icon tab-icon-inspect" aria-hidden="true"></span></a>
+        <a href="/normalise" class="tab-link tab-link--icon-only" data-tooltip="Normalise" aria-label="Normalise"><span class="tab-icon tab-icon-normalise" aria-hidden="true"></span></a>
+        <a href="/convert" class="tab-link tab-link--icon-only" data-tooltip="WAV/AIFF → FLAC" aria-label="WAV/AIFF to FLAC"><span class="tab-icon tab-icon-convert" aria-hidden="true"></span></a>
+        <a href="/bulk-fix" class="tab-link tab-link--icon-only" data-tooltip="Bulk Fix" aria-label="Bulk Fix"><span class="tab-icon tab-icon-bulk-fix" aria-hidden="true"></span></a>
+        <a href="/fix-list" class="tab-link tab-link--icon-only" data-tooltip="Fix List" aria-label="Fix List"><span class="tab-icon tab-icon-fix-list" aria-hidden="true"></span></a>
+        <a href="/saved-links" class="tab-link tab-link--icon-only active" data-tooltip="Saved Links" aria-label="Saved Links"><span class="tab-icon tab-icon-saved-links" aria-hidden="true"></span></a>
+        <a href="/settings" class="tab-link tab-link--icon-only" data-tooltip="Settings" aria-label="Settings"><span class="tab-icon tab-icon-settings" aria-hidden="true"></span></a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>Saved Links</h2>
+        <p class="hint" id="sl-summary">Loading...</p>
+        <div id="sl-list" class="sl-list"></div>
+        <p class="hint hidden" id="sl-empty">No saved links yet. Use the bookmark button on search results in Fix Metadata or Fix List to save interesting tracks.</p>
+      </section>
+    </main>
+  </div>
+
+  <script>
+  (function () {
+    function esc(s) {
+      return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    const srcMap = {
+      discogs: { label: "Discogs", cls: "src-discogs" },
+      apple_music: { label: "Apple Music", cls: "src-apple" },
+      bandcamp: { label: "Bandcamp", cls: "src-bandcamp" },
+      soundcloud: { label: "SoundCloud", cls: "src-soundcloud" },
+      beatport: { label: "Beatport", cls: "src-beatport" },
+    };
+
+    function render(links) {
+      const list = document.getElementById("sl-list");
+      const empty = document.getElementById("sl-empty");
+      const summary = document.getElementById("sl-summary");
+
+      if (!links.length) {
+        list.innerHTML = "";
+        empty.classList.remove("hidden");
+        summary.textContent = "No saved links.";
+        return;
+      }
+      empty.classList.add("hidden");
+      summary.textContent = links.length + " saved link(s).";
+
+      list.innerHTML = links.map((l) => {
+        const sm = srcMap[l.source] || { label: "Web", cls: "src-generic" };
+        const thumb = l.artwork_thumb
+          ? `<img class="search-thumb" src="${esc(l.artwork_thumb)}" alt="" />`
+          : `<div class="search-thumb"></div>`;
+        const detail = [l.artist, l.album].filter(Boolean).join(" · ");
+        const from = l.saved_from ? ` · from ${esc(l.saved_from)}` : "";
+        const date = l.timestamp ? new Date(l.timestamp).toLocaleDateString() : "";
+        return `<div class="search-item sl-item" data-url="${esc(l.url)}">
+          ${thumb}
+          <div class="search-info">
+            <div class="search-title">${esc(l.title || l.url)}</div>
+            <div class="search-detail">${esc(detail)}${from}</div>
+          </div>
+          <span class="search-source ${sm.cls}">${sm.label}</span>
+          <span class="sl-date hint">${date}</span>
+          <a href="${esc(l.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-secondary sl-open" title="Open link">Open</a>
+          <button type="button" class="btn btn-sm sl-remove" title="Remove">&#10005;</button>
+        </div>`;
+      }).join("");
+
+      list.querySelectorAll(".sl-remove").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const item = btn.closest(".sl-item");
+          const url = item?.dataset.url;
+          if (!url) return;
+          btn.disabled = true;
+          try {
+            await fetch("/api/saved-links", {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url }),
+            });
+          } catch (_) {}
+          item.remove();
+          const remaining = list.querySelectorAll(".sl-item").length;
+          summary.textContent = remaining ? remaining + " saved link(s)." : "No saved links.";
+          if (!remaining) empty.classList.remove("hidden");
+        });
+      });
+    }
+
+    fetch("/api/saved-links")
+      .then((r) => r.json())
+      .then((links) => render(links))
+      .catch(() => {
+        document.getElementById("sl-summary").textContent = "Failed to load saved links.";
+      });
+  })();
+  </script>
+</body>
+</html>
