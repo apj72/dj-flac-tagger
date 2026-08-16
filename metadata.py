@@ -133,7 +133,22 @@ def _decode_retag_artwork_base64(raw: str, _mime_hint: str = "") -> tuple[bytes 
 # Apply metadata (write tags)
 # ---------------------------------------------------------------------------
 
+def _load_default_artwork():
+    from config import bundle_base_path
+    p = os.path.join(str(bundle_base_path()), "static", "icons", "no_artwork.jpeg")
+    try:
+        with open(p, "rb") as f:
+            return f.read(), "image/jpeg"
+    except Exception:
+        return None, None
+
+
 def apply_metadata(filepath, metadata, artwork_bytes=None, artwork_mime=None):
+    if artwork_bytes is None:
+        existing_art, _ = read_embedded_artwork(filepath)
+        if existing_art is None:
+            artwork_bytes, artwork_mime = _load_default_artwork()
+
     ext = os.path.splitext(filepath)[1].lower()
 
     if ext == ".flac":
