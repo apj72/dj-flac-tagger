@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saved Links — DJ MetaManager</title>
+  <link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="guide-shell">
+    <div class="guide-nav-wrap">
+      <div class="guide-nav-inner">
+        <a class="guide-brand" href="index.html">DJ MetaManager &mdash; User Guide</a>
+        <nav class="guide-nav" aria-label="Guide pages">
+          <a href="index.html">Home</a>
+          <a href="install-and-setup.html">Install</a>
+          <a href="workflow-extract.html">Extract</a>
+          <a href="workflow-fix-and-inspect.html">Fix &amp; Inspect</a>
+          <a href="workflow-normalise.html">Normalise</a>
+          <a href="workflow-wav-to-flac.html">WAV &rarr; FLAC</a>
+          <a href="workflow-bulk-fix.html">Bulk Fix</a>
+          <a href="workflow-fix-list.html">Fix List</a>
+          <a href="workflow-lossless-check.html">Lossless Check</a>
+          <a href="workflow-saved-links.html" aria-current="page">Saved Links</a>
+          <a href="reference-config-and-formats.html">Reference</a>
+        </nav>
+      </div>
+    </div>
+
+    <main id="main" class="guide-main">
+      <p class="breadcrumb"><a href="index.html">Home</a> &middot; Saved Links</p>
+      <h1>Saved Links</h1>
+      <p class="lead">
+        The Saved Links tab is a simple bookmark manager for music URLs you want to come back to later. Save links to Bandcamp pages, Discogs releases, SoundCloud tracks, Beatport listings, or any other URL while you are browsing and tagging &mdash; then revisit them when you are ready to buy, download, or process.
+      </p>
+
+      <h2>Adding links</h2>
+      <p>
+        Paste a URL into the input field and click <strong>Save</strong> (or press Enter). The link is stored immediately. You can optionally add a note or label alongside the URL to remind yourself why you saved it.
+      </p>
+
+      <h2>Managing links</h2>
+      <p>
+        Saved links are displayed in a list, most recent first. Each entry shows the URL (clickable to open in the browser) and any note you added. Click the <strong>&times;</strong> button to remove a link you no longer need.
+      </p>
+
+      <h2>Storage</h2>
+      <p>
+        Links are saved to <code>saved_links.json</code> on the server (under <code>~/Library/Application Support/DJ MetaManager/</code> for the packaged app, or next to <code>app.py</code> in development). They survive app rebuilds and browser changes.
+      </p>
+
+      <div class="callout">
+        <strong>Tip.</strong> Use Saved Links to collect URLs during a metadata session. When you find a Bandcamp or Discogs page that has tracks you want to purchase later, save the link here instead of relying on browser bookmarks that might get lost across profiles or machines.
+      </div>
+    </main>
+
+    <footer class="guide-footer">
+      <p>DJ MetaManager user guide &middot; Modular HTML in <code>docs/user-guide/</code></p>
+    </footer>
+  </div>
+</body>
+</html>

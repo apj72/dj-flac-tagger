@@ -33,6 +33,7 @@ from config import *      # noqa: F401,F403
 from scrapers import *    # noqa: F401,F403
 from metadata import *    # noqa: F401,F403
 from audio import *       # noqa: F401,F403
+from spectral import *    # noqa: F401,F403
 
 # ---------------------------------------------------------------------------
 # Redirect config path lookups so test monkeypatching of
@@ -1286,6 +1287,145 @@ def delete_saved_link():
     links = [l for l in links if l.get("url") != url]
     _save_saved_links(links)
     return jsonify({"ok": True, "count": len(links)})
+
+
+# ---------------------------------------------------------------------------
+# Lossless Check — spectral analysis for detecting lossy transcodes
+# ---------------------------------------------------------------------------
+
+@app.route("/lossless-check")
+def lossless_check_page():
+    return app.send_static_file("lossless-check.html")
+
+
+@app.route("/api/lossless-check/scan")
+def lossless_check_scan():
+    """List audio files in a directory for lossless checking."""
+    directory = (request.args.get("dir") or "").strip()
+    if not directory:
+        return jsonify({"error": "dir query parameter required"}), 400
+    recursive = request.args.get("recursive", "0").lower() in ("1", "true", "yes", "on")
+    try:
+        real = os.path.realpath(resolve(directory))  # noqa: F405
+    except (OSError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+    if not os.path.isdir(real):
+        return jsonify({"error": f"Not a directory: {real}"}), 404
+
+    files = []
+    for p in _iter_audio_paths(real, recursive):  # noqa: F405
+        try:
+            files.append({
+                "path": str(p),
+                "name": os.path.basename(str(p)),
+                "ext": os.path.splitext(str(p))[1].lower().lstrip("."),
+                "size_mb": round(os.path.getsize(str(p)) / (1024 * 1024), 1),
+            })
+        except OSError:
+            continue
+    return jsonify({"directory": real, "files": files, "count": len(files)})
+
+
+@app.route("/api/lossless-check/analyze", methods=["POST"])
+def lossless_check_analyze():
+    """Analyze a single file for lossy transcoding."""
+    data = request.get_json() or {}
+    filepath = (data.get("filepath") or "").strip()
+    if not filepath or not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 404
+    try:
+        result = analyze_lossless_authenticity(filepath)  # noqa: F405
+        result["filepath"] = filepath
+        result["name"] = os.path.basename(filepath)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            "filepath": filepath,
+            "name": os.path.basename(filepath),
+            "verdict": "error",
+            "reason": str(e),
+            "cutoff_freq": None,
+            "estimated_bitrate": None,
+            "confidence": None,
+            "sample_rate": None,
+            "nyquist": None,
+            "duration": None,
+        })
+
+
+def _lossless_reports_dir():
+    if getattr(sys, "frozen", False):
+        d = writable_app_data_dir() / "lossless_reports"  # noqa: F405
+    else:
+        d = Path(os.path.dirname(os.path.abspath(__file__))) / "lossless_reports"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+@app.route("/api/lossless-check/reports")
+def lossless_check_list_reports():
+    d = _lossless_reports_dir()
+    reports = []
+    for f in sorted(d.glob("*.json"), reverse=True):
+        try:
+            with open(f, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            reports.append({
+                "id": f.stem,
+                "directory": data.get("directory", ""),
+                "date": data.get("date", ""),
+                "total": data.get("total", 0),
+                "lossless": data.get("lossless", 0),
+                "transcodes": data.get("transcodes", 0),
+            })
+        except Exception:
+            continue
+    return jsonify(reports)
+
+
+@app.route("/api/lossless-check/report/<report_id>")
+def lossless_check_load_report(report_id):
+    safe = re.sub(r"[^a-zA-Z0-9_-]", "", report_id)
+    p = _lossless_reports_dir() / f"{safe}.json"
+    if not p.is_file():
+        return jsonify({"error": "Report not found"}), 404
+    with open(p, "r", encoding="utf-8") as f:
+        return jsonify(json.load(f))
+
+
+@app.route("/api/lossless-check/report", methods=["POST"])
+def lossless_check_save_report():
+    data = request.get_json() or {}
+    results = data.get("results", [])
+    directory = data.get("directory", "")
+    now = datetime.now()
+    report_id = now.strftime("lc_%Y%m%d_%H%M%S")
+
+    lossless = sum(1 for r in results if r.get("verdict") == "lossless")
+    transcodes = sum(1 for r in results if r.get("verdict") == "transcode")
+
+    report = {
+        "id": report_id,
+        "directory": directory,
+        "date": now.isoformat(),
+        "total": len(results),
+        "lossless": lossless,
+        "transcodes": transcodes,
+        "results": results,
+    }
+    p = _lossless_reports_dir() / f"{report_id}.json"
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(report, f, ensure_ascii=False, indent=2)
+    return jsonify({"ok": True, "id": report_id})
+
+
+@app.route("/api/lossless-check/report/<report_id>", methods=["DELETE"])
+def lossless_check_delete_report(report_id):
+    safe = re.sub(r"[^a-zA-Z0-9_-]", "", report_id)
+    p = _lossless_reports_dir() / f"{safe}.json"
+    if p.is_file():
+        p.unlink()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/settings", methods=["GET"])

@@ -24,7 +24,7 @@ A local web tool for DJs to turn recordings into a clean, tagged library in **mu
 | **`master`** | Stable release; multi-format extract, tag, and normalise as documented below. |
 | **`v2`** | Active development; new features land here first, then merge to `master` when ready. |
 
-**On branch `v2` today:** **tab bar icons** with hover/focus labels; Extract **Rename** / **Delete** for source recordings (delete → Finder Trash on macOS; `POST /api/source-recording/rename` | `delete`), **SoundCloud** and **Beatport** URLs in **Fetch metadata**; **Bulk Fix → Reset form** to clear saved browser state; plus **Bulk Fix** (batch FLAC metadata, Bandcamp search, duplicate-name warnings, optional sibling `.wav` hints, **best-match pre-selection** after fetch), batch **WAV/AIFF → FLAC** with offsets and **browser-stored batch progress**, **conversion-order handoff** to Bulk Fix for flat output (see [UI state](#ui-state-browser)), in-app **bulk convert confirmation** (no native `confirm` dialog), **per-tab UI drafts** for Extract / Fix / Inspect / Normalise / Settings in `localStorage`, **Inspect** folder picker, last browsed folder remembered between **Fix Metadata** and **Inspect**, **UTF-8–safe** HTML/JSON scraping so accented titles (e.g. Apple Music) write correctly to tags, and **Fix List** for batch-fixing tracks from a [Rekordbox Library Manager](https://github.com/apj72/music_library) CSV export with **background auto-search**.
+**On branch `v2` today:** **tab bar icons** with hover/focus labels; Extract **Rename** / **Delete** for source recordings (delete → Finder Trash on macOS; `POST /api/source-recording/rename` | `delete`), **SoundCloud** and **Beatport** URLs in **Fetch metadata**; **Bulk Fix → Reset form** to clear saved browser state; plus **Bulk Fix** (batch FLAC metadata, Bandcamp search, duplicate-name warnings, optional sibling `.wav` hints, **best-match pre-selection** after fetch), batch **WAV/AIFF → FLAC** with offsets and **browser-stored batch progress**, **conversion-order handoff** to Bulk Fix for flat output (see [UI state](#ui-state-browser)), in-app **bulk convert confirmation** (no native `confirm` dialog), **per-tab UI drafts** for Extract / Fix / Inspect / Normalise / Settings in `localStorage`, **Inspect** folder picker, last browsed folder remembered between **Fix Metadata** and **Inspect**, **UTF-8–safe** HTML/JSON scraping so accented titles (e.g. Apple Music) write correctly to tags, **Fix List** for batch-fixing tracks from a [Rekordbox Library Manager](https://github.com/apj72/music_library) CSV export with **background auto-search**, **Lossless Check** (FFT spectral analysis to detect lossy transcodes with bitrate estimation and saved reports), **Saved Links** (bookmark URLs for later), and **default artwork** embedded automatically when files have no cover art.
 
 **Also on `v2`:** A fixed **audio preview bar** on every tab streams the selected file via **`GET /api/stream-audio`** (manual Play / Pause, draggable timeline, volume stored in `localStorage`). **Fix Metadata** supports a separate **Artwork image URL**, **Update artwork** (cover only, `POST /api/retag-artwork`), **click the cover** for a full-screen preview, and save rules that **prefer your local or URL cover** over release art; **Fix** and **Inspect** file lists use **arrow keys / Home / End** to move selection (like a focusable list), not only scroll.
 
@@ -36,7 +36,7 @@ OBS is still primarily a **video** app: even when you only care about audio, it 
 
 ## What It Does
 
-Eight pages, via tabs at the top (order: **Extract → Fix Metadata → Inspect → Normalise → WAV/AIFF → FLAC → Bulk Fix → Fix List → Settings**):
+Eleven pages, via tabs at the top (order: **Extract → Inspect → Fix Metadata → Bulk Fix → Fix List → Normalise → WAV/AIFF → FLAC → Lossless Check → Saved Links → Settings**):
 
 ### Extract (main workflow)
 
@@ -194,6 +194,27 @@ DJs often keep **extra text in the filename** (Camelot key, BPM, etc.) for quick
 
 These rules apply to **Bulk Fix** (scan query and title hint), **Fix Metadata** (suggested search from the filename), and **WAV → FLAC** tag embedding when a known pattern does not match.
 
+### Lossless Check (spectral analysis)
+
+Scan a folder of audio files and use **FFT-based spectral analysis** to detect whether lossless files (FLAC, WAV, AIFF) are actually **re-encoded from lossy sources** (e.g. MP3). Lossy codecs apply a low-pass filter that removes high frequencies above a bitrate-dependent threshold; when the file is re-encoded to FLAC, that cutoff remains detectable.
+
+1. **Select a folder** — browse or use the folder picker. Optionally include subfolders.
+2. **Scan** — lists all supported audio files (FLAC, WAV, AIFF, MP3, M4A, OGG).
+3. **Analyse** — processes each file by decoding a 30-second segment from the middle, computing the FFT, and looking for a sharp energy drop in the 14–21 kHz range.
+4. **Results** — each file gets a verdict (**Lossless**, **Transcode**, or **Inconclusive**), an estimated source bitrate for transcodes (e.g. "~192 kbps MP3"), the detected cutoff frequency, and a confidence level.
+5. **Filter** — toggle between All, Transcodes, Lossless, and Other to focus on files that need replacing.
+6. **Save reports** — persist analysis results on the server for later reference when sourcing better-quality copies. Load or delete saved reports from the Saved Reports card.
+
+Requires **numpy** (in `requirements.txt`) and **ffmpeg/ffprobe**.
+
+### Saved Links
+
+A simple bookmark manager for music URLs. Save links to Bandcamp pages, Discogs releases, SoundCloud tracks, Beatport listings, or any URL while browsing and tagging — then revisit them later for purchase or processing. Links are stored server-side in `saved_links.json`.
+
+### Default artwork
+
+When metadata is applied to a file that has **no existing artwork** and no artwork was fetched from an online source, DJ MetaManager automatically embeds a **default artwork image** (`static/icons/no_artwork.jpeg`). This ensures every file in your library has cover art, even when no release artwork is available. The default is a vinyl record with waveform overlay.
+
 ## Recording Setup
 
 - **[BlackHole](https://existential.audio/blackhole/)** — virtual audio on macOS (16-channel version).
@@ -210,6 +231,7 @@ These rules apply to **Bulk Fix** (scan query and title hint), **Fix Metadata** 
 
 - **macOS** (Finder trash integration for “move recording to Bin”)
 - **Python 3.10+**
+- **numpy** (for Lossless Check spectral analysis; installed via `pip install -r requirements.txt`)
 - **ffmpeg** and **ffprobe**:
 
 ```bash
@@ -354,6 +376,12 @@ Example (see `config.json.example`):
 | `GET` | `/api/fix-list/state` | Load persisted fix-list state from disk. |
 | `POST` | `/api/fix-list/state` | Save fix-list state to disk (survives app rebuilds). |
 | `DELETE` | `/api/fix-list/state` | Clear persisted fix-list state. |
+| `GET` | `/api/lossless-check/scan` | List audio files in a directory for spectral analysis (`dir`, `recursive` query params). |
+| `POST` | `/api/lossless-check/analyze` | Analyse a single file for lossy transcoding (FFT spectral analysis). |
+| `GET` | `/api/lossless-check/reports` | List saved lossless check reports. |
+| `GET` | `/api/lossless-check/report/<id>` | Load a specific saved report. |
+| `POST` | `/api/lossless-check/report` | Save a new lossless check report. |
+| `DELETE` | `/api/lossless-check/report/<id>` | Delete a saved report. |
 | `POST` | `/api/scan-normalise-bulk` | Scan a folder for audio files eligible for bulk normalisation. |
 | `POST` | `/api/normalise-bulk` | Normalise all audio files in a folder; streams progress as **NDJSON** lines. |
 | `GET` | `/api/search` | Apple Music + Discogs + Bandcamp + **SoundCloud** + **Beatport** track search (used by Fix and Bulk Fix). Optional `source=soundcloud` (aliases: `sc`) or `source=beatport` (aliases: `bp`) limits to one catalogue. |
@@ -363,7 +391,7 @@ Example (see `config.json.example`):
 | `GET` | `/api/stream-audio` | Stream a local file for the in-browser preview (`path` query param). Range requests supported; extensions match browse-audio plus `.wav`. |
 | `GET` | `/api/browse-folders` | Server-side folder picker for paths the browser cannot read. |
 
-Routes **`/convert`**, **`/bulk-fix`**, **`/fix-list`**, etc. serve the static HTML shells; the app runs locally (default **http://127.0.0.1:5123**).
+Routes **`/convert`**, **`/bulk-fix`**, **`/fix-list`**, **`/lossless-check`**, **`/saved-links`**, etc. serve the static HTML shells; the app runs locally (default **http://127.0.0.1:5123**).
 
 ## Development / tests
 
@@ -385,7 +413,8 @@ dj-meta-manager/
 ├── app.py                 # Flask routes and server entry point
 ├── config.py              # Constants, configuration, paths, filename helpers, path validation
 ├── audio.py               # FFmpeg/ffprobe operations, audio processing, preview cache
-├── metadata.py            # Mutagen tag read/write, artwork embedding (FLAC/MP3/AIFF/M4A/OGG)
+├── metadata.py            # Mutagen tag read/write, artwork embedding (FLAC/MP3/AIFF/M4A/OGG), default artwork fallback
+├── spectral.py            # FFT-based spectral analysis for detecting lossy transcodes in lossless files
 ├── scrapers.py            # Web scrapers: Discogs, Bandcamp, Apple Music, Spotify, SoundCloud, Beatport
 ├── config.json            # Local settings (not in repo)
 ├── config.json.example
@@ -402,6 +431,8 @@ dj-meta-manager/
 │   ├── convert.html / convert.js   # WAV → FLAC
 │   ├── bulk-fix.html / bulk-fix.js # Bulk Fix metadata
 │   ├── fix-list.html / fix-list.js # Fix List (Rekordbox Library Manager integration)
+│   ├── lossless-check.html / lossless-check.js  # Lossless Check (spectral analysis)
+│   ├── saved-links.html            # Saved Links (URL bookmarks)
 │   ├── folder-picker.js            # Shared folder navigator modal (window.DJMM)
 │   ├── path-persist.js             # Last audio browse dir (Fix + Inspect) + `djmm.pageState` UI drafts
 │   ├── player.js                   # Bottom audio preview bar (all tabs)

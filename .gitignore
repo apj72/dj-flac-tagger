@@ -8,6 +8,7 @@ logged_tracks.json
 saved_links.json
 fix_list_state.json
 completed_fixes_*.csv
+lossless_reports/
 .dj-meta-manager.pid
 .dj-metamanager.pid
 .dj-flac-tagger.pid
