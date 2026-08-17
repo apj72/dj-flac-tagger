@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capture Playlist — DJ MetaManager</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <script src="/static/theme-init.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="page-capture">
+  <div class="app">
+    <header>
+      <h1 class="sr-only">DJ MetaManager</h1>
+      <div class="header-logo-wrap">
+        <a href="/" class="header-logo-link" aria-label="DJ MetaManager home">
+          <img src="/static/header-logo-dark-112h.png" alt="" width="366" height="112" class="header-logo header-logo--dark" decoding="async" />
+          <img src="/static/header-logo-light-112h.png" alt="" width="370" height="112" class="header-logo header-logo--light" decoding="async" />
+        </a>
+      </div>
+      <nav class="tab-nav">
+        <a href="/" class="tab-link tab-link--icon-only" data-tooltip="Extract" aria-label="Extract"><span class="tab-icon tab-icon-extract" aria-hidden="true"></span></a>
+        <a href="/inspect" class="tab-link tab-link--icon-only" data-tooltip="Inspect" aria-label="Inspect"><span class="tab-icon tab-icon-inspect" aria-hidden="true"></span></a>
+        <a href="/fix" class="tab-link tab-link--icon-only" data-tooltip="Fix Metadata" aria-label="Fix Metadata"><span class="tab-icon tab-icon-fix" aria-hidden="true"></span></a>
+        <a href="/bulk-fix" class="tab-link tab-link--icon-only" data-tooltip="Bulk Fix" aria-label="Bulk Fix"><span class="tab-icon tab-icon-bulk-fix" aria-hidden="true"></span></a>
+        <a href="/fix-list" class="tab-link tab-link--icon-only" data-tooltip="Fix List" aria-label="Fix List"><span class="tab-icon tab-icon-fix-list" aria-hidden="true"></span></a>
+        <a href="/normalise" class="tab-link tab-link--icon-only" data-tooltip="Normalise" aria-label="Normalise"><span class="tab-icon tab-icon-normalise" aria-hidden="true"></span></a>
+        <a href="/convert" class="tab-link tab-link--icon-only" data-tooltip="WAV/AIFF → FLAC" aria-label="WAV/AIFF to FLAC"><span class="tab-icon tab-icon-convert" aria-hidden="true"></span></a>
+        <a href="/lossless-check" class="tab-link tab-link--icon-only" data-tooltip="Lossless Check" aria-label="Lossless Check"><span class="tab-icon tab-icon-lossless-check" aria-hidden="true"></span></a>
+        <a href="/saved-links" class="tab-link tab-link--icon-only" data-tooltip="Saved Links" aria-label="Saved Links"><span class="tab-icon tab-icon-saved-links" aria-hidden="true"></span></a>
+        <a href="/capture" class="tab-link tab-link--icon-only active" data-tooltip="Capture Playlist" aria-label="Capture Playlist"><span class="tab-icon tab-icon-capture" aria-hidden="true"></span></a>
+        <a href="/settings" class="tab-link tab-link--icon-only" data-tooltip="Settings" aria-label="Settings"><span class="tab-icon tab-icon-settings" aria-hidden="true"></span></a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- ===== SETUP CARD ===== -->
+      <section class="card" id="cap-setup-card">
+        <h2><span class="step">1</span> Setup</h2>
+
+        <div class="field-row" style="gap:0.5rem; align-items:flex-end; flex-wrap:wrap">
+          <div style="flex:1; min-width:200px">
+            <label for="cap-playlist" class="label-sm">Playlist</label>
+            <select id="cap-playlist" style="width:100%">
+              <option value="">Select a Music playlist…</option>
+            </select>
+          </div>
+          <button type="button" id="cap-refresh-btn" class="btn btn-secondary" title="Refresh playlist list">Refresh</button>
+        </div>
+
+        <div id="cap-playlist-info" class="hint" style="margin:0.5rem 0"></div>
+
+        <div id="cap-track-preview" style="max-height:280px; overflow-y:auto; margin:0.5rem 0; display:none">
+          <table class="result-tbl" style="font-size:0.85rem">
+            <thead><tr><th>#</th><th>Title</th><th>Artist</th><th>Album</th><th>Duration</th></tr></thead>
+            <tbody id="cap-track-tbody"></tbody>
+          </table>
+        </div>
+
+        <div class="field-row" style="gap:0.75rem; flex-wrap:wrap; margin-top:0.75rem">
+          <div style="flex:1; min-width:200px">
+            <label for="cap-output-dir" class="label-sm">Output folder</label>
+            <div class="dir-bar">
+              <input type="text" id="cap-output-dir" placeholder="~/Music/playlist_recordings" style="width:100%">
+              <button type="button" id="cap-output-dir-browse" class="btn btn-secondary" title="Choose folder">Choose folder…</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:1rem; display:flex; gap:0.5rem; flex-wrap:wrap">
+          <button type="button" id="cap-preflight-btn" class="btn btn-secondary" disabled>Run preflight</button>
+          <button type="button" id="cap-test-signal-btn" class="btn btn-secondary" disabled>Test signal</button>
+        </div>
+
+        <!-- Preflight results -->
+        <div id="cap-preflight-results" style="display:none; margin-top:0.75rem">
+          <ul id="cap-preflight-list" class="check-list"></ul>
+        </div>
+
+        <div style="margin-top:1rem">
+          <button type="button" id="cap-start-btn" class="btn btn-primary" disabled>Start capture</button>
+        </div>
+      </section>
+
+      <!-- ===== RUNNING CARD ===== -->
+      <section class="card" id="cap-running-card" style="display:none">
+        <h2><span class="step">2</span> Capture in progress</h2>
+
+        <div id="cap-current-track" class="cap-current">
+          <div class="cap-current-title" id="cap-cur-title">—</div>
+          <div class="cap-current-detail" id="cap-cur-detail">—</div>
+        </div>
+
+        <div class="cap-progress-bar-wrap" style="margin:0.75rem 0">
+          <div class="cap-progress-bar" id="cap-progress-bar" style="width:0%"></div>
+        </div>
+
+        <div class="cap-stats" id="cap-stats">
+          <span id="cap-stat-completed">0 completed</span>
+          <span id="cap-stat-failed">0 failed</span>
+          <span id="cap-stat-pending">0 pending</span>
+          <span id="cap-stat-eta">—</span>
+        </div>
+
+        <div id="cap-queue-wrap" style="max-height:240px; overflow-y:auto; margin:0.75rem 0">
+          <table class="result-tbl" style="font-size:0.85rem">
+            <thead><tr><th>#</th><th>Title</th><th>Artist</th><th>Status</th></tr></thead>
+            <tbody id="cap-queue-tbody"></tbody>
+          </table>
+        </div>
+
+        <div class="cap-controls" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.75rem">
+          <button type="button" id="cap-pause-btn" class="btn btn-secondary">Pause after track</button>
+          <button type="button" id="cap-stop-btn" class="btn btn-secondary">Stop after track</button>
+          <button type="button" id="cap-emergency-btn" class="btn btn-danger">Emergency stop</button>
+        </div>
+      </section>
+
+      <!-- ===== REVIEW CARD ===== -->
+      <section class="card" id="cap-review-card" style="display:none">
+        <h2><span class="step">3</span> Review</h2>
+
+        <div id="cap-review-summary" class="cap-stats" style="margin-bottom:0.75rem"></div>
+
+        <div id="cap-review-queue" style="max-height:400px; overflow-y:auto; margin:0.75rem 0">
+          <table class="result-tbl" style="font-size:0.85rem">
+            <thead><tr><th>#</th><th>Title</th><th>Artist</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="cap-review-tbody"></tbody>
+          </table>
+        </div>
+
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.75rem">
+          <button type="button" id="cap-resume-btn" class="btn btn-primary" style="display:none">Resume capture</button>
+          <button type="button" id="cap-new-btn" class="btn btn-secondary">New capture</button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+  <script src="/static/folder-picker.js"></script>
+  <script src="/static/capture.js"></script>
+</body>
+</html>

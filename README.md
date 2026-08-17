@@ -36,7 +36,7 @@ OBS is still primarily a **video** app: even when you only care about audio, it 
 
 ## What It Does
 
-Eleven pages, via tabs at the top (order: **Extract → Inspect → Fix Metadata → Bulk Fix → Fix List → Normalise → WAV/AIFF → FLAC → Lossless Check → Saved Links → Settings**):
+Twelve pages, via tabs at the top (order: **Extract → Inspect → Fix Metadata → Bulk Fix → Fix List → Normalise → WAV/AIFF → FLAC → Lossless Check → Saved Links → Capture Playlist → Settings**):
 
 ### Extract (main workflow)
 
@@ -210,6 +210,40 @@ Requires **numpy** (in `requirements.txt`) and **ffmpeg/ffprobe**.
 ### Saved Links
 
 A simple bookmark manager for music URLs. Save links to Bandcamp pages, Discogs releases, SoundCloud tracks, Beatport listings, or any URL while browsing and tagging — then revisit them later for purchase or processing. Links are stored server-side in `saved_links.json`.
+
+### Capture Playlist (automated Apple Music recording)
+
+Record individual tracks from an Apple Music playlist as separate, lossless **24-bit FLAC** files. DJ MetaManager controls Music playback, records each track one at a time through a virtual audio device, verifies the output, and applies metadata from the playlist.
+
+**Audio routing:** Uses **SoundSource** (by Rogue Amoeba) to isolate the Music app's audio, routing it through a **SoundPipe Device** to **BlackHole 2ch**, where FFmpeg captures it as FLAC. This keeps system sounds, notifications, and other apps out of the recording.
+
+```text
+Apple Music  -->  SoundSource (Music source)
+                  -->  SoundPipe Device (2ch)
+                       -->  BlackHole 2ch (Monitor)
+                            -->  FFmpeg AVFoundation
+                                 -->  24-bit FLAC
+```
+
+**SoundPipe setup (critical):**
+
+| Setting | Value |
+|---------|-------|
+| Sources | Music (Application, 100%) |
+| **Mute when capturing** | **Unchecked** — if checked, SoundSource silences BlackHole when FFmpeg starts recording |
+| Output Channels | 2 Channels |
+| Monitors | BlackHole 2ch (100%) |
+
+**Workflow:**
+
+1. Select a playlist from Music on the **Capture Playlist** tab.
+2. Preview the track list and set the output folder.
+3. **Run preflight** to verify routing, then **Test signal** to confirm audio.
+4. **Start capture** — each track is played once, recorded, verified, and tagged automatically.
+5. Use **Pause after track**, **Stop after track**, or **Emergency stop** during capture.
+6. Review results — retry failed tracks or send to **Bulk Fix** for artwork enrichment.
+
+**Requirements:** [BlackHole 2ch](https://existential.audio/blackhole/) (free) and [SoundSource](https://rogueamoeba.com/soundsource/) (paid, free trial). See the [Capture Playlist user guide](docs/user-guide/workflow-capture.html) for detailed setup instructions with screenshots.
 
 ### Default artwork
 
@@ -410,6 +444,7 @@ dj-meta-manager/
 ├── docs/user-guide/       # Modular HTML user guide (see index.html)
 ├── scripts/
 │   └── rekordbox_wavs_missing_in_library.py  # List Ableton-style .wav tree entries with no match in a flat .flac library
+├── capture/               # Playlist capture subsystem (models, manager, backends)
 ├── app.py                 # Flask routes and server entry point
 ├── config.py              # Constants, configuration, paths, filename helpers, path validation
 ├── audio.py               # FFmpeg/ffprobe operations, audio processing, preview cache
@@ -433,6 +468,7 @@ dj-meta-manager/
 │   ├── fix-list.html / fix-list.js # Fix List (Rekordbox Library Manager integration)
 │   ├── lossless-check.html / lossless-check.js  # Lossless Check (spectral analysis)
 │   ├── saved-links.html            # Saved Links (URL bookmarks)
+│   ├── capture.html / capture.js  # Capture Playlist (automated Apple Music recording)
 │   ├── folder-picker.js            # Shared folder navigator modal (window.DJMM)
 │   ├── path-persist.js             # Last audio browse dir (Fix + Inspect) + `djmm.pageState` UI drafts
 │   ├── player.js                   # Bottom audio preview bar (all tabs)

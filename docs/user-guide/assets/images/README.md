@@ -39,6 +39,8 @@ Place exported PNG (or WebP) files in this folder using the **exact filenames** 
 | 26 | `26-fix-list-detail-results.png` | **Fix List**: detail panel showing search results with artwork thumbnails, title/artist/album, coloured source badges (Apple Music, Discogs, Bandcamp, SoundCloud, Beatport), auto-selected best match. |
 | 27 | `27-fix-list-export.png` | **Fix List**: export section — completed count, download CSV button for Rekordbox Library Manager playlist creation. |
 
+| 30 | `30-capture-soundsource-routing.png` | **Capture Playlist**: SoundSource SoundPipe Device configuration — Music as source, 2ch output, BlackHole 2ch as monitor, "Mute when capturing" unchecked. |
+
 ## Updating the guide
 
 - **New feature:** add a subsection in the relevant chapter HTML under `docs/user-guide/`, add a row here, drop a new image, and reference it with `<figure class="guide-figure">` in that chapter.

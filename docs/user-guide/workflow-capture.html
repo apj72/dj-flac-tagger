@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capture Playlist — DJ MetaManager</title>
+  <link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="guide-shell">
+    <div class="guide-nav-wrap">
+      <div class="guide-nav-inner">
+        <a class="guide-brand" href="index.html">DJ MetaManager &mdash; User Guide</a>
+        <nav class="guide-nav" aria-label="Guide pages">
+          <a href="index.html">Home</a>
+          <a href="install-and-setup.html">Install</a>
+          <a href="workflow-extract.html">Extract</a>
+          <a href="workflow-fix-and-inspect.html">Fix &amp; Inspect</a>
+          <a href="workflow-normalise.html">Normalise</a>
+          <a href="workflow-wav-to-flac.html">WAV &rarr; FLAC</a>
+          <a href="workflow-bulk-fix.html">Bulk Fix</a>
+          <a href="workflow-fix-list.html">Fix List</a>
+          <a href="workflow-lossless-check.html">Lossless Check</a>
+          <a href="workflow-saved-links.html">Saved Links</a>
+          <a href="workflow-capture.html" aria-current="page">Capture</a>
+          <a href="reference-config-and-formats.html">Reference</a>
+        </nav>
+      </div>
+    </div>
+
+    <main id="main" class="guide-main">
+      <p class="breadcrumb"><a href="index.html">Home</a> &middot; Capture Playlist</p>
+      <h1>Capture Playlist</h1>
+      <p class="lead">
+        The <strong>Capture Playlist</strong> tab automates recording individual tracks from an Apple Music playlist as separate, lossless <strong>24-bit FLAC</strong> files. DJ MetaManager controls Music playback, records each track one at a time through a virtual audio device, verifies the output, and applies metadata from the playlist &mdash; producing Rekordbox-ready files without manual intervention.
+      </p>
+
+      <h2>How it works</h2>
+      <ol>
+        <li>Select a playlist from your Music library.</li>
+        <li>DJ MetaManager snapshots the playlist order and metadata.</li>
+        <li>For each track: the recorder is armed, Music plays the track once, audio is captured as FLAC, and the file is verified and tagged.</li>
+        <li>Completed files appear in your output folder, ready for Rekordbox import.</li>
+      </ol>
+      <p>The recorder is always confirmed active <strong>before</strong> Music starts playing, with a short pre-roll and post-roll to ensure no audio is clipped.</p>
+
+      <h2>Audio routing</h2>
+      <p>
+        Capture uses <strong>BlackHole 2ch</strong> as the FFmpeg recording source. Because BlackHole operates at the macOS HAL (Hardware Abstraction Layer) level, it receives audio <em>after</em> DRM decryption &mdash; so it works with Apple Music streaming content where other capture APIs (ScreenCaptureKit, Core Audio Process Taps) deliver silence.
+      </p>
+      <p>
+        To isolate Music from other system sounds (notifications, browser audio, etc.), use <strong>SoundSource</strong> by Rogue Amoeba. Its <strong>SoundPipe</strong> virtual device routes only the Music app&rsquo;s audio to BlackHole, keeping system sounds on your normal speakers or headphones.
+      </p>
+
+      <h3>Required software</h3>
+      <ul>
+        <li><strong><a href="https://existential.audio/blackhole/">BlackHole 2ch</a></strong> &mdash; free virtual audio device for macOS.</li>
+        <li><strong><a href="https://rogueamoeba.com/soundsource/">SoundSource</a></strong> by Rogue Amoeba &mdash; per-app audio routing (paid; free trial available).</li>
+      </ul>
+
+      <h3>SoundSource setup</h3>
+      <p>Open SoundSource and create a <strong>SoundPipe Device</strong> with the following configuration:</p>
+
+      <figure class="guide-figure">
+        <img src="assets/images/30-capture-soundsource-routing.png" width="1100" alt="SoundSource SoundPipe Device configuration showing Music as the source, 2-channel output, and BlackHole 2ch as the monitor">
+        <figcaption><span class="fig-label">Figure 30.</span> SoundPipe Device routing: Music &rarr; SoundPipe &rarr; BlackHole 2ch.</figcaption>
+      </figure>
+
+      <table class="guide-table">
+        <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Sources</strong></td><td>Music (the Apple Music app)</td></tr>
+          <tr><td><strong>Source volume</strong></td><td>100%</td></tr>
+          <tr><td><strong>Mute when capturing</strong></td><td><strong>Unchecked</strong> &mdash; this is critical. If checked, SoundSource silences the monitor output when it detects screen/audio capture, which would cause BlackHole to receive silence.</td></tr>
+          <tr><td><strong>Output Channels</strong></td><td>2 Channels</td></tr>
+          <tr><td><strong>Output device</strong></td><td>SoundPipe Device Virtual Audio (100%)</td></tr>
+          <tr><td><strong>Monitors</strong></td><td>BlackHole 2ch (100%)</td></tr>
+          <tr><td><strong>Sample rate</strong></td><td>48 kHz (match your BlackHole configuration)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>Important:</strong> The &ldquo;Mute when capturing&rdquo; checkbox under the Music source <strong>must be unchecked</strong>. SoundSource detects when FFmpeg opens BlackHole for recording and will mute the monitor output &mdash; resulting in a silent capture file. If you get silence despite seeing audio levels in SoundPipe, this is almost certainly the cause.
+      </div>
+
+      <h3>Audio routing chain</h3>
+      <pre><code>Apple Music &rarr; SoundSource (Music app source)
+    &rarr; SoundPipe Device (2ch virtual output)
+    &rarr; BlackHole 2ch (as Monitor, 100%)
+    &rarr; FFmpeg AVFoundation capture
+    &rarr; FLAC 24-bit output</code></pre>
+      <p>
+        With this setup, only the Music app&rsquo;s audio reaches BlackHole. Other apps (browsers, system notifications) play through your normal output device and are never captured.
+      </p>
+
+      <h3>Monitoring while recording</h3>
+      <p>
+        If you want to hear the music while it records, add your headphones or speakers as a second monitor in SoundPipe alongside BlackHole 2ch. Both monitors receive the same audio from Music.
+      </p>
+
+      <h2>Capture workflow</h2>
+
+      <h3>1. Setup</h3>
+      <ol>
+        <li>Open the <strong>Capture Playlist</strong> tab.</li>
+        <li>Select a playlist from the dropdown (click <strong>Refresh</strong> if you recently changed playlists in Music).</li>
+        <li>Review the track preview table &mdash; it shows the exact order and metadata that will be used.</li>
+        <li>Set the <strong>output folder</strong> (defaults to the value in Settings, e.g. <code>~/Music/playlist_recordings</code>). Use <strong>Choose folder&hellip;</strong> to browse.</li>
+      </ol>
+
+      <h3>2. Preflight and signal test</h3>
+      <ol>
+        <li>Click <strong>Run preflight</strong> to verify Music is accessible, BlackHole is present, FFmpeg is available, and disk space is sufficient.</li>
+        <li>Click <strong>Test signal</strong> with music playing in Music to confirm audio is reaching BlackHole through SoundPipe. Both channels must show signal above the silence threshold.</li>
+      </ol>
+
+      <h3>3. Capture</h3>
+      <ol>
+        <li>Click <strong>Start capture</strong>. DJ MetaManager takes over Music playback.</li>
+        <li>The running view shows the current track, progress bar, completed/failed/pending counts, and estimated time remaining.</li>
+        <li>Each track is: armed &rarr; pre-roll &rarr; played once &rarr; post-roll &rarr; stopped &rarr; verified &rarr; tagged &rarr; completed.</li>
+        <li>You can navigate away from the tab without stopping the capture. Return to see current progress reconstructed from server state.</li>
+      </ol>
+
+      <h3>4. Controls during capture</h3>
+      <ul>
+        <li><strong>Pause after track</strong> &mdash; finishes the current track, then pauses. Resume later.</li>
+        <li><strong>Stop after track</strong> &mdash; finishes the current track, then stops the session.</li>
+        <li><strong>Emergency stop</strong> &mdash; stops Music and the recorder immediately. The current track is marked interrupted and can be retried.</li>
+      </ul>
+
+      <h3>5. Review</h3>
+      <p>
+        After completion (or pause/stop), the review card shows a summary of completed, failed, and skipped tracks. Failed tracks can be <strong>retried</strong> or <strong>skipped</strong>. Use <strong>New capture</strong> to start a fresh session.
+      </p>
+
+      <h2>Output</h2>
+      <p>
+        Completed files are placed in the output folder as <code>Artist - Title.flac</code>. Each file is:
+      </p>
+      <ul>
+        <li><strong>24-bit FLAC</strong> at the capture device&rsquo;s sample rate (typically 48 kHz)</li>
+        <li>Verified by FFprobe (codec, channels, sample rate, bit depth)</li>
+        <li>Tagged with title, artist, album, year, genre, and track number from the playlist snapshot</li>
+        <li>No normalisation, gain, or EQ applied &mdash; use the Normalise tab afterwards if needed</li>
+      </ul>
+
+      <h2>Settings</h2>
+      <p>
+        Capture settings are configured under <strong>Settings &rarr; Capture &mdash; output folder</strong> and in the <code>capture</code> section of <code>config.json</code>:
+      </p>
+      <ul>
+        <li><strong>output_dir</strong> &mdash; where completed FLAC files are placed (falls back to the destination folder if empty)</li>
+        <li><strong>blackhole_device_name</strong> &mdash; the BlackHole device to use (default: <code>BlackHole 2ch</code>)</li>
+        <li><strong>blackhole_channels</strong> &mdash; which channels to capture (default: <code>[1, 2]</code> for BlackHole 2ch)</li>
+        <li><strong>pre_roll_ms</strong> / <strong>post_roll_ms</strong> &mdash; silence buffer before/after playback (default: 750ms each)</li>
+        <li><strong>play_start_timeout_s</strong> &mdash; how long to wait for Music to start playing (default: 15s)</li>
+        <li><strong>playback_stall_timeout_s</strong> &mdash; stop if playback stalls for this long (default: 12s)</li>
+        <li><strong>duration_grace_s</strong> &mdash; allowed overrun past planned duration (default: 15s)</li>
+        <li><strong>disk_reserve_gb</strong> &mdash; minimum free disk space to maintain (default: 5 GB)</li>
+      </ul>
+
+      <h2>Troubleshooting</h2>
+
+      <h3>Silent capture (no audio in the FLAC file)</h3>
+      <ul>
+        <li>Check that <strong>&ldquo;Mute when capturing&rdquo;</strong> is <strong>unchecked</strong> in SoundSource for the Music source.</li>
+        <li>Verify BlackHole 2ch is listed as a Monitor in the SoundPipe Device at 100% volume.</li>
+        <li>Confirm Music is the only source in SoundPipe and its volume is at 100%.</li>
+        <li>Play a track in Music and visually confirm audio levels appear on the SoundPipe channel meters.</li>
+      </ul>
+
+      <h3>Truncated recording (file shorter than expected)</h3>
+      <ul>
+        <li>Ensure SoundPipe is configured as <strong>2 Channels</strong>, not 4. A 4-channel SoundPipe device can cause FLAC muxer issues with FFmpeg.</li>
+        <li>Check that BlackHole 2ch (not 16ch) is the capture target when using channels 1 and 2.</li>
+      </ul>
+
+      <h3>Music permission denied</h3>
+      <p>
+        If DJ MetaManager cannot control Music, go to <strong>System Settings &rarr; Privacy &amp; Security &rarr; Automation</strong> and enable the Music checkbox for Terminal (or the DJ MetaManager app if using the packaged build).
+      </p>
+
+      <h3>BlackHole device not found</h3>
+      <p>
+        Install <a href="https://existential.audio/blackhole/">BlackHole 2ch</a>. After installation, restart the app and run preflight again. The device should appear in the FFmpeg audio device list.
+      </p>
+
+      <div class="callout">
+        <strong>DRM note.</strong> This feature records normal system audio playback through a virtual audio device. It does not decrypt, bypass, or circumvent any DRM. Users are responsible for complying with applicable laws, licences, and service terms.
+      </div>
+    </main>
+
+    <footer class="guide-footer">
+      <p>DJ MetaManager user guide &middot; Modular HTML in <code>docs/user-guide/</code></p>
+    </footer>
+  </div>
+</body>
+</html>

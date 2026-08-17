@@ -422,6 +422,44 @@ html[data-theme="light"] .header-logo-wrap .header-logo--light {
   -webkit-mask-image: url("/static/icons/tabs/settings.png");
   mask-image: url("/static/icons/tabs/settings.png");
 }
+.tab-icon-capture {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='currentColor' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='currentColor' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3C/svg%3E");
+  width: 1.6rem;
+}
+
+/* Capture page styles */
+.cap-current { padding: 0.5rem 0; }
+.cap-current-title { font-size: 1.1rem; font-weight: 600; }
+.cap-current-detail { font-size: 0.85rem; opacity: 0.7; margin-top: 0.15rem; }
+.cap-progress-bar-wrap {
+  height: 6px; border-radius: 3px;
+  background: var(--bg-inset, #e0e0e0);
+}
+.cap-progress-bar {
+  height: 100%; border-radius: 3px;
+  background: var(--accent, #3b82f6);
+  transition: width 0.3s ease;
+}
+.cap-stats {
+  display: flex; gap: 1rem; flex-wrap: wrap;
+  font-size: 0.85rem; opacity: 0.8;
+}
+.check-list { list-style: none; padding: 0; margin: 0; }
+.check-list li { padding: 0.25rem 0; padding-left: 1.5rem; position: relative; }
+.check-list li::before { position: absolute; left: 0; }
+.check-pass::before { content: "\2713"; color: var(--ok, #22c55e); }
+.check-fail::before { content: "\2717"; color: var(--err, #ef4444); }
+.check-fix { font-size: 0.8rem; opacity: 0.7; }
+.badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem; font-weight: 600; }
+.badge-ok { background: var(--ok-bg, #dcfce7); color: var(--ok, #166534); }
+.badge-err { background: var(--err-bg, #fee2e2); color: var(--err, #991b1b); }
+.badge-active { background: var(--info-bg, #dbeafe); color: var(--info, #1e40af); }
+.badge-skip { background: var(--warn-bg, #fef9c3); color: var(--warn, #854d0e); }
+.badge-pending { background: var(--bg-inset, #f3f4f6); color: var(--fg-muted, #6b7280); }
+.btn-danger { background: var(--err, #ef4444); color: #fff; border: none; }
+.btn-danger:hover { background: #dc2626; }
+.btn-xs { padding: 0.15rem 0.4rem; font-size: 0.75rem; }
 
 /* Search result bookmark button */
 .search-bookmark {

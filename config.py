@@ -261,6 +261,18 @@ def load_config():
         # that must match the end of the stem (typically end your pattern with $). Peeled segments are appended
         # back when renaming to Artist - Title. Example: ["_warped", "regex:_bpm\\([A-Za-z0-9]{3}\\)$"]
         "fix_retain_filename_suffixes": [],
+        "capture": {
+            "pre_roll_ms": 750,
+            "post_roll_ms": 750,
+            "music_poll_ms": 250,
+            "play_start_timeout_s": 15,
+            "playback_stall_timeout_s": 12,
+            "duration_grace_s": 15,
+            "disk_reserve_gb": 5,
+            "output_dir": "~/Music/playlist_recordings",
+            "blackhole_device_name": "BlackHole 2ch",
+            "blackhole_channels": [1, 2],
+        },
     }
     try:
         with open(_get_config_path()) as f:

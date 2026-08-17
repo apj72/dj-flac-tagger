@@ -49,6 +49,10 @@ _config_mod._get_logged_tracks_path = lambda: LOGGED_TRACKS_PATH  # noqa: F405
 # ---------------------------------------------------------------------------
 app = Flask(__name__, static_folder=str(bundle_base_path() / "static"))  # noqa: F405
 
+# Register capture subsystem blueprint
+from capture.routes import init_capture
+init_capture(app, load_config())
+
 
 # ---------------------------------------------------------------------------
 # Apple Music Now Playing capture
@@ -1456,6 +1460,10 @@ def update_settings():
         cfg["fix_metadata_default_dir"] = (data["fix_metadata_default_dir"] or "").strip()
     if "inspect_default_dir" in data:
         cfg["inspect_default_dir"] = (data["inspect_default_dir"] or "").strip()
+    if "capture_output_dir" in data:
+        if "capture" not in cfg:
+            cfg["capture"] = {}
+        cfg["capture"]["output_dir"] = (data["capture_output_dir"] or "").strip()
     if "platinum_notes_app" in data:
         cfg["platinum_notes_app"] = (data["platinum_notes_app"] or "").strip()
     if "pn_output_suffix" in data:
