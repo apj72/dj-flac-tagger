@@ -2344,16 +2344,60 @@ html[data-theme="light"] .djmm-player-thumb {
   color: var(--text-muted);
   white-space: nowrap;
 }
+.lc-table th.lc-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.lc-table th.lc-sortable:hover {
+  color: var(--accent);
+}
+.lc-table th[aria-sort] {
+  color: var(--accent);
+}
+.lc-sort-ind {
+  font-size: 0.7em;
+}
 .lc-table td {
   padding: 0.4rem 0.5rem;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
 .lc-td-name {
-  max-width: 22rem;
+  max-width: 26rem;
+}
+.lc-td-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.lc-name-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+}
+.lc-copy-name {
+  flex: none;
+  cursor: pointer;
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2, transparent);
+  color: var(--text-muted, inherit);
+  opacity: 0.65;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.lc-copy-name:hover {
+  opacity: 1;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.lc-copy-name--done {
+  opacity: 1;
+  color: var(--accent);
+  border-color: var(--accent);
 }
 .lc-td-sr, .lc-td-dur, .lc-td-cutoff, .lc-td-bitrate, .lc-td-confidence { white-space: nowrap; }
 .lc-row--transcode { background: rgba(255, 60, 60, 0.06); }

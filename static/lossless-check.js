@@ -25,11 +25,40 @@
   let currentFilter = "all";
   let currentDirectory = "";
   let viewingReport = false;
+  let sortKey = null;
+  let sortDir = 1; // 1 = ascending, -1 = descending
 
   function esc(s) {
     const d = document.createElement("div");
     d.textContent = s;
     return d.innerHTML;
+  }
+
+  function nameNoExt(name) {
+    const i = (name || "").lastIndexOf(".");
+    return i > 0 ? name.slice(0, i) : name || "";
+  }
+
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (_) { /* fall through to legacy path */ }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch (_) {
+      return false;
+    }
   }
 
   function fmtDuration(secs) {
@@ -70,18 +99,68 @@
     return `<span class="lc-conf ${cls}">${r.confidence}</span>`;
   }
 
+  // Numeric bitrate for the "Est. Source" column (e.g. "~192 kbps MP3" -> 192).
+  // Files without a lossy estimate (lossless/resampled/inconclusive) sort last
+  // when ascending, so the lowest-quality transcodes group at the top.
+  function bitrateValue(r) {
+    if (!r.estimated_bitrate) return Infinity;
+    const m = String(r.estimated_bitrate).match(/\d+/);
+    return m ? parseInt(m[0], 10) : Infinity;
+  }
+
+  const VERDICT_RANK = { transcode: 0, resampled: 1, inconclusive: 2, error: 3, lossless: 4 };
+  const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
+
+  function sortValue(r, key) {
+    switch (key) {
+      case "name": return (r.name || "").toLowerCase();
+      case "ext": return (r.ext || "").toLowerCase();
+      case "sample_rate": return r.sample_rate || 0;
+      case "duration": return r.duration || 0;
+      case "verdict": return VERDICT_RANK[r.verdict] ?? 5;
+      case "bitrate": return bitrateValue(r);
+      case "cutoff": return r.cutoff_freq || 0;
+      case "confidence": return r.verdict ? (CONFIDENCE_RANK[r.confidence] ?? 3) : 4;
+      default: return 0;
+    }
+  }
+
+  function updateSortIndicators() {
+    document.querySelectorAll("#lc-results-table th.lc-sortable").forEach((th) => {
+      const ind = th.querySelector(".lc-sort-ind");
+      if (th.dataset.sort === sortKey) {
+        th.setAttribute("aria-sort", sortDir === 1 ? "ascending" : "descending");
+        if (ind) ind.textContent = sortDir === 1 ? " ▲" : " ▼";
+      } else {
+        th.removeAttribute("aria-sort");
+        if (ind) ind.textContent = "";
+      }
+    });
+  }
+
   function renderTable() {
     const filtered = currentFilter === "all"
-      ? results
+      ? results.slice()
       : results.filter((r) => {
           if (currentFilter === "inconclusive") return r.verdict === "inconclusive" || r.verdict === "error" || !r.verdict;
           return r.verdict === currentFilter;
         });
 
+    if (sortKey) {
+      filtered.sort((a, b) => {
+        const va = sortValue(a, sortKey);
+        const vb = sortValue(b, sortKey);
+        if (va < vb) return -1 * sortDir;
+        if (va > vb) return 1 * sortDir;
+        return (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase());
+      });
+    }
+    updateSortIndicators();
+
     tbody.innerHTML = filtered
       .map(
         (r) => `<tr class="lc-row lc-row--${r.verdict || "pending"}" title="${esc(r.reason || "")}">
-        <td class="lc-td-name">${esc(r.name)}</td>
+        <td class="lc-td-name"><span class="lc-name-text">${esc(r.name)}</span><button type="button" class="lc-copy-name" title="Copy filename (no extension) to search Apple Music" aria-label="Copy filename without extension">Copy</button></td>
         <td class="lc-td-fmt"><span class="format-badge format-badge--${esc(r.ext || "")}">${esc((r.ext || "").toUpperCase())}</span></td>
         <td class="lc-td-sr">${fmtSampleRate(r.sample_rate)}</td>
         <td class="lc-td-dur">${fmtDuration(r.duration)}</td>
@@ -134,6 +213,8 @@
     scannedFiles = [];
     results = [];
     viewingReport = false;
+    sortKey = null;
+    sortDir = 1;
 
     try {
       const resp = await fetch(
@@ -332,6 +413,8 @@
       progressWrap.classList.add("hidden");
       saveReportBtn.classList.add("hidden");
       currentFilter = "all";
+      sortKey = null;
+      sortDir = 1;
       filterRow.querySelectorAll(".lc-filter").forEach((b) => b.classList.remove("active"));
       filterRow.querySelector('[data-filter="all"]')?.classList.add("active");
 
@@ -342,6 +425,36 @@
       scanStatus.innerHTML = `<span class="error">Failed to load report: ${esc(e.message)}</span>`;
     }
   }
+
+  const resultsTable = document.getElementById("lc-results-table");
+  resultsTable.querySelector("thead")?.addEventListener("click", (e) => {
+    const th = e.target.closest("th.lc-sortable");
+    if (!th) return;
+    const key = th.dataset.sort;
+    if (sortKey === key) {
+      sortDir = -sortDir;
+    } else {
+      sortKey = key;
+      sortDir = 1;
+    }
+    renderTable();
+  });
+
+  tbody.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".lc-copy-name");
+    if (!btn) return;
+    const nameText = btn.closest("tr")?.querySelector(".lc-name-text")?.textContent || "";
+    const copyStr = nameNoExt(nameText);
+    if (!copyStr) return;
+    const ok = await copyText(copyStr);
+    const prev = btn.textContent;
+    btn.textContent = ok ? "Copied!" : "Failed";
+    btn.classList.add("lc-copy-name--done");
+    setTimeout(() => {
+      btn.textContent = prev;
+      btn.classList.remove("lc-copy-name--done");
+    }, 1400);
+  });
 
   scanBtn.addEventListener("click", scanFolder);
   analyzeBtn.addEventListener("click", analyzeAll);
