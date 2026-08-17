@@ -204,6 +204,9 @@
         <strong>Theme and visuals</strong> (not written to <code>config.json</code>): <strong><code>djmm.themePreference</code></strong> — <code>dark</code>, <code>light</code>, or <code>system</code>; <strong><code>djmm.pageBackgroundEnabled</code></strong> — <code>1</code> or <code>0</code> toggles full-page scenic art (settings UI: “Show page background image”). Implemented in <code>static/theme-init.js</code> for early apply. Repo art lives under <code>design/UI/</code> (<code>dark_background.png</code>, <code>light_background.png</code>, header wordmarks); the app ships copies under <code>static/</code> for HTTP.
       </p>
       <p>
+        <strong>Optional tabs.</strong> <strong><code>djmm.showPlaylistBuilderTab</code></strong> — <code>1</code> or <code>0</code> (settings UI: “Show Playlist Builder tab”, <strong>off by default</strong>) reveals the experimental <strong>Playlist Builder</strong> tab, which browses your Apple Music library and creates playlists. Unlike theme/background, this preference is <strong>also mirrored to <code>config.json</code></strong> (<code>show_playlist_builder_tab</code>) so a fresh browser restores it. Applied early in <code>static/theme-init.js</code>; the tab is hidden by CSS unless <code>&lt;html data-pb-tab="on"&gt;</code>.
+      </p>
+      <p>
         <strong>Fix List</strong> uses <strong>server-side</strong> persistence instead of <code>localStorage</code>. The full track list, search results, and completed paths are saved as <code>fix_list_state.json</code> on disk (in <code>~/Library/Application Support/DJ MetaManager/</code> for the packaged app, or next to <code>app.py</code> in development) via <code>GET/POST/DELETE /api/fix-list/state</code>. This survives app rebuilds, unlike browser storage.
       </p>
       <p>

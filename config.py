@@ -262,6 +262,7 @@ def load_config():
         # back when renaming to Artist - Title. Example: ["_warped", "regex:_bpm\\([A-Za-z0-9]{3}\\)$"]
         "fix_retain_filename_suffixes": [],
         "capture": {
+            "backend": "obs",
             "pre_roll_ms": 750,
             "post_roll_ms": 750,
             "music_poll_ms": 250,
@@ -272,6 +273,11 @@ def load_config():
             "output_dir": "~/Music/playlist_recordings",
             "blackhole_device_name": "BlackHole 2ch",
             "blackhole_channels": [1, 2],
+            "obs": {
+                "host": "127.0.0.1",
+                "port": 4455,
+                "password": "",
+            },
         },
     }
     try:

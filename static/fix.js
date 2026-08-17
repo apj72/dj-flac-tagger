@@ -6,6 +6,11 @@ let currentMeta = {};
 let artworkUrl = "";
 /** Local cover for Save (not stored in tab draft). */
 let localArtworkPayload = null;
+/** True once the user has picked a search result / loaded metadata this session,
+ *  so a later result click refines metadata or artwork independently (like Fix List). */
+let fixHasPicked = false;
+/** Guards against out-of-order hi-res artwork fetches when picking art from a result. */
+let fixArtworkFetchGen = 0;
 /** Whether the loaded file had embedded art before any local/remote override in this session. */
 let lastEmbeddedArtworkKnown = false;
 /** Paths in current file list (same order as .file-item data-idx). */
@@ -638,6 +643,7 @@ async function selectFlacFile(el) {
   currentTracklist = [];
   currentMeta = {};
   artworkUrl = "";
+  fixHasPicked = false;
   clearLocalArtworkPayload();
   if (selectedFile !== prevPath) {
     const directUrlInp = document.getElementById("fix-artwork-direct-url");
@@ -757,8 +763,9 @@ function searchResultCardsHtml(results) {
       const sm = srcMap[r.source] || { label: "Web", cls: "src-generic" };
       const srcClass = sm.cls;
       const srcLabel = sm.label;
-      const thumb = r.artwork_thumb
-        ? `<img class="search-thumb" src="${r.artwork_thumb}" alt="" />`
+      const thumbUrl = r.artwork_thumb || r.artwork_url || "";
+      const thumb = thumbUrl
+        ? `<img class="search-thumb search-thumb--has-art" src="${thumbUrl}" alt="" title="Click for artwork only" />`
         : `<div class="search-thumb"></div>`;
       const detail = [r.artist, r.album, r.year].filter(Boolean).join(" · ");
       const label = r.label ? ` · ${r.label}` : "";
@@ -786,7 +793,26 @@ function paintFixSearchResults(container, results) {
   }
   container.innerHTML = searchResultCardsHtml(results);
   container.querySelectorAll(".search-item").forEach((el) => {
-    el.addEventListener("click", () => pickSearchResult(el, results));
+    el.addEventListener("click", (e) => {
+      if (e.target.closest(".search-bookmark")) return;
+      const r = results[parseInt(el.dataset.index, 10)];
+      if (!r) return;
+      const clickedThumb = !!e.target.closest(".search-thumb");
+      const directEl = document.getElementById("fix-artwork-direct-url");
+      const hasArt = !!artworkUrl || !!localArtworkPayload || !!(directEl && directEl.value.trim());
+      const hasExisting = fixHasPicked || hasArt;
+
+      if (hasExisting && clickedThumb) {
+        // Refine artwork only — keep the chosen metadata.
+        pickArtworkFromResult(el, r);
+      } else if (hasExisting) {
+        // Refine metadata only — keep the chosen artwork.
+        pickSearchResult(el, results, { skipArtwork: true });
+      } else {
+        // First pick — load both metadata and artwork from this result.
+        pickSearchResult(el, results);
+      }
+    });
   });
   container.querySelectorAll(".search-bookmark").forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -920,9 +946,15 @@ async function runFixSearch(q) {
   paintFixSearchResults(container, data.results);
 }
 
-async function pickSearchResult(el, results) {
+async function pickSearchResult(el, results, opts = {}) {
+  const skipArtwork = !!opts.skipArtwork;
   const container = $("#fix-search-results");
+  // ".selected" marks the METADATA source; leave any ".art-source" mark intact
+  // on a metadata-only refine so the artwork source stays visibly flagged.
   container.querySelectorAll(".search-item").forEach((e) => e.classList.remove("selected"));
+  if (!skipArtwork) {
+    container.querySelectorAll(".search-item").forEach((e) => e.classList.remove("art-source"));
+  }
   el.classList.add("selected");
 
   const r = results[parseInt(el.dataset.index)];
@@ -940,16 +972,17 @@ async function pickSearchResult(el, results) {
 
   const meta = await resp.json();
   currentMeta = meta;
+  fixHasPicked = true;
   status.classList.add("hidden");
 
   if (meta.tracklist && meta.tracklist.length > 1) {
     currentTracklist = meta.tracklist;
     showTracklist(meta);
-    populateFromMeta(meta);
+    populateFromMeta(meta, { skipArtwork });
   } else {
     $("#fix-tracklist-section").classList.add("hidden");
     currentTracklist = [];
-    populateFromMeta(meta);
+    populateFromMeta(meta, { skipArtwork });
   }
 
   if (meta._warning) {
@@ -981,6 +1014,7 @@ async function fetchMetadata() {
 
   const meta = await resp.json();
   currentMeta = meta;
+  fixHasPicked = true;
   status.classList.add("hidden");
 
   if (meta.tracklist && meta.tracklist.length > 1) {
@@ -1000,7 +1034,7 @@ async function fetchMetadata() {
   scheduleFixPageSave();
 }
 
-function populateFromMeta(meta) {
+function populateFromMeta(meta, opts = {}) {
   if (meta.title) $("#fix-title").value = meta.title;
   if (meta.artist) $("#fix-artist").value = meta.artist;
   if (meta.albumartist) $("#fix-albumartist").value = meta.albumartist;
@@ -1010,17 +1044,85 @@ function populateFromMeta(meta) {
   if (meta.label) $("#fix-label").value = meta.label;
   if (meta.catno) $("#fix-catno").value = meta.catno;
 
-  const directArt =
-    (document.getElementById("fix-artwork-direct-url") &&
-      document.getElementById("fix-artwork-direct-url").value.trim()) ||
-    "";
-  if (meta.artwork_url && !localArtworkPayload && !directArt) {
-    artworkUrl = meta.artwork_url;
-    const proxyUrl = `/api/fetch-artwork?url=${encodeURIComponent(artworkUrl)}`;
-    $("#fix-artwork-preview").innerHTML = `<img src="${proxyUrl}" alt="Cover art" onerror="this.parentElement.innerHTML='<span>Failed to load</span>'" />`;
+  if (!opts.skipArtwork) {
+    const directArt =
+      (document.getElementById("fix-artwork-direct-url") &&
+        document.getElementById("fix-artwork-direct-url").value.trim()) ||
+      "";
+    if (meta.artwork_url && !localArtworkPayload && !directArt) {
+      artworkUrl = meta.artwork_url;
+      const proxyUrl = `/api/fetch-artwork?url=${encodeURIComponent(artworkUrl)}`;
+      $("#fix-artwork-preview").innerHTML = `<img src="${proxyUrl}" alt="Cover art" onerror="this.parentElement.innerHTML='<span>Failed to load</span>'" />`;
+    }
   }
   updateRenamePreview();
   scheduleFixPageSave();
+}
+
+/** Apply artwork from a search result WITHOUT touching the metadata fields.
+ *  Mirrors Fix List's "click a thumbnail for artwork only". Clears the
+ *  higher-priority artwork sources (local file, direct URL) so the chosen
+ *  release art is what gets embedded on save, then upgrades to hi-res. */
+function pickArtworkFromResult(el, r) {
+  const container = $("#fix-search-results");
+  container.querySelectorAll(".search-item").forEach((e) => e.classList.remove("art-source"));
+  el.classList.add("art-source");
+
+  // Search-picked art wins: drop the sources that would otherwise override it.
+  clearLocalArtworkPayload();
+  const directEl = document.getElementById("fix-artwork-direct-url");
+  if (directEl) directEl.value = "";
+
+  const preview = $("#fix-artwork-preview");
+  const thumbUrl = r.artwork_thumb || r.artwork_url || "";
+  artworkUrl = thumbUrl;
+  fixHasPicked = true;
+  if (preview) {
+    preview.innerHTML = thumbUrl
+      ? `<span class="spinner"></span> Loading hi-res…`
+      : "<span>No artwork</span>";
+  }
+
+  const hint = document.getElementById("fix-artwork-hint");
+  if (hint) hint.textContent = "Artwork chosen from a search result. Click Save Tags & Artwork to embed it.";
+
+  const gen = ++fixArtworkFetchGen;
+  const paint = (url) => {
+    if (!preview) return;
+    const proxyUrl = `/api/fetch-artwork?url=${encodeURIComponent(url)}`;
+    preview.innerHTML = `<img src="${proxyUrl}" alt="Cover art" onerror="this.parentElement.innerHTML='<span>Failed to load</span>'" />`;
+  };
+
+  if (!r.url) {
+    if (thumbUrl) paint(thumbUrl);
+    scheduleFixPageSave();
+    return;
+  }
+
+  fetch("/api/fetch-metadata", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: r.url }),
+  })
+    .then((resp) => resp.json())
+    .then((data) => {
+      if (gen !== fixArtworkFetchGen) return; // superseded by a newer pick
+      const hi = data && data.artwork_url;
+      if (hi) {
+        artworkUrl = hi;
+        paint(hi);
+      } else if (thumbUrl) {
+        paint(thumbUrl);
+      } else if (preview) {
+        preview.innerHTML = "<span>No artwork</span>";
+      }
+      scheduleFixPageSave();
+    })
+    .catch(() => {
+      if (gen !== fixArtworkFetchGen) return;
+      if (thumbUrl) paint(thumbUrl);
+      scheduleFixPageSave();
+    });
 }
 
 // ---- Tracklist ----
@@ -1125,6 +1227,7 @@ function clearAll() {
   paintDefaultArtworkPreview();
   currentTracklist = [];
   currentMeta = {};
+  fixHasPicked = false;
   scheduleFixPageSave();
 }
 

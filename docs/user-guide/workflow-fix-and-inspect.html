@@ -60,6 +60,9 @@
         The server queries <strong>Apple Music (iTunes Search API)</strong>, <strong>Discogs</strong>, <strong>Bandcamp</strong> (public search page), and <strong>SoundCloud</strong>, then merges results. Click a row to <strong>fetch full metadata</strong> for that URL. If the release has multiple tracks, a tracklist appears so you can pick the correct cut.
       </p>
       <p>
+        <strong>Mix metadata and artwork from different sources.</strong> Once you have picked a first result, you can refine either dimension independently &mdash; the same behaviour as <a href="workflow-fix-list.html">Fix List</a>. Click another result's <strong>cover thumbnail</strong> to take <em>just its artwork</em> (the highest-resolution version is fetched, and your text fields are untouched); click its <strong>text</strong> to take <em>just its metadata</em> while keeping the artwork you already chose. The result supplying artwork is outlined so you can see which is which.
+      </p>
+      <p>
         When <strong>combined search returns no hits</strong>, the UI shows a <strong>fallback panel</strong>: choose <strong>Apple Music</strong> (default), <strong>Discogs</strong>, <strong>Bandcamp</strong>, or <strong>SoundCloud</strong>, refine the query, and click <strong>Search</strong>. The app shows up to <strong>three</strong> results from that catalogue only; pick one to fetch metadata.
       </p>
 
@@ -83,7 +86,7 @@
         Adjust title, artist, album, year, genre, label, catalogue number, and comment. The cover area shows embedded art, a local file you drop or choose, or catalogue art from search. <strong>Click the cover</strong> to open a full-screen preview.
       </p>
       <p>
-        <strong>Artwork image URL</strong> is separate from <strong>Fetch from URL</strong> (metadata source): paste a direct link to a JPEG/PNG/WebP/GIF file. <strong>Update artwork</strong> embeds only the cover via <code>POST /api/retag-artwork</code>; <strong>Save Tags &amp; Artwork</strong> applies text tags too, with priority <strong>local cover → artwork URL → release art</strong> from search when you save.
+        <strong>Artwork image URL</strong> is separate from <strong>Fetch from URL</strong> (metadata source): paste a direct link to a JPEG/PNG/WebP/GIF file. <strong>Update artwork</strong> embeds only the cover via <code>POST /api/retag-artwork</code>; <strong>Save Tags &amp; Artwork</strong> applies text tags too, with priority <strong>local cover → artwork URL → release art</strong> from search when you save. Picking artwork from a search result's cover thumbnail (above) clears any local file and URL field so that chosen cover is the one embedded.
       </p>
 
       <figure class="guide-figure">

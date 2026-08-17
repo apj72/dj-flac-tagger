@@ -13,6 +13,8 @@ function collectSettingsPageDraft() {
     v: 1,
     page_background_enabled:
       typeof djmmGetPageBackgroundEnabled === "function" ? djmmGetPageBackgroundEnabled() : true,
+    show_playlist_builder_tab:
+      typeof djmmGetShowPlaylistBuilderTab === "function" ? djmmGetShowPlaylistBuilderTab() : false,
     source_dir: $("#cfg-source").value,
     destination_dir: $("#cfg-dest").value,
     fix_metadata_default_dir: $("#cfg-fix-default").value,
@@ -42,6 +44,11 @@ function applySettingsDraft(st) {
     djmmApplyPageBackgroundEnabled(!!st.page_background_enabled);
     const pg = document.getElementById("cfg-page-background");
     if (pg) pg.checked = !!st.page_background_enabled;
+  }
+  if (st.show_playlist_builder_tab != null && typeof djmmApplyShowPlaylistBuilderTab === "function") {
+    djmmApplyShowPlaylistBuilderTab(!!st.show_playlist_builder_tab);
+    const pb = document.getElementById("cfg-show-playlist-builder");
+    if (pb) pb.checked = !!st.show_playlist_builder_tab;
   }
   if (st.source_dir != null) $("#cfg-source").value = st.source_dir;
   if (st.destination_dir != null) $("#cfg-dest").value = st.destination_dir;
@@ -203,6 +210,18 @@ function wirePageBackgroundControl() {
   });
 }
 
+function wireShowPlaylistBuilderControl() {
+  const cb = document.getElementById("cfg-show-playlist-builder");
+  if (!cb || typeof djmmGetShowPlaylistBuilderTab !== "function") return;
+  cb.checked = djmmGetShowPlaylistBuilderTab();
+  cb.addEventListener("change", () => {
+    if (typeof djmmApplyShowPlaylistBuilderTab === "function") {
+      djmmApplyShowPlaylistBuilderTab(cb.checked);
+    }
+    scheduleSettingsPageSave();
+  });
+}
+
 function wireSettingsPersistence() {
   [
     "cfg-source",
@@ -280,6 +299,7 @@ $("#cfg-extract-profile").addEventListener("change", updateBitrateVisibility);
 loadSettings().then(() => {
   wireThemeControl();
   wirePageBackgroundControl();
+  wireShowPlaylistBuilderControl();
   wireSettingsPersistence();
   wireSettingsFolderNavigator();
   scheduleSettingsPageSave();

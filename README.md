@@ -36,7 +36,7 @@ OBS is still primarily a **video** app: even when you only care about audio, it 
 
 ## What It Does
 
-Twelve pages, via tabs at the top (order: **Extract → Inspect → Fix Metadata → Bulk Fix → Fix List → Normalise → WAV/AIFF → FLAC → Lossless Check → Saved Links → Capture Playlist → Settings**):
+Twelve pages, via tabs at the top (order: **Extract → Inspect → Fix Metadata → Bulk Fix → Fix List → Normalise → WAV/AIFF → FLAC → Lossless Check → Saved Links → Capture Playlist → Settings**). An optional, experimental **Playlist Builder** tab (browse your Apple Music library and create playlists) is hidden by default; enable **Settings → Show Playlist Builder tab** to reveal it.
 
 ### Extract (main workflow)
 
@@ -69,7 +69,7 @@ When you select a **playable** audio file on **Extract**, **Fix**, **Inspect**, 
 
 ### Fix Metadata
 
-Browse audio files (multiple formats), auto-search iTunes, Discogs, and Bandcamp, fetch from URLs, edit fields, **save tags and artwork**. The **Fetch from URL** field (metadata source) is separate from the **Artwork image URL** under the cover: you can paste a **direct image link** and use **Update artwork** to embed **only** the cover without rewriting other tags, or rely on **Save Tags & Artwork** with priority **local file → artwork URL → release art** from search. **Click the cover** for a full-screen preview. The **URL field** (metadata) is saved into the file and into the **processing log** where applicable. **Saved metadata URL** appears on **Inspect** for FLAC/OGG/MP3 where supported.
+Browse audio files (multiple formats), auto-search iTunes, Discogs, and Bandcamp, fetch from URLs, edit fields, **save tags and artwork**. The **Fetch from URL** field (metadata source) is separate from the **Artwork image URL** under the cover: you can paste a **direct image link** and use **Update artwork** to embed **only** the cover without rewriting other tags, or rely on **Save Tags & Artwork** with priority **local file → artwork URL → release art** from search. **Mix metadata and artwork from different search results** (same as **Fix List**): after picking a first result, click another result's **cover thumbnail** to take *just its artwork* (the highest-resolution version is fetched, your text fields untouched), or click its **text** to swap *just the metadata* while keeping the artwork you chose; the result supplying artwork is outlined. **Click the cover** for a full-screen preview. The **URL field** (metadata) is saved into the file and into the **processing log** where applicable. **Saved metadata URL** appears on **Inspect** for FLAC/OGG/MP3 where supported.
 
 On the file list, **ArrowUp / ArrowDown / Home / End** move the highlighted file and load it (when you are not typing in a text field or the folder modal is not focused)—same idea as **Inspect**.
 
@@ -113,6 +113,8 @@ If you use **Extract → open in Platinum Notes → watch for processed output**
 - **Fix Metadata — filename suffixes** — list of literals or `regex:` lines (`fix_retain_filename_suffixes` in `config.json`): peeled from the end of the stem **before** building search queries; **re-appended** when renaming to `Artist - Title` (see [Filename search and tags](#filename-search-and-tags))  
 - **Platinum Notes** app name and **`_PN` output suffix**  
 - **Loudness target (LUFS)** and **true peak (dBTP)** — e.g. **-11.5** / **-1** to match Platinum Notes; **-14** / **-1** for streaming-style reference. You may enter **11.5** (positive); it is treated as **-11.5 LUFS**.
+- **Show page background image** — full-page scenic art toggle (browser preference `djmm.pageBackgroundEnabled`, also mirrored to `config.json`).
+- **Show Playlist Builder tab** — reveals the optional, experimental **Playlist Builder** tab (browse your Apple Music library and create playlists). **Off by default** (browser preference `djmm.showPlaylistBuilderTab`, also mirrored to `config.json` as `show_playlist_builder_tab`).
 
 ### WAV/AIFF → FLAC
 
@@ -201,8 +203,8 @@ Scan a folder of audio files and use **FFT-based spectral analysis** to detect w
 1. **Select a folder** — browse or use the folder picker. Optionally include subfolders.
 2. **Scan** — lists all supported audio files (FLAC, WAV, AIFF, MP3, M4A, OGG).
 3. **Analyse** — processes each file by decoding a 30-second segment from the middle, computing the FFT, and looking for a sharp energy drop in the 14–21 kHz range.
-4. **Results** — each file gets a verdict (**Lossless**, **Transcode**, or **Inconclusive**), an estimated source bitrate for transcodes (e.g. "~192 kbps MP3"), the detected cutoff frequency, and a confidence level.
-5. **Filter** — toggle between All, Transcodes, Lossless, and Other to focus on files that need replacing.
+4. **Results** — each file gets a verdict (**Lossless**, **Transcode**, **Resampled**, or **Inconclusive**), an estimated source bitrate for transcodes (e.g. "~192 kbps MP3"), the detected cutoff frequency, and a confidence level. **Resampled** means a lossless source was sample-rate-converted to a lower rate (e.g. a hi-res 96 kHz master downsampled to 44.1 kHz): the roll-off rides up to Nyquist rather than leaving a silent plateau, so it is *not* a lossy transcode and does not need replacing.
+5. **Filter** — toggle between All, Transcodes, Lossless, Resampled, and Other to focus on files that need replacing.
 6. **Save reports** — persist analysis results on the server for later reference when sourcing better-quality copies. Load or delete saved reports from the Saved Reports card.
 
 Requires **numpy** (in `requirements.txt`) and **ffmpeg/ffprobe**.
@@ -213,37 +215,37 @@ A simple bookmark manager for music URLs. Save links to Bandcamp pages, Discogs 
 
 ### Capture Playlist (automated Apple Music recording)
 
-Record individual tracks from an Apple Music playlist as separate, lossless **24-bit FLAC** files. DJ MetaManager controls Music playback, records each track one at a time through a virtual audio device, verifies the output, and applies metadata from the playlist.
+Record individual tracks from an Apple Music playlist as separate, lossless **24-bit FLAC** files. DJ MetaManager controls Music playback, drives **OBS Studio** over the WebSocket API to record each track one at a time, converts the recording to FLAC, verifies it, and applies metadata and artwork from the playlist.
 
-**Audio routing:** Uses **SoundSource** (by Rogue Amoeba) to isolate the Music app's audio, routing it through a **SoundPipe Device** to **BlackHole 2ch**, where FFmpeg captures it as FLAC. This keeps system sounds, notifications, and other apps out of the recording.
+**Audio routing:** Music plays into **BlackHole 16ch**; **OBS** captures that device and records an **MKV** with a 24-bit lossless audio track; DJ MetaManager tells OBS when to start and stop over the **OBS WebSocket** and then converts each MKV to FLAC. Muting the system channels in OBS keeps notifications and other apps out of the recording. (Earlier versions used SoundSource/SoundPipe for direct FFmpeg capture — that paid dependency has been retired in favour of OBS.)
 
 ```text
-Apple Music  -->  SoundSource (Music source)
-                  -->  SoundPipe Device (2ch)
-                       -->  BlackHole 2ch (Monitor)
-                            -->  FFmpeg AVFoundation
-                                 -->  24-bit FLAC
+Apple Music  -->  System output: BlackHole 16ch (44.1 kHz)
+                  -->  OBS "DJ Audio" capture (mute system ch 1/2, keep Music ch 3/4)
+                       -->  OBS records MKV (24-bit lossless audio)
+                            -->  DJ MetaManager (OBS WebSocket, start/stop per track)
+                                 -->  FFmpeg MKV --> 24-bit FLAC
 ```
 
-**SoundPipe setup (critical):**
+**OBS WebSocket config** (in `config.json`):
 
-| Setting | Value |
-|---------|-------|
-| Sources | Music (Application, 100%) |
-| **Mute when capturing** | **Unchecked** — if checked, SoundSource silences BlackHole when FFmpeg starts recording |
-| Output Channels | 2 Channels |
-| Monitors | BlackHole 2ch (100%) |
+```json
+"capture": {
+  "backend": "obs",
+  "obs": { "host": "127.0.0.1", "port": 4455, "password": "your-obs-password" }
+}
+```
 
 **Workflow:**
 
 1. Select a playlist from Music on the **Capture Playlist** tab.
 2. Preview the track list and set the output folder.
-3. **Run preflight** to verify routing, then **Test signal** to confirm audio.
-4. **Start capture** — each track is played once, recorded, verified, and tagged automatically.
+3. **Run preflight** to verify Music access, the OBS WebSocket connection, and disk space.
+4. **Start capture** — each track is played once, recorded via OBS, converted, verified, and tagged automatically.
 5. Use **Pause after track**, **Stop after track**, or **Emergency stop** during capture.
 6. Review results — retry failed tracks or send to **Bulk Fix** for artwork enrichment.
 
-**Requirements:** [BlackHole 2ch](https://existential.audio/blackhole/) (free) and [SoundSource](https://rogueamoeba.com/soundsource/) (paid, free trial). See the [Capture Playlist user guide](docs/user-guide/workflow-capture.html) for detailed setup instructions with screenshots.
+**Requirements:** [BlackHole](https://existential.audio/blackhole/) (free, 16-channel version) and [OBS Studio](https://obsproject.com/) (free, includes obs-websocket). See the [Capture Playlist user guide](docs/user-guide/workflow-capture.html) for detailed setup instructions.
 
 ### Default artwork
 
@@ -257,9 +259,9 @@ When metadata is applied to a file that has **no existing artwork** and no artwo
 ### Recommended OBS Settings (lossless capture)
 
 1. **Settings > Output > Output Mode**: Advanced  
-2. **Recording > Audio Encoder**: FFmpeg FLAC 16-bit (or your preferred encoder)  
+2. **Recording > Audio Encoder**: FFmpeg FLAC or ALAC, **24-bit**  
 3. **Recording > Recording Format**: MKV  
-4. **Settings > Audio > Sample Rate**: 48 kHz  
+4. **Settings > Audio > Sample Rate**: **44.1 kHz** — match BlackHole in Audio MIDI Setup (use 96 kHz instead if you want to preserve hi-res bandwidth without downsampling)  
 
 ## Requirements
 

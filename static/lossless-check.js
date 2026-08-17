@@ -51,6 +51,8 @@
         return `<span class="lc-badge lc-badge--lossless">Lossless</span>`;
       case "transcode":
         return `<span class="lc-badge lc-badge--transcode">Transcode</span>`;
+      case "resampled":
+        return `<span class="lc-badge lc-badge--resampled">Resampled</span>`;
       case "inconclusive":
         return `<span class="lc-badge lc-badge--inconclusive">Inconclusive</span>`;
       case "error":
@@ -96,6 +98,7 @@
     const total = results.length;
     const analyzed = results.filter((r) => r.verdict).length;
     const lossless = results.filter((r) => r.verdict === "lossless").length;
+    const resampled = results.filter((r) => r.verdict === "resampled").length;
     const transcode = results.filter((r) => r.verdict === "transcode").length;
     const other = results.filter((r) => r.verdict === "inconclusive" || r.verdict === "error").length;
     const pending = total - analyzed;
@@ -103,6 +106,7 @@
     let html = `<strong>${total}</strong> files`;
     if (analyzed > 0) {
       html += ` &mdash; <span class="lc-sum-lossless">${lossless} lossless</span>`;
+      if (resampled > 0) html += `, <span class="lc-sum-resampled">${resampled} resampled</span>`;
       html += `, <span class="lc-sum-transcode">${transcode} likely transcode${transcode !== 1 ? "s" : ""}</span>`;
       if (other > 0) html += `, <span class="lc-sum-other">${other} inconclusive</span>`;
       if (pending > 0) html += `, ${pending} pending`;
@@ -258,6 +262,7 @@
           <div class="lc-report-stats">
             <span>${r.total} files</span>
             <span class="lc-sum-lossless">${r.lossless} lossless</span>
+            ${r.resampled ? `<span class="lc-sum-resampled">${r.resampled} resampled</span>` : ""}
             <span class="lc-sum-transcode">${r.transcodes} transcode${r.transcodes !== 1 ? "s" : ""}</span>
           </div>
           <div class="lc-report-actions">

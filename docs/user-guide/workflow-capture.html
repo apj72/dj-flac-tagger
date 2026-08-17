@@ -47,56 +47,55 @@
 
       <h2>Audio routing</h2>
       <p>
-        Capture uses <strong>BlackHole 2ch</strong> as the FFmpeg recording source. Because BlackHole operates at the macOS HAL (Hardware Abstraction Layer) level, it receives audio <em>after</em> DRM decryption &mdash; so it works with Apple Music streaming content where other capture APIs (ScreenCaptureKit, Core Audio Process Taps) deliver silence.
+        Capture records through <strong>OBS Studio</strong>, which listens to a <strong>BlackHole</strong> virtual audio device. Because BlackHole operates at the macOS HAL (Hardware Abstraction Layer) level, it receives audio <em>after</em> DRM decryption &mdash; so it works with Apple Music streaming content where other capture APIs (ScreenCaptureKit, Core Audio Process Taps) deliver silence. OBS manages the audio device clock internally, which produces reliable recordings without the sample-rate glitches, speed changes, or crackle that direct FFmpeg capture is prone to.
       </p>
       <p>
-        To isolate Music from other system sounds (notifications, browser audio, etc.), use <strong>SoundSource</strong> by Rogue Amoeba. Its <strong>SoundPipe</strong> virtual device routes only the Music app&rsquo;s audio to BlackHole, keeping system sounds on your normal speakers or headphones.
+        DJ MetaManager drives OBS remotely over the <strong>OBS WebSocket</strong> API: for each track it tells OBS to start recording, plays the track once in Music, then tells OBS to stop &mdash; producing one <strong>MKV</strong> per track with a 24-bit lossless audio track. DJ MetaManager then converts each MKV to <strong>24-bit FLAC</strong>, verifies it, and applies metadata and artwork from the playlist.
       </p>
+
+      <div class="callout">
+        <strong>No SoundSource / SoundPipe required.</strong> Earlier versions routed Music through Rogue Amoeba&rsquo;s SoundSource (a paid app) into BlackHole for direct FFmpeg capture. That path has been retired in favour of OBS, which is free, open source, and far more robust. You no longer need SoundSource or SoundPipe.
+      </div>
 
       <h3>Required software</h3>
       <ul>
-        <li><strong><a href="https://existential.audio/blackhole/">BlackHole 2ch</a></strong> &mdash; free virtual audio device for macOS.</li>
-        <li><strong><a href="https://rogueamoeba.com/soundsource/">SoundSource</a></strong> by Rogue Amoeba &mdash; per-app audio routing (paid; free trial available).</li>
+        <li><strong><a href="https://existential.audio/blackhole/">BlackHole</a></strong> &mdash; free virtual audio device for macOS (the 16-channel version, <code>BlackHole 16ch</code>, is recommended).</li>
+        <li><strong><a href="https://obsproject.com/">OBS Studio</a></strong> &mdash; free, open-source recorder. Includes the <strong>obs-websocket</strong> server used to control it.</li>
       </ul>
 
-      <h3>SoundSource setup</h3>
-      <p>Open SoundSource and create a <strong>SoundPipe Device</strong> with the following configuration:</p>
+      <h3>macOS audio setup</h3>
+      <ol>
+        <li>In <strong>System Settings &rarr; Sound</strong>, set the system <strong>output</strong> to <strong>BlackHole 16ch</strong> so Music plays into the virtual device.</li>
+        <li>Open <strong>Audio MIDI Setup</strong>, select <strong>BlackHole 16ch</strong>, and set its sample rate to <strong>44.1 kHz</strong> with output volume at full. Match this rate in OBS (below).</li>
+        <li>Set the <strong>Apple Music</strong> app volume to around <strong>90%</strong> &mdash; a small amount of headroom below 100% avoids inter-sample clipping. Leave EQ off.</li>
+      </ol>
+      <p class="hint">Because Music plays into BlackHole (not your speakers), you won&rsquo;t hear the tracks during capture. If you want to monitor, create a Multi-Output Device in Audio MIDI Setup that includes both BlackHole 16ch and your headphones/speakers, and use that as the system output.</p>
 
-      <figure class="guide-figure">
-        <img src="assets/images/30-capture-soundsource-routing.png" width="1100" alt="SoundSource SoundPipe Device configuration showing Music as the source, 2-channel output, and BlackHole 2ch as the monitor">
-        <figcaption><span class="fig-label">Figure 30.</span> SoundPipe Device routing: Music &rarr; SoundPipe &rarr; BlackHole 2ch.</figcaption>
-      </figure>
+      <h3>OBS setup</h3>
+      <ol>
+        <li>In OBS, add an <strong>Audio Input Capture</strong> source and point it at <strong>BlackHole 16ch</strong>. Name it something recognisable, e.g. <strong>&ldquo;DJ Audio&rdquo;</strong>.</li>
+        <li>In the <strong>Audio Mixer</strong> (or <strong>Advanced Audio Properties</strong>), keep only the channels carrying the Music signal and mute the rest so system sounds and notifications aren&rsquo;t captured. In a typical BlackHole 16ch setup this means muting channels <strong>1/2</strong> (system) and leaving <strong>3/4</strong> at <strong>0&nbsp;dB</strong> &mdash; play a track and watch the meters to confirm which pair carries the signal.</li>
+        <li>Under <strong>Settings &rarr; Output &rarr; Recording</strong>, set <strong>Recording Format</strong> to <strong>MKV</strong> (Matroska) and the <strong>Audio Encoder</strong> to a <strong>lossless 24-bit</strong> codec (FLAC or ALAC). Set the audio sample rate under <strong>Settings &rarr; Audio</strong> to <strong>44.1 kHz</strong> to match BlackHole.</li>
+        <li>Enable the WebSocket server under <strong>Tools &rarr; WebSocket Server Settings</strong>: tick <em>Enable WebSocket server</em>, note the <strong>Port</strong> (default <code>4455</code>), and set a <strong>password</strong> (use <em>Show Connect Info</em> to view it).</li>
+      </ol>
 
-      <table class="guide-table">
-        <thead><tr><th>Setting</th><th>Value</th></tr></thead>
-        <tbody>
-          <tr><td><strong>Sources</strong></td><td>Music (the Apple Music app)</td></tr>
-          <tr><td><strong>Source volume</strong></td><td>100%</td></tr>
-          <tr><td><strong>Mute when capturing</strong></td><td><strong>Unchecked</strong> &mdash; this is critical. If checked, SoundSource silences the monitor output when it detects screen/audio capture, which would cause BlackHole to receive silence.</td></tr>
-          <tr><td><strong>Output Channels</strong></td><td>2 Channels</td></tr>
-          <tr><td><strong>Output device</strong></td><td>SoundPipe Device Virtual Audio (100%)</td></tr>
-          <tr><td><strong>Monitors</strong></td><td>BlackHole 2ch (100%)</td></tr>
-          <tr><td><strong>Sample rate</strong></td><td>48 kHz (match your BlackHole configuration)</td></tr>
-        </tbody>
-      </table>
-
-      <div class="callout">
-        <strong>Important:</strong> The &ldquo;Mute when capturing&rdquo; checkbox under the Music source <strong>must be unchecked</strong>. SoundSource detects when FFmpeg opens BlackHole for recording and will mute the monitor output &mdash; resulting in a silent capture file. If you get silence despite seeing audio levels in SoundPipe, this is almost certainly the cause.
-      </div>
+      <h3>Connect DJ MetaManager to OBS</h3>
+      <p>Enter the OBS WebSocket details in <code>config.json</code> under <code>capture.obs</code> (or the Settings panel):</p>
+      <pre><code>"capture": {
+  "backend": "obs",
+  "obs": { "host": "127.0.0.1", "port": 4455, "password": "your-obs-password" }
+}</code></pre>
+      <p class="hint">OBS may regenerate the WebSocket password when the server is toggled off and on. If preflight reports an authentication error, re-copy the password from <em>Show Connect Info</em>.</p>
 
       <h3>Audio routing chain</h3>
-      <pre><code>Apple Music &rarr; SoundSource (Music app source)
-    &rarr; SoundPipe Device (2ch virtual output)
-    &rarr; BlackHole 2ch (as Monitor, 100%)
-    &rarr; FFmpeg AVFoundation capture
-    &rarr; FLAC 24-bit output</code></pre>
+      <pre><code>Apple Music &rarr; System output: BlackHole 16ch (44.1 kHz)
+    &rarr; OBS &ldquo;DJ Audio&rdquo; audio input capture (BlackHole 16ch)
+        &rarr; Audio Mixer: mute system channels (1/2), keep Music channels (3/4)
+        &rarr; OBS records MKV with 24-bit lossless audio
+    &rarr; DJ MetaManager (OBS WebSocket) &mdash; start/stop per track
+        &rarr; FFmpeg converts MKV &rarr; 24-bit FLAC</code></pre>
       <p>
-        With this setup, only the Music app&rsquo;s audio reaches BlackHole. Other apps (browsers, system notifications) play through your normal output device and are never captured.
-      </p>
-
-      <h3>Monitoring while recording</h3>
-      <p>
-        If you want to hear the music while it records, add your headphones or speakers as a second monitor in SoundPipe alongside BlackHole 2ch. Both monitors receive the same audio from Music.
+        With this setup, only the Music channels reach the recording. Other apps (browsers, system notifications) land on the muted channels and are never captured.
       </p>
 
       <h2>Capture workflow</h2>
@@ -109,11 +108,12 @@
         <li>Set the <strong>output folder</strong> (defaults to the value in Settings, e.g. <code>~/Music/playlist_recordings</code>). Use <strong>Choose folder&hellip;</strong> to browse.</li>
       </ol>
 
-      <h3>2. Preflight and signal test</h3>
+      <h3>2. Preflight</h3>
       <ol>
-        <li>Click <strong>Run preflight</strong> to verify Music is accessible, BlackHole is present, FFmpeg is available, and disk space is sufficient.</li>
-        <li>Click <strong>Test signal</strong> with music playing in Music to confirm audio is reaching BlackHole through SoundPipe. Both channels must show signal above the silence threshold.</li>
+        <li>Click <strong>Run preflight</strong> to verify Music is accessible, DJ MetaManager can reach OBS over the WebSocket, OBS is not already recording, FFmpeg/FFprobe are available, and disk space is sufficient.</li>
+        <li>Before starting, play a track in Music and glance at the OBS <strong>Audio Mixer</strong> to confirm the Music channels show a healthy signal and the muted channels stay silent.</li>
       </ol>
+      <p class="hint">The <strong>Test signal</strong> button applies only to the legacy direct-BlackHole backend, which measures channel levels through FFmpeg. With the OBS backend you confirm levels in OBS&rsquo;s own mixer instead.</p>
 
       <h3>3. Capture</h3>
       <ol>
@@ -140,20 +140,24 @@
         Completed files are placed in the output folder as <code>Artist - Title.flac</code>. Each file is:
       </p>
       <ul>
-        <li><strong>24-bit FLAC</strong> at the capture device&rsquo;s sample rate (typically 48 kHz)</li>
+        <li><strong>24-bit FLAC</strong> at the capture device&rsquo;s sample rate (44.1 kHz with the setup above), converted from the OBS MKV</li>
         <li>Verified by FFprobe (codec, channels, sample rate, bit depth)</li>
-        <li>Tagged with title, artist, album, year, genre, and track number from the playlist snapshot</li>
+        <li>Tagged with title, artist, album, year, genre, and track number &mdash; plus artwork &mdash; from the playlist snapshot</li>
         <li>No normalisation, gain, or EQ applied &mdash; use the Normalise tab afterwards if needed</li>
       </ul>
+      <div class="callout">
+        <strong>&ldquo;Resampled&rdquo; vs &ldquo;Transcode&rdquo; in Lossless Check.</strong> Apple Music lossless tracks are often hi-res (48/96&nbsp;kHz). When captured through a 44.1&nbsp;kHz device, macOS sample-rate-converts them, leaving a gentle high-frequency rolloff. The <a href="workflow-lossless-check.html">Lossless Check</a> tool recognises this and reports such files as <strong>Resampled</strong> (a lossless source that was sample-rate-converted) rather than a lossy <strong>Transcode</strong>. To keep the full bandwidth, set BlackHole and OBS to a higher rate (e.g. 96&nbsp;kHz) so no downsampling occurs.
+      </div>
 
       <h2>Settings</h2>
       <p>
         Capture settings are configured under <strong>Settings &rarr; Capture &mdash; output folder</strong> and in the <code>capture</code> section of <code>config.json</code>:
       </p>
       <ul>
+        <li><strong>backend</strong> &mdash; recording backend, <code>obs</code> (default, recommended) or <code>blackhole</code> (legacy direct-FFmpeg capture)</li>
+        <li><strong>obs.host</strong> / <strong>obs.port</strong> / <strong>obs.password</strong> &mdash; OBS WebSocket connection (default host <code>127.0.0.1</code>, port <code>4455</code>)</li>
         <li><strong>output_dir</strong> &mdash; where completed FLAC files are placed (falls back to the destination folder if empty)</li>
-        <li><strong>blackhole_device_name</strong> &mdash; the BlackHole device to use (default: <code>BlackHole 2ch</code>)</li>
-        <li><strong>blackhole_channels</strong> &mdash; which channels to capture (default: <code>[1, 2]</code> for BlackHole 2ch)</li>
+        <li><strong>blackhole_device_name</strong> / <strong>blackhole_channels</strong> &mdash; only used by the legacy <code>blackhole</code> backend (defaults: <code>BlackHole 16ch</code>, channels <code>[1, 2]</code>)</li>
         <li><strong>pre_roll_ms</strong> / <strong>post_roll_ms</strong> &mdash; silence buffer before/after playback (default: 750ms each)</li>
         <li><strong>play_start_timeout_s</strong> &mdash; how long to wait for Music to start playing (default: 15s)</li>
         <li><strong>playback_stall_timeout_s</strong> &mdash; stop if playback stalls for this long (default: 12s)</li>
@@ -163,18 +167,25 @@
 
       <h2>Troubleshooting</h2>
 
-      <h3>Silent capture (no audio in the FLAC file)</h3>
+      <h3>Cannot connect to OBS</h3>
       <ul>
-        <li>Check that <strong>&ldquo;Mute when capturing&rdquo;</strong> is <strong>unchecked</strong> in SoundSource for the Music source.</li>
-        <li>Verify BlackHole 2ch is listed as a Monitor in the SoundPipe Device at 100% volume.</li>
-        <li>Confirm Music is the only source in SoundPipe and its volume is at 100%.</li>
-        <li>Play a track in Music and visually confirm audio levels appear on the SoundPipe channel meters.</li>
+        <li>Make sure OBS is <strong>running</strong> before you run preflight or start a capture.</li>
+        <li>Confirm the WebSocket server is enabled under <strong>Tools &rarr; WebSocket Server Settings</strong> and the <strong>port</strong> matches <code>capture.obs.port</code> (default <code>4455</code>).</li>
+        <li>If preflight reports an <strong>authentication</strong> error, re-copy the password from <em>Show Connect Info</em> into <code>capture.obs.password</code> &mdash; OBS can regenerate it when the server is toggled.</li>
+        <li>Preflight also fails if <strong>OBS is already recording</strong>; stop the existing recording first.</li>
       </ul>
 
-      <h3>Truncated recording (file shorter than expected)</h3>
+      <h3>Silent capture (no audio in the FLAC file)</h3>
       <ul>
-        <li>Ensure SoundPipe is configured as <strong>2 Channels</strong>, not 4. A 4-channel SoundPipe device can cause FLAC muxer issues with FFmpeg.</li>
-        <li>Check that BlackHole 2ch (not 16ch) is the capture target when using channels 1 and 2.</li>
+        <li>Confirm the system <strong>output</strong> is set to <strong>BlackHole 16ch</strong> (not your speakers) so Music actually plays into the virtual device.</li>
+        <li>In the OBS <strong>Audio Mixer</strong>, verify the Music channels are <strong>unmuted</strong> and show a signal while a track plays &mdash; and that you didn&rsquo;t mute the wrong pair.</li>
+        <li>Check that OBS&rsquo;s <strong>Audio Input Capture</strong> source is pointed at <strong>BlackHole 16ch</strong>.</li>
+      </ul>
+
+      <h3>Wrong speed, crackle, or sample-rate glitches</h3>
+      <ul>
+        <li>Ensure the sample rate matches across the chain: <strong>Audio MIDI Setup</strong> (BlackHole 16ch), <strong>OBS &rarr; Settings &rarr; Audio</strong>, and Music playback should all be <strong>44.1 kHz</strong>.</li>
+        <li>A mismatch between the device rate and the OBS audio rate is the usual cause of speed changes or clicks.</li>
       </ul>
 
       <h3>Music permission denied</h3>
@@ -184,7 +195,7 @@
 
       <h3>BlackHole device not found</h3>
       <p>
-        Install <a href="https://existential.audio/blackhole/">BlackHole 2ch</a>. After installation, restart the app and run preflight again. The device should appear in the FFmpeg audio device list.
+        Install <a href="https://existential.audio/blackhole/">BlackHole</a> (the 16-channel version). After installation, restart macOS audio (or log out and back in), set it as the system output, and it will appear as a device in OBS.
       </p>
 
       <div class="callout">

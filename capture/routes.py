@@ -21,14 +21,22 @@ capture_bp = Blueprint("capture", __name__)
 _manager: CaptureManager | None = None
 
 
+def _make_backend(backend_name: str):
+    if backend_name == "obs":
+        from capture.backends.obs import OBSBackend
+        return OBSBackend()
+    from capture.backends.blackhole import BlackHoleBackend
+    return BlackHoleBackend()
+
+
 def init_capture(app, config: dict):
     """Initialise the capture subsystem and register the blueprint."""
-    from capture.backends.blackhole import BlackHoleBackend
+    cap_cfg = config.get("capture", {})
+    backend_name = cap_cfg.get("backend", "obs")
 
-    store = SessionStore(config.get("capture", {}).get(
-        "output_dir", "") or config.get("destination_dir", ""))
+    store = SessionStore(cap_cfg.get("output_dir", "") or config.get("destination_dir", ""))
     music = MusicController()
-    backend = BlackHoleBackend()
+    backend = _make_backend(backend_name)
     global _manager
     _manager = CaptureManager(store, music, backend, config)
 
@@ -139,8 +147,9 @@ def run_preflight():
         checks.append({"name": "FFprobe available", "ok": False,
                         "fix": "Install FFmpeg: brew install ffmpeg"})
 
-    # Signal test
-    if backend_ok and data.get("test_signal", False):
+    # Signal test (BlackHole direct only)
+    from capture.backends.blackhole import BlackHoleBackend
+    if backend_ok and data.get("test_signal", False) and isinstance(m._backend, BlackHoleBackend):
         from capture.backends.blackhole import probe_signal, find_blackhole_device
         device_name = cfg.get("blackhole_device_name", "BlackHole 16ch")
         channels = cfg.get("blackhole_channels", [3, 4])
@@ -153,7 +162,7 @@ def run_preflight():
                 "ok": sig.has_signal,
                 "fix": "" if sig.has_signal else
                     f"No audio on {ch_label}. Route Music to "
-                    f"BlackHole {ch_label} via SoundSource.",
+                    f"BlackHole {ch_label}.",
                 "detail": {
                     "has_signal": sig.has_signal,
                     "left_db": sig.left_db,
@@ -177,12 +186,22 @@ def create_session():
     playlist_pid = data.get("playlist_persistent_id", "")
     tracks_data = data.get("tracks", [])
     output_dir = data.get("output_dir", "")
-    backend_name = data.get("backend", "blackhole")
 
     if not playlist_pid or not tracks_data:
         return jsonify({"error": "playlist_persistent_id and tracks required"}), 400
 
     m = _get_manager()
+
+    # Backend: honour an explicit request, else fall back to the configured
+    # default (config.py sets capture.backend = "obs").
+    backend_name = data.get("backend") or \
+        m._config.get("capture", {}).get("backend", "obs")
+
+    # Switch backend if requested differs from current
+    new_backend = _make_backend(backend_name)
+    if type(new_backend) != type(m._backend):
+        m._backend.cleanup()
+        m._backend = new_backend
 
     playlist = PlaylistInfo(
         name=data.get("playlist_name", ""),

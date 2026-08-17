@@ -42,6 +42,7 @@
   let snapshotTracks = [];
   let activeSessionId = null;
   let pollTimer = null;
+  let captureBackend = "obs";  // set from config in loadDefaults()
 
   // ------------------------------------------------------------------
   // Playlists
@@ -173,7 +174,7 @@
           playlist_name: selectedOpt.dataset.name || "",
           tracks: snapshotTracks,
           output_dir: outputDir.value,
-          backend: "blackhole",
+          backend: captureBackend,
         }),
       });
       const data = await resp.json();
@@ -426,6 +427,7 @@
       const resp = await fetch("/api/settings");
       if (resp.ok) {
         const cfg = await resp.json();
+        captureBackend = cfg.capture?.backend || "obs";
         if (!outputDir.value) {
           outputDir.value = cfg.capture?.output_dir || cfg.destination_dir || "";
         }

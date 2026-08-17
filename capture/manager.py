@@ -37,7 +37,8 @@ class CaptureManager:
         self._session: CaptureSession | None = None
         self._worker: threading.Thread | None = None
         self._lock = threading.Lock()
-        self._stop_flag = threading.Event()
+        self._stop_flag = threading.Event()   # graceful: finish current track, then stop
+        self._abort_flag = threading.Event()  # immediate: abort the in-progress track now
         self._pause_flag = threading.Event()
 
     @property
@@ -86,6 +87,7 @@ class CaptureManager:
             self._session.transition(SessionStatus.RUNNING)
             self._store.save_atomic(self._session)
             self._stop_flag.clear()
+            self._abort_flag.clear()
             self._pause_flag.clear()
 
             self._worker = threading.Thread(
@@ -104,6 +106,7 @@ class CaptureManager:
     def emergency_stop(self):
         with self._lock:
             self._stop_flag.set()
+            self._abort_flag.set()
             try:
                 self._music.stop()
             except Exception:
@@ -135,6 +138,7 @@ class CaptureManager:
             self._session.transition(SessionStatus.RUNNING)
             self._store.save_atomic(self._session)
             self._stop_flag.clear()
+            self._abort_flag.clear()
             self._pause_flag.clear()
 
             self._worker = threading.Thread(
@@ -146,6 +150,7 @@ class CaptureManager:
     def cancel(self):
         with self._lock:
             self._stop_flag.set()
+            self._abort_flag.set()
             try:
                 self._music.stop()
             except Exception:
@@ -372,7 +377,7 @@ class CaptureManager:
         playing = False
         t_start = time.monotonic()
         while time.monotonic() - t_start < start_timeout:
-            if self._stop_flag.is_set():
+            if self._abort_flag.is_set():
                 self._music.stop()
                 self._backend.stop()
                 track.fail("Stopped by user")
@@ -399,7 +404,7 @@ class CaptureManager:
         max_duration = track.duration_seconds + grace
 
         while True:
-            if self._stop_flag.is_set():
+            if self._abort_flag.is_set():
                 self._music.stop()
                 time.sleep(post_roll)
                 self._backend.stop()
@@ -441,7 +446,7 @@ class CaptureManager:
             last_position = pb.position
 
         # Check if emergency stop happened during playback
-        if self._stop_flag.is_set() and track.status == TrackStatus.FAILED:
+        if self._abort_flag.is_set() and track.status == TrackStatus.FAILED:
             self._backend.abort()
             return False
 
@@ -464,16 +469,15 @@ class CaptureManager:
             return False
         track.raw_path = raw.path
 
-        # 12. Convert (OBS) or promote (BlackHole direct)
+        # 12. Convert (OBS MKV→FLAC) or promote (BlackHole direct FLAC)
         track.transition(TrackStatus.CONVERTING)
         self._store.save_atomic(session)
 
-        if session.backend == "obs" and raw.codec == "alac":
+        if session.backend == "obs" and raw.codec != "flac":
             from capture.processing import convert_alac_to_flac24
             try:
                 flac_path = str(raw_dir / f"{track.ordinal:04d}_converted.flac")
                 convert_alac_to_flac24(raw.path, flac_path)
-                track.raw_path = raw.path
             except Exception as e:
                 track.fail(f"Conversion error: {e}")
                 return False
@@ -496,9 +500,18 @@ class CaptureManager:
         self._store.save_atomic(session)
 
         from capture.processing import apply_capture_tags, resolve_output_path
+        artwork = None
+        try:
+            artwork = self._music.get_artwork(playlist_pid, track.persistent_id)
+            if artwork is None:
+                log.info("No artwork in Music for track %d (%s)",
+                         track.ordinal, track.title)
+        except Exception as e:
+            log.warning("Artwork fetch failed for track %d: %s", track.ordinal, e)
         try:
             apply_capture_tags(
-                flac_path, track, session.session_id, session.backend
+                flac_path, track, session.session_id, session.backend,
+                artwork=artwork,
             )
         except Exception as e:
             log.warning("Tagging failed for track %d: %s", track.ordinal, e)

@@ -53,6 +53,10 @@ app = Flask(__name__, static_folder=str(bundle_base_path() / "static"))  # noqa:
 from capture.routes import init_capture
 init_capture(app, load_config())
 
+# Music.app controller for the Playlist Builder (stateless — reused per request)
+from capture.music import MusicController, MusicError, MusicPermissionDenied
+_music_ctl = MusicController()
+
 
 # ---------------------------------------------------------------------------
 # Apple Music Now Playing capture
@@ -1294,6 +1298,50 @@ def delete_saved_link():
 
 
 # ---------------------------------------------------------------------------
+# Playlist Builder — browse the Music library and create a new playlist
+# ---------------------------------------------------------------------------
+
+@app.route("/playlist-builder")
+def playlist_builder_page():
+    return app.send_static_file("playlist-builder.html")
+
+
+@app.route("/api/music-library/tracks", methods=["GET"])
+def music_library_tracks():
+    try:
+        tracks = _music_ctl.list_library_tracks()
+    except MusicPermissionDenied as e:
+        return jsonify({"error": str(e), "permission": True}), 403
+    except MusicError as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"tracks": tracks, "count": len(tracks)})
+
+
+@app.route("/api/music-library/create-playlist", methods=["POST"])
+def music_library_create_playlist():
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    track_ids = data.get("track_ids") or []
+    if not name:
+        return jsonify({"error": "Playlist name is required"}), 400
+    if not isinstance(track_ids, list):
+        return jsonify({"error": "track_ids must be a list"}), 400
+    try:
+        result = _music_ctl.create_playlist(name, track_ids)
+    except MusicPermissionDenied as e:
+        return jsonify({"error": str(e), "permission": True}), 403
+    except MusicError as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({
+        "ok": True,
+        "name": name,
+        "persistent_id": result.get("persistent_id", ""),
+        "added": result.get("added", 0),
+        "requested": len(track_ids),
+    })
+
+
+# ---------------------------------------------------------------------------
 # Lossless Check — spectral analysis for detecting lossy transcodes
 # ---------------------------------------------------------------------------
 
@@ -1406,6 +1454,7 @@ def lossless_check_save_report():
     report_id = now.strftime("lc_%Y%m%d_%H%M%S")
 
     lossless = sum(1 for r in results if r.get("verdict") == "lossless")
+    resampled = sum(1 for r in results if r.get("verdict") == "resampled")
     transcodes = sum(1 for r in results if r.get("verdict") == "transcode")
 
     report = {
@@ -1414,6 +1463,7 @@ def lossless_check_save_report():
         "date": now.isoformat(),
         "total": len(results),
         "lossless": lossless,
+        "resampled": resampled,
         "transcodes": transcodes,
         "results": results,
     }
@@ -1515,6 +1565,8 @@ def update_settings():
             cfg["theme_preference"] = tp
     if "page_background_enabled" in data:
         cfg["page_background_enabled"] = bool(data["page_background_enabled"])
+    if "show_playlist_builder_tab" in data:
+        cfg["show_playlist_builder_tab"] = bool(data["show_playlist_builder_tab"])
     if "fix_retain_filename_suffixes" in data:
         lines = normalize_fix_retain_filename_suffixes(data["fix_retain_filename_suffixes"])  # noqa: F405
         for line in lines:

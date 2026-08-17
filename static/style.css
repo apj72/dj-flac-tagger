@@ -322,6 +322,10 @@ html[data-theme="light"] .header-logo-wrap .header-logo--light {
 .tab-link:hover { color: var(--text); background: var(--surface-hover); }
 .tab-link.active { color: var(--text-on-accent); background: var(--accent); }
 
+/* Playlist Builder tab is opt-in (Settings → Show Playlist Builder tab).
+   Hidden unless documentElement has data-pb-tab="on", set by theme-init.js. */
+html:not([data-pb-tab="on"]) .tab-link[href="/playlist-builder"] { display: none; }
+
 .tab-link--icon-only {
   position: relative;
   gap: 0;
@@ -414,8 +418,8 @@ html[data-theme="light"] .header-logo-wrap .header-logo--light {
   mask-image: url("/static/icons/tabs/bulk-fix.png");
 }
 .tab-icon-saved-links {
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 2h14a1 1 0 0 1 1 1v19.143a.5.5 0 0 1-.766.424L12 18.03l-7.234 4.537A.5.5 0 0 1 4 22.143V3a1 1 0 0 1 1-1z' fill='black'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 2h14a1 1 0 0 1 1 1v19.143a.5.5 0 0 1-.766.424L12 18.03l-7.234 4.537A.5.5 0 0 1 4 22.143V3a1 1 0 0 1 1-1z' fill='black'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9.5' fill='none' stroke='black' stroke-width='2'/%3E%3Cellipse cx='12' cy='12' rx='4' ry='9.5' fill='none' stroke='black' stroke-width='2'/%3E%3Cline x1='2.5' y1='12' x2='21.5' y2='12' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9.5' fill='none' stroke='black' stroke-width='2'/%3E%3Cellipse cx='12' cy='12' rx='4' ry='9.5' fill='none' stroke='black' stroke-width='2'/%3E%3Cline x1='2.5' y1='12' x2='21.5' y2='12' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
   width: 1.6rem;
 }
 .tab-icon-settings {
@@ -423,10 +427,61 @@ html[data-theme="light"] .header-logo-wrap .header-logo--light {
   mask-image: url("/static/icons/tabs/settings.png");
 }
 .tab-icon-capture {
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='currentColor' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='currentColor' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='5' y='2' width='14' height='20' rx='2' fill='none' stroke='black' stroke-width='2'/%3E%3Ccircle cx='12' cy='7' r='1.6' fill='black'/%3E%3Ccircle cx='12' cy='15' r='3.6' fill='none' stroke='black' stroke-width='2'/%3E%3Ccircle cx='12' cy='15' r='1.2' fill='black'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='5' y='2' width='14' height='20' rx='2' fill='none' stroke='black' stroke-width='2'/%3E%3Ccircle cx='12' cy='7' r='1.6' fill='black'/%3E%3Ccircle cx='12' cy='15' r='3.6' fill='none' stroke='black' stroke-width='2'/%3E%3Ccircle cx='12' cy='15' r='1.2' fill='black'/%3E%3C/svg%3E");
   width: 1.6rem;
 }
+.tab-icon-playlist-builder {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cline x1='3' y1='6' x2='15' y2='6' stroke='black' stroke-width='2'/%3E%3Cline x1='3' y1='11' x2='15' y2='11' stroke='black' stroke-width='2'/%3E%3Cline x1='3' y1='16' x2='11' y2='16' stroke='black' stroke-width='2'/%3E%3Cline x1='18' y1='13' x2='18' y2='21' stroke='black' stroke-width='2'/%3E%3Cline x1='14' y1='17' x2='22' y2='17' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cline x1='3' y1='6' x2='15' y2='6' stroke='black' stroke-width='2'/%3E%3Cline x1='3' y1='11' x2='15' y2='11' stroke='black' stroke-width='2'/%3E%3Cline x1='3' y1='16' x2='11' y2='16' stroke='black' stroke-width='2'/%3E%3Cline x1='18' y1='13' x2='18' y2='21' stroke='black' stroke-width='2'/%3E%3Cline x1='14' y1='17' x2='22' y2='17' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+  width: 1.6rem;
+}
+
+/* Playlist Builder page styles */
+.pb-create-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0 0.25rem;
+}
+.pb-name-input {
+  flex: 1 1 260px;
+  min-width: 180px;
+}
+.pb-selected-count {
+  font-size: 0.85rem;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+.pb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0 0.5rem;
+}
+.pb-search-input {
+  flex: 1 1 280px;
+  min-width: 180px;
+}
+.pb-table-wrap {
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+.pb-table th.pb-th-check,
+.pb-table td.pb-td-check {
+  width: 2rem;
+  text-align: center;
+}
+.pb-table th.pb-th-dur,
+.pb-table td.pb-td-dur {
+  white-space: nowrap;
+  text-align: right;
+}
+.pb-row:hover { background: rgba(127, 127, 127, 0.08); }
+.pb-success { color: #3cd278; }
 
 /* Capture page styles */
 .cap-current { padding: 0.5rem 0; }
@@ -1622,6 +1677,9 @@ label {
 }
 .search-item:hover { background: var(--surface-hover); }
 .search-item.selected { background: var(--accent); color: var(--text-on-accent); }
+/* Marks the result whose artwork is currently in use (picked via its thumbnail). */
+.search-item.art-source { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.search-item.selected.art-source { outline-color: var(--text-on-accent); }
 
 .search-thumb {
   width: 40px;
@@ -2300,6 +2358,7 @@ html[data-theme="light"] .djmm-player-thumb {
 .lc-td-sr, .lc-td-dur, .lc-td-cutoff, .lc-td-bitrate, .lc-td-confidence { white-space: nowrap; }
 .lc-row--transcode { background: rgba(255, 60, 60, 0.06); }
 .lc-row--lossless { background: rgba(60, 210, 120, 0.06); }
+.lc-row--resampled { background: rgba(70, 170, 255, 0.06); }
 
 /* Lossless Check verdict badges */
 .lc-badge {
@@ -2313,6 +2372,7 @@ html[data-theme="light"] .djmm-player-thumb {
 }
 .lc-badge--lossless { background: rgba(60, 210, 120, 0.15); color: #3cd278; }
 .lc-badge--transcode { background: rgba(255, 60, 60, 0.15); color: #ff5252; }
+.lc-badge--resampled { background: rgba(70, 170, 255, 0.15); color: #46aaff; }
 .lc-badge--inconclusive { background: rgba(180, 180, 180, 0.15); color: var(--text-muted); }
 .lc-badge--error { background: rgba(255, 160, 0, 0.15); color: #ffa000; }
 .lc-badge--pending { background: rgba(180, 180, 180, 0.1); color: var(--text-muted); }
@@ -2325,6 +2385,7 @@ html[data-theme="light"] .djmm-player-thumb {
 
 /* Lossless Check summary */
 .lc-sum-lossless { color: #3cd278; }
+.lc-sum-resampled { color: #46aaff; }
 .lc-sum-transcode { color: #ff5252; }
 .lc-sum-other { color: var(--text-muted); }
 

@@ -2,6 +2,7 @@
 (function () {
   var KEY = "djmm.themePreference";
   var BG_KEY = "djmm.pageBackgroundEnabled";
+  var PB_TAB_KEY = "djmm.showPlaylistBuilderTab";
 
   function resolve(pref) {
     if (pref === "light") return "light";
@@ -72,8 +73,29 @@
     return true;
   };
 
+  /* Playlist Builder tab visibility: off by default, opt-in from Settings.
+     CSS hides the tab unless documentElement has data-pb-tab="on". */
+  function applyPbTab(enabled) {
+    document.documentElement.setAttribute("data-pb-tab", enabled ? "on" : "off");
+  }
+
+  var pbRaw = localStorage.getItem(PB_TAB_KEY);
+  applyPbTab(pbRaw === "1" || pbRaw === "true");
+
+  window.djmmApplyShowPlaylistBuilderTab = function (enabled) {
+    localStorage.setItem(PB_TAB_KEY, enabled ? "1" : "0");
+    applyPbTab(enabled);
+    saveToServer("show_playlist_builder_tab", !!enabled);
+  };
+
+  window.djmmGetShowPlaylistBuilderTab = function () {
+    var raw = localStorage.getItem(PB_TAB_KEY);
+    return raw === "1" || raw === "true";
+  };
+
   /* On fresh load (empty localStorage), restore from server config */
-  var needsRestore = !localStorage.getItem(KEY) && !localStorage.getItem(BG_KEY);
+  var needsRestore =
+    !localStorage.getItem(KEY) && !localStorage.getItem(BG_KEY) && !localStorage.getItem(PB_TAB_KEY);
   if (needsRestore) {
     fetch("/api/settings")
       .then(function (r) { return r.json(); })
@@ -88,6 +110,12 @@
           applyBg(false);
         } else if (cfg.page_background_enabled === true) {
           localStorage.setItem(BG_KEY, "1");
+        }
+        if (cfg.show_playlist_builder_tab === true) {
+          localStorage.setItem(PB_TAB_KEY, "1");
+          applyPbTab(true);
+        } else if (cfg.show_playlist_builder_tab === false) {
+          localStorage.setItem(PB_TAB_KEY, "0");
         }
       })
       .catch(function () {});

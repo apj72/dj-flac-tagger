@@ -29,6 +29,7 @@
         <a href="/lossless-check" class="tab-link tab-link--icon-only active" data-tooltip="Lossless Check" aria-label="Lossless Check"><span class="tab-icon tab-icon-lossless-check" aria-hidden="true"></span></a>
         <a href="/saved-links" class="tab-link tab-link--icon-only" data-tooltip="Saved Links" aria-label="Saved Links"><span class="tab-icon tab-icon-saved-links" aria-hidden="true"></span></a>
         <a href="/capture" class="tab-link tab-link--icon-only" data-tooltip="Capture Playlist" aria-label="Capture Playlist"><span class="tab-icon tab-icon-capture" aria-hidden="true"></span></a>
+        <a href="/playlist-builder" class="tab-link tab-link--icon-only" data-tooltip="Playlist Builder" aria-label="Playlist Builder"><span class="tab-icon tab-icon-playlist-builder" aria-hidden="true"></span></a>
         <a href="/settings" class="tab-link tab-link--icon-only" data-tooltip="Settings" aria-label="Settings"><span class="tab-icon tab-icon-settings" aria-hidden="true"></span></a>
       </nav>
     </header>
@@ -39,7 +40,7 @@
           <span class="step">1</span> Select folder
           <span class="help-tip">
             <button type="button" class="help-tip-btn" aria-label="About lossless check">?</button>
-            <span class="help-tip-bubble" role="tooltip">Scans audio files using spectral analysis to detect if a lossless file (FLAC, WAV, AIFF) is actually a re-encoded lossy source (e.g. MP3). Files with a sharp high-frequency cutoff are flagged as likely transcodes, with an estimated source bitrate.</span>
+            <span class="help-tip-bubble" role="tooltip">Scans audio files using spectral analysis to detect if a lossless file (FLAC, WAV, AIFF) is actually a re-encoded lossy source (e.g. MP3). A sharp cutoff with a silent plateau up to Nyquist is flagged as a likely <em>Transcode</em> (with estimated source bitrate). A rolloff that instead rides right up to Nyquist is marked <em>Resampled</em> — a lossless source that was sample-rate-converted (e.g. hi-res downsampled to 44.1&nbsp;kHz), not a lossy encode.</span>
           </span>
         </h2>
         <div class="dir-bar">
@@ -83,6 +84,7 @@
           <button type="button" class="btn btn-secondary btn-sm lc-filter active" data-filter="all">All</button>
           <button type="button" class="btn btn-secondary btn-sm lc-filter" data-filter="transcode">Transcodes</button>
           <button type="button" class="btn btn-secondary btn-sm lc-filter" data-filter="lossless">Lossless</button>
+          <button type="button" class="btn btn-secondary btn-sm lc-filter" data-filter="resampled">Resampled</button>
           <button type="button" class="btn btn-secondary btn-sm lc-filter" data-filter="inconclusive">Other</button>
         </div>
         <div id="lc-results-table-wrap" style="overflow-x:auto">

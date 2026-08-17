@@ -169,6 +169,57 @@ def analyze_lossless_authenticity(filepath):
                         drop_db = round(local_drop, 1)
 
     if cutoff_freq is not None:
+        # A cutoff alone does not prove a lossy transcode. A lossless hi-res
+        # source that has been sample-rate-converted down to the capture device
+        # rate (e.g. 96 kHz -> 44.1 kHz by CoreAudio) also shows a rolloff — but
+        # its shape is different:
+        #
+        #   * Lossy transcode (AAC/MP3): energy is cut, then a FLAT silent
+        #     plateau extends from the cutoff all the way up to Nyquist. The band
+        #     between the cut and Nyquist is unused.
+        #   * Sample-rate conversion: the anti-alias filter rides a STEEP
+        #     transition band right up to Nyquist, only reaching the noise floor
+        #     in the last ~1 kHz. The band is used all the way to the limit.
+        #
+        # So we find where the spectrum actually bottoms out (reaches the noise
+        # floor) and compare that to Nyquist. If the floor is reached essentially
+        # AT Nyquist, the rolloff is the device's sample-rate limit — the source
+        # is lossless, just resampled. If there is a silent plateau well below
+        # Nyquist, it is a genuine lossy cut.
+        hf_region = smoothed[(freqs >= 14000) & (freqs <= nyquist)]
+        if hf_region.size:
+            floor_db = float(np.percentile(hf_region, 5))
+        else:
+            floor_db = ref_energy - 100.0
+        reach_mask = (
+            (freqs >= cutoff_freq) & (freqs <= nyquist)
+            & (smoothed <= floor_db + 8.0)
+        )
+        if np.any(reach_mask):
+            reach_floor_freq = float(freqs[reach_mask][0])
+        else:
+            reach_floor_freq = nyquist
+        gap_ratio = (nyquist - reach_floor_freq) / nyquist if nyquist else 1.0
+
+        if gap_ratio <= 0.06:
+            # Band used all the way to Nyquist → sample-rate-conversion rolloff,
+            # not a lossy encoder. Lossless source downsampled to the device rate.
+            return {
+                "verdict": "resampled",
+                "reason": (
+                    f"Rolloff rides to Nyquist (floor reached at "
+                    f"{int(reach_floor_freq)} Hz of {int(nyquist)} Hz) — "
+                    f"lossless source sample-rate-converted to {sr} Hz, "
+                    f"not a lossy transcode"
+                ),
+                "cutoff_freq": cutoff_freq,
+                "estimated_bitrate": None,
+                "confidence": "high",
+                "sample_rate": sr,
+                "nyquist": nyquist,
+                "duration": round(duration, 1),
+            }
+
         estimated_bitrate = _estimate_bitrate(cutoff_freq)
         if drop_db > 35:
             confidence = "high"
@@ -178,7 +229,10 @@ def analyze_lossless_authenticity(filepath):
             confidence = "low"
         return {
             "verdict": "transcode",
-            "reason": f"Sharp spectral cutoff at {cutoff_freq} Hz ({drop_db} dB drop)",
+            "reason": (
+                f"Sharp spectral cutoff at {cutoff_freq} Hz ({drop_db} dB drop) "
+                f"with a silent plateau to Nyquist"
+            ),
             "cutoff_freq": cutoff_freq,
             "estimated_bitrate": estimated_bitrate,
             "confidence": confidence,

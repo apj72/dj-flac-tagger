@@ -146,8 +146,14 @@ def convert_alac_to_flac24(input_path: str, output_path: str) -> str:
 
 
 def apply_capture_tags(filepath: str, track: PlannedTrack,
-                       session_id: str, backend: str):
-    """Apply metadata from the planned track to the output file."""
+                       session_id: str, backend: str,
+                       artwork: tuple[bytes, str] | None = None):
+    """Apply metadata from the planned track to the output file.
+
+    ``artwork`` is an optional (image_bytes, mime) tuple, typically pulled from
+    Music.app for the source track. When None, apply_metadata falls back to its
+    default no-artwork image.
+    """
     from metadata import apply_metadata
 
     meta = {}
@@ -170,7 +176,9 @@ def apply_capture_tags(filepath: str, track: PlannedTrack,
 
     meta["comment"] = f"Captured by DJ MetaManager (session {session_id})"
 
-    apply_metadata(filepath, meta)
+    art_bytes, art_mime = (artwork if artwork else (None, None))
+    apply_metadata(filepath, meta,
+                   artwork_bytes=art_bytes, artwork_mime=art_mime)
 
 
 def safe_filename(artist: str, title: str, ext: str = ".flac") -> str:
