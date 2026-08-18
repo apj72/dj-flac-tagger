@@ -36,6 +36,8 @@
   const reviewSummary = document.getElementById("cap-review-summary");
   const reviewTbody = document.getElementById("cap-review-tbody");
   const resumeBtn = document.getElementById("cap-resume-btn");
+  const fixArtworkBtn = document.getElementById("cap-fix-artwork-btn");
+  const fixArtworkResult = document.getElementById("cap-fix-artwork-result");
   const newBtn = document.getElementById("cap-new-btn");
 
   // State
@@ -328,6 +330,80 @@
     }
   }
 
+  let fixArtworkPoll = null;
+
+  function showFixArtworkNote(text, tone) {
+    // tone: "info" | "ok" | "warn" | "err"
+    const colors = { info: "var(--fg, #ddd)", ok: "#3fb950", warn: "#d29922", err: "#f85149" };
+    fixArtworkResult.textContent = text;
+    fixArtworkResult.style.color = colors[tone] || colors.info;
+    fixArtworkResult.style.display = "";
+  }
+
+  function renderFixArtworkStatus(st) {
+    const f = (st.fixed || []).length;
+    const s = (st.skipped || []).length;
+    const x = (st.failed || []).length;
+    if (st.running) {
+      const cur = st.current ? ` — ${st.current}` : "";
+      showFixArtworkNote(`⏳ Fixing artwork… ${st.done}/${st.total}${cur}`, "info");
+      return;
+    }
+    // finished
+    if (st.error) {
+      showFixArtworkNote(`Error: ${st.error}`, "err");
+      return;
+    }
+    let msg = `✓ Artwork re-applied to ${f} track${f === 1 ? "" : "s"}.`;
+    if (s) msg += ` ${s} skipped (file not found).`;
+    if (x) msg += ` ${x} failed (no artwork from Music).`;
+    showFixArtworkNote(msg, x || s ? "warn" : "ok");
+  }
+
+  async function pollFixArtwork() {
+    try {
+      const resp = await fetch(`/api/capture/sessions/${activeSessionId}/fix-artwork/status`);
+      if (!resp.ok) return;
+      const st = await resp.json();
+      renderFixArtworkStatus(st);
+      if (!st.running) {
+        clearInterval(fixArtworkPoll);
+        fixArtworkPoll = null;
+        fixArtworkBtn.disabled = false;
+        fixArtworkBtn.textContent = "Fix artwork";
+      }
+    } catch (e) {
+      // keep polling; transient
+    }
+  }
+
+  async function fixArtwork() {
+    if (!activeSessionId || fixArtworkPoll) return;
+    fixArtworkBtn.disabled = true;
+    fixArtworkBtn.textContent = "Fixing artwork…";
+    showFixArtworkNote("⏳ Starting…", "info");
+    try {
+      const resp = await fetch(`/api/capture/sessions/${activeSessionId}/fix-artwork`, { method: "POST" });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        // 409 means a job is already running — just attach to it by polling.
+        if (resp.status !== 409) {
+          showFixArtworkNote("Error: " + (data.error || "Failed to start"), "err");
+          fixArtworkBtn.disabled = false;
+          fixArtworkBtn.textContent = "Fix artwork";
+          return;
+        }
+      }
+      showFixArtworkNote(`⏳ Fixing artwork… 0/${data.total ?? "?"}`, "info");
+      fixArtworkPoll = setInterval(pollFixArtwork, 600);
+      pollFixArtwork();
+    } catch (e) {
+      showFixArtworkNote("Error: " + e, "err");
+      fixArtworkBtn.disabled = false;
+      fixArtworkBtn.textContent = "Fix artwork";
+    }
+  }
+
   function newCapture() {
     activeSessionId = null;
     stopPolling();
@@ -450,6 +526,7 @@
   stopBtn.addEventListener("click", stopCapture);
   emergencyBtn.addEventListener("click", emergencyStop);
   resumeBtn.addEventListener("click", resumeCapture);
+  fixArtworkBtn.addEventListener("click", fixArtwork);
   newBtn.addEventListener("click", newCapture);
 
   // ------------------------------------------------------------------

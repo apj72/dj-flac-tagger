@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from flask import Blueprint, jsonify, request, current_app
+import os
+from flask import Blueprint, Response, jsonify, request, current_app
 
 from capture.models import (
     CaptureSession, PlannedTrack, PlaylistInfo,
@@ -55,7 +56,28 @@ def _get_manager() -> CaptureManager:
 
 @capture_bp.route("/capture")
 def capture_page():
-    return current_app.send_static_file("capture.html")
+    """Serve the capture page, auto cache-busting capture.js by its
+    modification time so front-end edits are picked up without a manual
+    hard reload.
+    """
+    static_dir = current_app.static_folder
+    html_path = os.path.join(static_dir, "capture.html")
+    try:
+        with open(html_path, encoding="utf-8") as f:
+            html = f.read()
+    except OSError:
+        return current_app.send_static_file("capture.html")
+
+    try:
+        ver = int(os.path.getmtime(os.path.join(static_dir, "capture.js")))
+    except OSError:
+        ver = 0
+    html = html.replace('src="/static/capture.js"',
+                        f'src="/static/capture.js?v={ver}"')
+
+    resp = Response(html, mimetype="text/html")
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
 
 
 # ------------------------------------------------------------------
@@ -314,6 +336,35 @@ def skip_track(session_id, ordinal):
         return jsonify({"status": "skipped"})
     except CaptureError as e:
         return jsonify({"error": str(e)}), 409
+
+
+@capture_bp.route("/api/capture/sessions/<session_id>/fix-artwork",
+                   methods=["POST"])
+def fix_artwork(session_id):
+    m = _get_manager()
+    if m.session and m.session.session_id == session_id:
+        session = m.session
+    else:
+        try:
+            session = m._store.load(session_id)
+        except Exception:
+            return jsonify({"error": "Session not found"}), 404
+    try:
+        result = m.start_fix_artwork(session)
+        return jsonify({"status": "started", **result})
+    except CaptureError as e:
+        return jsonify({"error": str(e)}), 409
+
+
+@capture_bp.route("/api/capture/sessions/<session_id>/fix-artwork/status")
+def fix_artwork_status(session_id):
+    m = _get_manager()
+    status = m.artwork_status()
+    if status is None:
+        return jsonify({"running": False, "total": 0, "done": 0,
+                        "fixed": [], "skipped": [], "failed": [],
+                        "current": "", "error": None})
+    return jsonify(status)
 
 
 @capture_bp.route("/api/capture/sessions/<session_id>/cleanup",

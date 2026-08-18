@@ -40,6 +40,8 @@ class CaptureManager:
         self._stop_flag = threading.Event()   # graceful: finish current track, then stop
         self._abort_flag = threading.Event()  # immediate: abort the in-progress track now
         self._pause_flag = threading.Event()
+        self._artwork_lock = threading.Lock()
+        self._artwork_job: dict | None = None
 
     @property
     def session(self) -> CaptureSession | None:
@@ -175,6 +177,40 @@ class CaptureManager:
             track = self._session.tracks[ordinal]
             track.reset_for_retry()
             self._store.save_atomic(self._session)
+            # If the session already drained (needs_attention) or is paused and no
+            # worker is running, kick it off so the retried track is actually
+            # processed instead of sitting at "pending" forever.
+            self._maybe_restart_worker_locked()
+
+    def _worker_alive(self) -> bool:
+        return self._worker is not None and self._worker.is_alive()
+
+    def _maybe_restart_worker_locked(self):
+        """Restart the background worker if the session is idle but resumable.
+
+        Caller must hold self._lock.
+        """
+        if self._worker_alive():
+            return
+        session = self._session
+        if session is None:
+            return
+        if session.status not in (
+            SessionStatus.PAUSED, SessionStatus.NEEDS_ATTENTION
+        ):
+            return
+        try:
+            session.transition(SessionStatus.RUNNING)
+        except InvalidTransition:
+            return
+        self._store.save_atomic(session)
+        self._stop_flag.clear()
+        self._abort_flag.clear()
+        self._pause_flag.clear()
+        self._worker = threading.Thread(
+            target=self._run_loop, daemon=True, name="capture-worker",
+        )
+        self._worker.start()
 
     def skip_track(self, ordinal: int):
         with self._lock:
@@ -191,6 +227,112 @@ class CaptureManager:
                 raise CaptureError(
                     f"Cannot skip track in state {track.status}"
                 )
+
+    def start_fix_artwork(self, session: CaptureSession) -> dict:
+        """Start a background job that re-applies album artwork to a session's
+        completed output files.
+
+        External mastering (e.g. Platinum Notes) strips embedded art. The worker
+        re-fetches each track's artwork from Music and re-embeds it into the
+        current file at ``track.final_path`` (where Platinum Notes writes the
+        processed file, reusing the original location/filename). Only the
+        picture is touched — textual tags written by Platinum Notes are left
+        intact. Poll :meth:`artwork_status` for live progress.
+        """
+        with self._artwork_lock:
+            if self._artwork_job and self._artwork_job.get("running"):
+                raise CaptureError("Artwork fix already in progress")
+            candidates = [t for t in session.tracks
+                          if t.status == TrackStatus.COMPLETED]
+            self._artwork_job = {
+                "running": True,
+                "total": len(candidates),
+                "done": 0,
+                "current": "",
+                "fixed": [], "skipped": [], "failed": [],
+                "error": None,
+            }
+            total = len(candidates)
+
+        worker = threading.Thread(
+            target=self._fix_artwork_worker, args=(session,),
+            daemon=True, name="fix-artwork",
+        )
+        worker.start()
+        return {"total": total}
+
+    def _artwork_record(self, bucket: str, track: PlannedTrack,
+                        label: str, reason: str | None):
+        entry = {"ordinal": track.ordinal, "track": label}
+        if reason:
+            entry["reason"] = reason
+        with self._artwork_lock:
+            self._artwork_job[bucket].append(entry)
+            self._artwork_job["done"] += 1
+
+    def _fix_artwork_worker(self, session: CaptureSession):
+        from metadata import apply_metadata  # top-level module, import lazily
+
+        playlist_pid = session.playlist.persistent_id if session.playlist else ""
+        try:
+            for track in session.tracks:
+                if track.status != TrackStatus.COMPLETED:
+                    continue
+                label = f"{track.artist} - {track.title}"
+                with self._artwork_lock:
+                    self._artwork_job["current"] = label
+                path = track.final_path
+                if not path or not os.path.exists(path):
+                    self._artwork_record("skipped", track, label,
+                                         "output file not found")
+                    continue
+                try:
+                    artwork = self._music.get_artwork(playlist_pid,
+                                                      track.persistent_id)
+                except Exception as e:  # AppleScript / Music errors
+                    log.warning("fix_artwork: get_artwork failed for %s: %s",
+                                label, e)
+                    artwork = None
+                if not artwork:
+                    self._artwork_record("failed", track, label,
+                                         "no artwork available from Music")
+                    continue
+                try:
+                    art_bytes, art_mime = artwork
+                    apply_metadata(path, {}, artwork_bytes=art_bytes,
+                                   artwork_mime=art_mime)
+                    self._artwork_record("fixed", track, label, None)
+                except Exception as e:
+                    log.warning("fix_artwork: embed failed for %s: %s", label, e)
+                    self._artwork_record("failed", track, label, str(e))
+        except Exception as e:
+            log.exception("fix_artwork worker crashed")
+            with self._artwork_lock:
+                self._artwork_job["error"] = str(e)
+        finally:
+            with self._artwork_lock:
+                job = self._artwork_job
+                job["running"] = False
+                job["current"] = ""
+                log.info("fix_artwork: %d fixed, %d skipped, %d failed",
+                         len(job["fixed"]), len(job["skipped"]),
+                         len(job["failed"]))
+
+    def artwork_status(self) -> dict | None:
+        with self._artwork_lock:
+            j = self._artwork_job
+            if j is None:
+                return None
+            return {
+                "running": j["running"],
+                "total": j["total"],
+                "done": j["done"],
+                "current": j["current"],
+                "fixed": list(j["fixed"]),
+                "skipped": list(j["skipped"]),
+                "failed": list(j["failed"]),
+                "error": j["error"],
+            }
 
     def load_recoverable(self) -> list[CaptureSession]:
         return self._store.list_recoverable()
@@ -281,10 +423,19 @@ class CaptureManager:
         if not session.is_terminal:
             remaining = session.pending_count
             if remaining == 0 and not self._pause_flag.is_set():
-                session.transition(SessionStatus.FINALISING)
-                self._store.save_atomic(session)
-                session.transition(SessionStatus.COMPLETED)
-                self._store.save_atomic(session)
+                if session.unresolved_count > 0:
+                    # Queue drained but some tracks failed / need review. Do NOT
+                    # go terminal — keep the session recoverable and resumable so
+                    # the user can retry the stragglers (e.g. after fixing network
+                    # connectivity for cloud tracks).
+                    if session.status == SessionStatus.RUNNING:
+                        session.transition(SessionStatus.NEEDS_ATTENTION)
+                        self._store.save_atomic(session)
+                else:
+                    session.transition(SessionStatus.FINALISING)
+                    self._store.save_atomic(session)
+                    session.transition(SessionStatus.COMPLETED)
+                    self._store.save_atomic(session)
             elif self._stop_flag.is_set():
                 if session.status == SessionStatus.STOPPING:
                     session.transition(SessionStatus.FINALISING)

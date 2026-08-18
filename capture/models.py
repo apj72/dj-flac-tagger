@@ -258,6 +258,15 @@ class CaptureSession:
     def skipped_count(self) -> int:
         return sum(1 for t in self.tracks if t.status == TrackStatus.SKIPPED)
 
+    @property
+    def needs_review_count(self) -> int:
+        return sum(1 for t in self.tracks if t.status == TrackStatus.NEEDS_REVIEW)
+
+    @property
+    def unresolved_count(self) -> int:
+        """Tracks that ended in a non-terminal problem state (failed / needs review)."""
+        return self.failed_count + self.needs_review_count
+
     def next_pending_track(self) -> PlannedTrack | None:
         for t in self.tracks:
             if t.status == TrackStatus.PENDING:

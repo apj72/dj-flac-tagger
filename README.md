@@ -245,6 +245,10 @@ Apple Music  -->  System output: BlackHole 16ch (44.1 kHz)
 5. Use **Pause after track**, **Stop after track**, or **Emergency stop** during capture.
 6. Review results — retry failed tracks or send to **Bulk Fix** for artwork enrichment.
 
+**Resuming an interrupted session:** if a run ends with some tracks still failed (for example a network drop stops Apple Music cloud tracks from streaming), the session is **not** marked complete — it is left in a *needs-attention* state so it stays recoverable. On the next page load DJ MetaManager offers to **recover** it; click **Resume capture** and only the outstanding tracks are recorded, in order, from where it stopped. **Retry** on an individual track also restarts processing on its own, so a retried track no longer just sits at *pending*.
+
+**Fix artwork:** external mastering (e.g. Platinum Notes) can strip embedded cover art when it rewrites a file. The **Fix artwork** button at the bottom of the Capture tab re-applies artwork to every completed track in the session — it re-fetches each track's cover from Music and re-embeds it into the current file, touching **only** the picture so tags written by Platinum Notes are preserved. Progress is shown live (`Fixing artwork… 12/31`) with a summary of how many were fixed, skipped (output file no longer at its original path), or failed. Run it **after** your Platinum Notes pass.
+
 **Requirements:** [BlackHole](https://existential.audio/blackhole/) (free, 16-channel version) and [OBS Studio](https://obsproject.com/) (free, includes obs-websocket). See the [Capture Playlist user guide](docs/user-guide/workflow-capture.html) for detailed setup instructions.
 
 ### Default artwork
