@@ -50,7 +50,7 @@ _config_mod._get_logged_tracks_path = lambda: LOGGED_TRACKS_PATH  # noqa: F405
 app = Flask(__name__, static_folder=str(bundle_base_path() / "static"))  # noqa: F405
 
 # Register capture subsystem blueprint
-from capture.routes import init_capture
+from capture.routes import init_capture, update_capture_config
 init_capture(app, load_config())
 
 # Music.app controller for the Playlist Builder (stateless — reused per request)
@@ -1514,6 +1514,20 @@ def update_settings():
         if "capture" not in cfg:
             cfg["capture"] = {}
         cfg["capture"]["output_dir"] = (data["capture_output_dir"] or "").strip()
+    if "capture_obs_password" in data:
+        cfg.setdefault("capture", {}).setdefault("obs", {})["password"] = (
+            (data["capture_obs_password"] or "").strip()
+        )
+    if "capture_obs_host" in data:
+        host = (data["capture_obs_host"] or "").strip()
+        cfg.setdefault("capture", {}).setdefault("obs", {})["host"] = host or "127.0.0.1"
+    if "capture_obs_port" in data:
+        raw_port = str(data.get("capture_obs_port") or "").strip()
+        if raw_port:
+            try:
+                cfg.setdefault("capture", {}).setdefault("obs", {})["port"] = int(raw_port)
+            except (TypeError, ValueError):
+                pass
     if "platinum_notes_app" in data:
         cfg["platinum_notes_app"] = (data["platinum_notes_app"] or "").strip()
     if "pn_output_suffix" in data:
@@ -1581,6 +1595,13 @@ def update_settings():
     save_config(cfg)  # noqa: F405
 
     cfg = dict(load_config())  # noqa: F405
+    # Push the fresh config into the live capture manager so changes such as the
+    # OBS WebSocket password take effect on the next preflight/session without
+    # restarting the app.
+    try:
+        update_capture_config(cfg)
+    except Exception:
+        pass
     cfg["extract_profile"] = resolve_extract_profile_key(cfg)  # noqa: F405
     cfg["extract_profiles"] = extract_profile_options(cfg)  # noqa: F405
     cfg["source_dir_resolved"] = resolve(cfg["source_dir"])  # noqa: F405

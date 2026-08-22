@@ -50,6 +50,15 @@ class CaptureManager:
     def has_active_session(self) -> bool:
         return self._session is not None and not self._session.is_terminal
 
+    def update_config(self, config: dict) -> None:
+        """Replace the live config (e.g. after Settings are saved).
+
+        The next preflight / session picks up the new values — including the
+        OBS WebSocket password — without an app restart. A session already in
+        flight keeps the snapshot it started with.
+        """
+        self._config = config or {}
+
     # ------------------------------------------------------------------
     # Session lifecycle
     # ------------------------------------------------------------------

@@ -20,6 +20,8 @@ function collectSettingsPageDraft() {
     fix_metadata_default_dir: $("#cfg-fix-default").value,
     inspect_default_dir: $("#cfg-inspect-default").value,
     capture_output_dir: $("#cfg-capture-output").value,
+    capture_obs_host: $("#cfg-capture-obs-host").value,
+    capture_obs_port: $("#cfg-capture-obs-port").value,
     extract_profile: $("#cfg-extract-profile").value,
     mp3_bitrate: $("#cfg-mp3-bitrate").value,
     aac_bitrate: $("#cfg-aac-bitrate").value,
@@ -55,6 +57,8 @@ function applySettingsDraft(st) {
   if (st.fix_metadata_default_dir != null) $("#cfg-fix-default").value = st.fix_metadata_default_dir;
   if (st.inspect_default_dir != null) $("#cfg-inspect-default").value = st.inspect_default_dir;
   if (st.capture_output_dir != null) $("#cfg-capture-output").value = st.capture_output_dir;
+  if (st.capture_obs_host != null) $("#cfg-capture-obs-host").value = st.capture_obs_host;
+  if (st.capture_obs_port != null) $("#cfg-capture-obs-port").value = st.capture_obs_port;
   if (st.extract_profile != null) {
     const sel = $("#cfg-extract-profile");
     if ([...sel.options].some((o) => o.value === st.extract_profile)) sel.value = st.extract_profile;
@@ -120,6 +124,10 @@ async function loadSettings() {
   $("#cfg-fix-default").value = cfg.fix_metadata_default_dir || "";
   $("#cfg-inspect-default").value = cfg.inspect_default_dir || "";
   $("#cfg-capture-output").value = (cfg.capture && cfg.capture.output_dir) || "";
+  const obs = (cfg.capture && cfg.capture.obs) || {};
+  $("#cfg-capture-obs-password").value = obs.password || "";
+  $("#cfg-capture-obs-host").value = obs.host || "";
+  $("#cfg-capture-obs-port").value = obs.port != null && obs.port !== "" ? String(obs.port) : "";
   $("#cfg-pn-app").value = cfg.platinum_notes_app || "";
   $("#cfg-pn-suffix").value = cfg.pn_output_suffix || "_PN";
   $("#cfg-target-lufs").value =
@@ -146,6 +154,9 @@ async function saveSettings() {
       fix_metadata_default_dir: $("#cfg-fix-default").value.trim(),
       inspect_default_dir: $("#cfg-inspect-default").value.trim(),
       capture_output_dir: $("#cfg-capture-output").value.trim(),
+      capture_obs_password: $("#cfg-capture-obs-password").value.trim(),
+      capture_obs_host: $("#cfg-capture-obs-host").value.trim(),
+      capture_obs_port: $("#cfg-capture-obs-port").value.trim(),
       extract_profile: $("#cfg-extract-profile").value,
       mp3_bitrate: $("#cfg-mp3-bitrate").value,
       aac_bitrate: $("#cfg-aac-bitrate").value,
@@ -229,6 +240,8 @@ function wireSettingsPersistence() {
     "cfg-fix-default",
     "cfg-inspect-default",
     "cfg-capture-output",
+    "cfg-capture-obs-host",
+    "cfg-capture-obs-port",
     "cfg-extract-profile",
     "cfg-mp3-bitrate",
     "cfg-aac-bitrate",
@@ -276,6 +289,17 @@ async function resolveStartPathForSetting(inputId) {
   }
 }
 
+function wireObsPasswordToggle() {
+  const btn = document.getElementById("cfg-capture-obs-password-toggle");
+  const inp = document.getElementById("cfg-capture-obs-password");
+  if (!btn || !inp) return;
+  btn.addEventListener("click", () => {
+    const reveal = inp.type === "password";
+    inp.type = reveal ? "text" : "password";
+    btn.textContent = reveal ? "Hide" : "Show";
+  });
+}
+
 function wireSettingsFolderNavigator() {
   document.querySelectorAll(".settings-folder-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -302,5 +326,6 @@ loadSettings().then(() => {
   wireShowPlaylistBuilderControl();
   wireSettingsPersistence();
   wireSettingsFolderNavigator();
+  wireObsPasswordToggle();
   scheduleSettingsPageSave();
 });

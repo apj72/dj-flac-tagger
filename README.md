@@ -227,7 +227,7 @@ Apple Music  -->  System output: BlackHole 16ch (44.1 kHz)
                                  -->  FFmpeg MKV --> 24-bit FLAC
 ```
 
-**OBS WebSocket config** (in `config.json`):
+**OBS WebSocket config:** set the host, port, and password on the **Settings** tab (under *Capture — OBS WebSocket password*). The password must match OBS's own **Server Password** (OBS → *Tools → WebSocket Server Settings*); leave it blank if authentication is off. Saved values take effect on the next capture — no app restart needed. Use the **Show** button to reveal the password while typing. These map to the following in `config.json` if you prefer to edit it directly:
 
 ```json
 "capture": {

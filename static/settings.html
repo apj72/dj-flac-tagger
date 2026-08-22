@@ -116,6 +116,24 @@
           <p class="hint" style="margin-top:0.35rem">Where completed FLAC captures are placed. Falls back to destination folder if empty.</p>
         </div>
         <div class="field-row">
+          <label for="cfg-capture-obs-password">Capture — OBS WebSocket password</label>
+          <div class="dir-bar">
+            <input type="password" id="cfg-capture-obs-password" placeholder="Match OBS: Tools → WebSocket Server Settings" autocomplete="off" spellcheck="false" />
+            <button type="button" id="cfg-capture-obs-password-toggle" class="btn btn-secondary" title="Show / hide password">Show</button>
+          </div>
+          <p class="hint" style="margin-top:0.35rem">Only needed when the <strong>OBS</strong> capture backend is selected and <strong>Enable Authentication</strong> is on in OBS. Must match the OBS <strong>Server Password</strong>; leave blank if authentication is off. Takes effect on the next capture — no restart needed.</p>
+        </div>
+        <div class="field-row inline-fields">
+          <div class="field-row">
+            <label for="cfg-capture-obs-host">OBS WebSocket host</label>
+            <input type="text" id="cfg-capture-obs-host" placeholder="127.0.0.1" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="field-row">
+            <label for="cfg-capture-obs-port">OBS WebSocket port</label>
+            <input type="text" id="cfg-capture-obs-port" inputmode="numeric" placeholder="4455" autocomplete="off" spellcheck="false" />
+          </div>
+        </div>
+        <div class="field-row">
           <label for="cfg-fix-retain-suffixes">Fix Metadata — filename suffixes to strip for search, keep when renaming</label>
           <textarea id="cfg-fix-retain-suffixes" rows="5" class="modal-field-input mono" style="resize:vertical;min-height:5.5rem" spellcheck="false" placeholder="_warped&#10;regex:_bpm\\([A-Za-z0-9]{3}\\)$"></textarea>
           <p class="hint" style="margin-top:0.35rem">

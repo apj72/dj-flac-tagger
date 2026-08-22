@@ -50,6 +50,12 @@ def _get_manager() -> CaptureManager:
     return _manager
 
 
+def update_capture_config(config: dict) -> None:
+    """Push freshly-saved settings into the live manager (no restart needed)."""
+    if _manager is not None:
+        _manager.update_config(config)
+
+
 # ------------------------------------------------------------------
 # Page
 # ------------------------------------------------------------------
