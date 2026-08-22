@@ -47,6 +47,58 @@
   let captureBackend = "obs";  // set from config in loadDefaults()
 
   // ------------------------------------------------------------------
+  // Setup-form persistence (survives leaving/returning to the tab before a
+  // capture has started — the running/review state is handled server-side).
+  // ------------------------------------------------------------------
+
+  const CAP_SETUP_KEY = "djmm.capture.setup";
+
+  function saveSetupDraft() {
+    try {
+      const opt = playlistSelect.options[playlistSelect.selectedIndex];
+      localStorage.setItem(CAP_SETUP_KEY, JSON.stringify({
+        playlistId: playlistSelect.value || "",
+        playlistName: (opt && opt.dataset.name) || "",
+        outputDir: outputDir.value || "",
+      }));
+    } catch (e) {
+      // localStorage unavailable — persistence is best-effort.
+    }
+  }
+
+  function getSetupDraft() {
+    try {
+      return JSON.parse(localStorage.getItem(CAP_SETUP_KEY) || "null");
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function clearSetupDraft() {
+    try {
+      localStorage.removeItem(CAP_SETUP_KEY);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // Re-apply the saved playlist/output selections once the playlist <select>
+  // has been populated. Rebuilds the track preview so the tab looks exactly as
+  // it did before navigating away.
+  async function restoreSetupDraft() {
+    const d = getSetupDraft();
+    if (!d) return;
+    if (d.outputDir) outputDir.value = d.outputDir;
+    if (d.playlistId) {
+      const hasOpt = [...playlistSelect.options].some((o) => o.value === d.playlistId);
+      if (hasOpt) {
+        playlistSelect.value = d.playlistId;
+        await loadSnapshot();
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------
   // Playlists
   // ------------------------------------------------------------------
 
@@ -411,6 +463,9 @@
     trackPreview.style.display = "none";
     preflightResults.style.display = "none";
     startBtn.disabled = true;
+    clearSetupDraft();
+    playlistSelect.value = "";
+    playlistInfo.textContent = "";
     showCard("setup");
     loadPlaylists();
   }
@@ -499,8 +554,12 @@
         }
       }
     } catch (e) {
-      // Fall through to recovery check.
+      // Fall through to setup.
     }
+    // No live session — show the setup card, restoring the playlist/output
+    // selections the user had before they navigated away.
+    await loadPlaylists();
+    await restoreSetupDraft();
     checkRecoverable();
   }
 
@@ -553,6 +612,8 @@
 
   refreshBtn.addEventListener("click", loadPlaylists);
   playlistSelect.addEventListener("change", loadSnapshot);
+  playlistSelect.addEventListener("change", saveSetupDraft);
+  outputDir.addEventListener("input", saveSetupDraft);
   preflightBtn.addEventListener("click", () => runPreflight(false));
   testSignalBtn.addEventListener("click", () => runPreflight(true));
   startBtn.addEventListener("click", startCapture);
@@ -582,6 +643,5 @@
   // ------------------------------------------------------------------
 
   loadDefaults();
-  loadPlaylists();
   initSessionView();
 })();
