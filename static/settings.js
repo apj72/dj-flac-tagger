@@ -32,6 +32,7 @@ function collectSettingsPageDraft() {
     loudness_verify_enabled: $("#cfg-loudness-verify").checked,
     extract_mkv_audio_analysis_enabled: $("#cfg-mkv-extract-analysis").checked,
     fix_retain_filename_suffixes_text: $("#cfg-fix-retain-suffixes").value,
+    allowed_extra_dirs_text: $("#cfg-allowed-extra-dirs").value,
   };
 }
 
@@ -82,6 +83,9 @@ function applySettingsDraft(st) {
   }
   if (st.fix_retain_filename_suffixes_text != null) {
     $("#cfg-fix-retain-suffixes").value = st.fix_retain_filename_suffixes_text;
+  }
+  if (st.allowed_extra_dirs_text != null) {
+    $("#cfg-allowed-extra-dirs").value = st.allowed_extra_dirs_text;
   }
 }
 
@@ -140,6 +144,9 @@ async function loadSettings() {
   $("#cfg-mkv-extract-analysis").checked = cfg.extract_mkv_audio_analysis_enabled !== false;
   const sfx = cfg.fix_retain_filename_suffixes;
   $("#cfg-fix-retain-suffixes").value = Array.isArray(sfx) && sfx.length ? sfx.join("\n") : "";
+  const extraDirs = cfg.allowed_extra_dirs;
+  $("#cfg-allowed-extra-dirs").value =
+    Array.isArray(extraDirs) && extraDirs.length ? extraDirs.join("\n") : "";
   const draft = typeof djmmPageStateGetPage === "function" ? djmmPageStateGetPage("settings") : null;
   if (draft && draft.v === 1) applySettingsDraft(draft);
 }
@@ -167,6 +174,7 @@ async function saveSettings() {
       loudness_verify_enabled: $("#cfg-loudness-verify").checked,
       extract_mkv_audio_analysis_enabled: $("#cfg-mkv-extract-analysis").checked,
       fix_retain_filename_suffixes: linesToRetainSuffixArray($("#cfg-fix-retain-suffixes").value),
+      allowed_extra_dirs: linesToRetainSuffixArray($("#cfg-allowed-extra-dirs").value),
     }),
   });
   let j = {};
@@ -256,6 +264,7 @@ function wireSettingsPersistence() {
   document.getElementById("cfg-loudness-verify")?.addEventListener("change", scheduleSettingsPageSave);
   document.getElementById("cfg-mkv-extract-analysis")?.addEventListener("change", scheduleSettingsPageSave);
   document.getElementById("cfg-fix-retain-suffixes")?.addEventListener("input", scheduleSettingsPageSave);
+  document.getElementById("cfg-allowed-extra-dirs")?.addEventListener("input", scheduleSettingsPageSave);
 }
 
 async function resolveStartPathForSetting(inputId) {

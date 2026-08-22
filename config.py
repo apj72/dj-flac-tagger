@@ -950,6 +950,13 @@ def _get_allowed_dirs():
         val = cfg.get(key, "")
         if val:
             dirs.append(os.path.realpath(resolve(val)))
+    extra = cfg.get("allowed_extra_dirs", [])
+    if isinstance(extra, str):
+        extra = [extra]
+    if isinstance(extra, (list, tuple)):
+        for val in extra:
+            if val and isinstance(val, str):
+                dirs.append(os.path.realpath(resolve(val)))
     dirs.append(os.path.realpath(tempfile.gettempdir()))
     return dirs
 

@@ -106,6 +106,7 @@ If you use **Extract → open in Platinum Notes → watch for processed output**
 
 - **Source / destination** folders  
 - **Fix Metadata / Inspect default folders** (optional; when empty, the **destination** folder is used for the initial path and **Default** on those tabs)  
+- **Additional allowed folders** — extra directories the app may read and write (`allowed_extra_dirs` in `config.json`, one per line). For safety the app only touches files inside its known folders — the Source, Destination, and default-browse folders above, plus the system temp dir. If **Fix Metadata**, **Inspect**, or **Normalise** rejects a file with *"Path is outside all allowed directories,"* add its folder here (subfolders are included; `~` is expanded). Takes effect immediately.  
 - **Extract format** — global default for **Extract** output and **Normalise** re-encode  
 - **MP3 bitrate** — CBR bitrate for MP3 output (128 / 192 / 256 / 320 kbps; default 320)  
 - **AAC bitrate** — CBR bitrate for AAC/M4A output (128 / 192 / 256 kbps; default 256)  

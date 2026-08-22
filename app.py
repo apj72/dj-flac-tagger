@@ -1510,6 +1510,16 @@ def update_settings():
         cfg["fix_metadata_default_dir"] = (data["fix_metadata_default_dir"] or "").strip()
     if "inspect_default_dir" in data:
         cfg["inspect_default_dir"] = (data["inspect_default_dir"] or "").strip()
+    if "allowed_extra_dirs" in data:
+        raw = data["allowed_extra_dirs"]
+        if isinstance(raw, str):
+            raw = raw.split("\n")
+        cleaned = []
+        for ln in (raw or []):
+            s = (ln or "").strip()
+            if s and not s.startswith("#") and s not in cleaned:
+                cleaned.append(s)
+        cfg["allowed_extra_dirs"] = cleaned
     if "capture_output_dir" in data:
         if "capture" not in cfg:
             cfg["capture"] = {}

@@ -108,6 +108,11 @@
           <p class="hint" style="margin-top:0.35rem">Initial path and <strong>Default</strong> on Inspect when nothing is remembered.</p>
         </div>
         <div class="field-row">
+          <label for="cfg-allowed-extra-dirs">Additional allowed folders (one per line)</label>
+          <textarea id="cfg-allowed-extra-dirs" rows="4" class="modal-field-input mono" style="resize:vertical;min-height:4.5rem" spellcheck="false" placeholder="~/Music&#10;/Volumes/DJ-SSD/tracks"></textarea>
+          <p class="hint" style="margin-top:0.35rem">Folders the app may read and write in <strong>Fix Metadata</strong>, <strong>Inspect</strong>, <strong>Normalise</strong>, etc., <em>in addition to</em> the Source, Destination, and default-browse folders above (subfolders are included). Use this when you edit files outside those locations. One path per line; <code>~</code> is expanded. Takes effect immediately — no restart.</p>
+        </div>
+        <div class="field-row">
           <label for="cfg-capture-output">Capture — output folder for recorded tracks</label>
           <div class="dir-bar">
             <input type="text" id="cfg-capture-output" placeholder="~/Music/playlist_recordings" autocomplete="off" />
