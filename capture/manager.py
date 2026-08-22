@@ -335,7 +335,15 @@ class CaptureManager:
             }
 
     def load_recoverable(self) -> list[CaptureSession]:
-        return self._store.list_recoverable()
+        sessions = self._store.list_recoverable()
+        # A session that is still live in this process (its worker thread is
+        # running, or it is simply the current in-memory session) is NOT
+        # "interrupted" — the browser just navigated away and back. Exclude it
+        # so the front end reconnects to it instead of offering to recover it.
+        if self._session is not None:
+            sessions = [s for s in sessions
+                        if s.session_id != self._session.session_id]
+        return sessions
 
     def recover_session(self, session_id: str):
         with self._lock:

@@ -382,6 +382,22 @@ def cleanup_session(session_id):
 # Recovery
 # ------------------------------------------------------------------
 
+@capture_bp.route("/api/capture/current")
+def current_session():
+    """The session live in this process, if any.
+
+    Used on page load to reconnect the UI to an in-progress capture after the
+    browser navigated away and back (the worker keeps running server-side).
+    Returns {} when there is no in-memory session.
+    """
+    m = _get_manager()
+    if m.session is None:
+        return jsonify({})
+    data = m.session.to_dict()
+    data["worker_alive"] = m._worker_alive()
+    return jsonify(data)
+
+
 @capture_bp.route("/api/capture/recoverable")
 def list_recoverable():
     m = _get_manager()

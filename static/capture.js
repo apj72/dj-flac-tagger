@@ -467,8 +467,42 @@
   }
 
   // ------------------------------------------------------------------
-  // Recovery check on page load
+  // Reconnect / recovery on page load
   // ------------------------------------------------------------------
+
+  // Statuses that mean "capture is actively in flight" — show the running
+  // card and resume polling. Anything else with a live session (paused,
+  // needs_attention, completed, …) drops into the review card.
+  const RUNNING_STATES = ["preflighting", "ready", "running", "stopping", "finalising"];
+
+  // Called on every page load. If a session is still live in the server
+  // process, silently reconnect the UI to it (this is the normal case when the
+  // user navigates to another tab and back — the recording never stopped).
+  // Only if there is NO live session do we look for a genuinely interrupted
+  // one to recover (that happens after the app itself was restarted).
+  async function initSessionView() {
+    try {
+      const resp = await fetch("/api/capture/current");
+      if (resp.ok) {
+        const s = await resp.json();
+        if (s && s.session_id) {
+          activeSessionId = s.session_id;
+          if (RUNNING_STATES.includes(s.status)) {
+            showCard("running");
+            renderRunning(s);
+            startPolling();
+          } else {
+            // paused / needs_attention / completed / failed / cancelled
+            showReview(s);
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      // Fall through to recovery check.
+    }
+    checkRecoverable();
+  }
 
   async function checkRecoverable() {
     try {
@@ -549,5 +583,5 @@
 
   loadDefaults();
   loadPlaylists();
-  checkRecoverable();
+  initSessionView();
 })();
