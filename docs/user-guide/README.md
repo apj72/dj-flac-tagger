@@ -13,6 +13,11 @@ Professional, **static** documentation for DJ MetaManager. Open **`index.html`**
 | `workflow-normalise.html` | Loudness normalisation |
 | `workflow-wav-to-flac.html` | Single + bulk WAV conversion, handoff |
 | `workflow-bulk-fix.html` | Batch metadata |
+| `workflow-fix-list.html` | Batch-fix from Rekordbox Library Manager CSV |
+| `workflow-lossless-check.html` | Spectral lossy-transcode detection |
+| `workflow-saved-links.html` | Bookmark music URLs to revisit |
+| `workflow-capture.html` | Automated Apple Music playlist recording (OBS) |
+| `workflow-mix-cue.html` | Mix Tags: rekordbox `.cue` → chapters, tracklist comment, mix tags, share text |
 | `reference-config-and-formats.html` | Filename rules, formats, API sketch, UI state (preview: `stream-audio`, `retag-artwork`, theme + background `localStorage`, `design/UI` masters) |
 | `partials/nav.inc.html` | **Copy-paste** nav snippet when adding pages |
 | `assets/guide.css` | Shared typography and components |

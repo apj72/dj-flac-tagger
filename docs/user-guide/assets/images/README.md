@@ -38,8 +38,11 @@ Place exported PNG (or WebP) files in this folder using the **exact filenames** 
 | 25 | `25-fix-list-track-list.png` | **Fix List**: track list with status indicators — ticks (applied), dots (matches ready), spinners (searching), format badges (FLAC/MP3/M4A/AIFF), missing-field badges (T/A/B/K/W). |
 | 26 | `26-fix-list-detail-results.png` | **Fix List**: detail panel showing search results with artwork thumbnails, title/artist/album, coloured source badges (Apple Music, Discogs, Bandcamp, SoundCloud, Beatport), auto-selected best match. |
 | 27 | `27-fix-list-export.png` | **Fix List**: export section — completed count, download CSV button for Rekordbox Library Manager playlist creation. |
+| 28 | `28-mix-cue-load.png` | **Mix Tags**: recorded mixes listed with a **cue** badge, ready to load from the Capture output folder. |
+| 29 | `29-mix-cue-editor.png` | **Mix Tags**: editable mix Title/Artist/Date and per-track times/artist/title, audio length + detected cue-time format, existing-chapters warning, write options. |
+| 30 | `30-mix-cue-share.png` | **Mix Tags**: copy-ready SoundCloud / Mixcloud / YouTube — timestamped description and plain numbered tracklist with Copy buttons. |
 
-| 30 | `30-capture-obs-routing.png` | **Capture Playlist**: OBS setup — "DJ Audio" Audio Input Capture on BlackHole 16ch, Audio Mixer with system channels (1/2) muted and Music channels (3/4) at 0 dB, MKV recording with 24-bit lossless audio, WebSocket Server Settings enabled (port 4455). |
+| 30b | `30-capture-obs-routing.png` | **Capture Playlist**: OBS setup — "DJ Audio" Audio Input Capture on BlackHole 16ch, Audio Mixer with system channels (1/2) muted and Music channels (3/4) at 0 dB, MKV recording with 24-bit lossless audio, WebSocket Server Settings enabled (port 4455). |
 
 ## Updating the guide
 

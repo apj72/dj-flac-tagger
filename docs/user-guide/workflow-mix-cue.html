@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mix Tags — DJ MetaManager</title>
+  <link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="guide-shell">
+    <div class="guide-nav-wrap">
+      <div class="guide-nav-inner">
+        <a class="guide-brand" href="index.html">DJ MetaManager &mdash; User Guide</a>
+        <nav class="guide-nav" aria-label="Guide pages">
+          <a href="index.html">Home</a>
+          <a href="install-and-setup.html">Install</a>
+          <a href="workflow-extract.html">Extract</a>
+          <a href="workflow-fix-and-inspect.html">Fix &amp; Inspect</a>
+          <a href="workflow-normalise.html">Normalise</a>
+          <a href="workflow-wav-to-flac.html">WAV &rarr; FLAC</a>
+          <a href="workflow-bulk-fix.html">Bulk Fix</a>
+          <a href="workflow-fix-list.html">Fix List</a>
+          <a href="workflow-lossless-check.html">Lossless Check</a>
+          <a href="workflow-saved-links.html">Saved Links</a>
+          <a href="workflow-capture.html">Capture</a>
+          <a href="workflow-mix-cue.html" aria-current="page">Mix Tags</a>
+          <a href="reference-config-and-formats.html">Reference</a>
+        </nav>
+      </div>
+    </div>
+
+    <main id="main" class="guide-main">
+      <p class="breadcrumb"><a href="index.html">Home</a> &middot; Mix Tags</p>
+      <h1>Mix Tags</h1>
+      <p class="lead">
+        When you record a mix in rekordbox it writes a sibling <code>.cue</code> file next to the mix audio (for example <code>my&nbsp;mix.wav</code> alongside <code>my&nbsp;mix.cue</code>) that lists every track and its start time. The <strong>Mix Tags</strong> tab reads that cue, lets you <strong>edit</strong> the tracklist, and then writes rich metadata into the mix file &mdash; plus copy-ready descriptions for SoundCloud, Mixcloud and YouTube.
+      </p>
+
+      <h2>1. Select the recorded mix</h2>
+      <p>
+        The tab opens on your Capture output folder (Settings &rarr; Capture output; it falls back to the destination folder). Files that have a paired <code>.cue</code> show a <strong>cue</strong> badge &mdash; click one to load it. Use <strong>Choose folder&hellip;</strong> or <strong>Default</strong> to point elsewhere.
+      </p>
+      <figure class="guide-figure">
+        <img src="assets/images/28-mix-cue-load.png" width="1100" height="688" alt="Mix Tags tab listing a recorded mix with a cue badge">
+        <figcaption><span class="fig-label">Figure 1.</span> Recorded mixes are listed with a <strong>cue</strong> badge; click one to load its tracklist (<code>28-mix-cue-load.png</code>).</figcaption>
+      </figure>
+
+      <h2>2. Edit the mix details and tracklist</h2>
+      <p>
+        The parsed mix Title, Artist and Date appear at the top, and every track is shown with its start time, artist and title &mdash; all <strong>editable</strong>. rekordbox often folds the artist into a track&rsquo;s title and sometimes adds a duplicate final track, so this is the place to tidy those up. Untick a track&rsquo;s checkbox to exclude it, edit start times as <code>m:ss</code> or <code>h:mm:ss</code>, or use <strong>+ Add track</strong> for anything the cue missed.
+      </p>
+      <figure class="guide-figure">
+        <img src="assets/images/29-mix-cue-editor.png" width="1100" height="688" alt="Editable mix details and tracklist with per-track times and write options">
+        <figcaption><span class="fig-label">Figure 2.</span> Editable mix details and tracklist. The header notes the audio length, detected cue-time format, and warns if the file already has chapters (<code>29-mix-cue-editor.png</code>).</figcaption>
+      </figure>
+      <div class="callout">
+        <strong>Cue-time format.</strong> rekordbox writes long-mix cue times as <code>h:mm:ss</code> rather than the CUE-standard <code>mm:ss:ff</code>. Mix Tags detects which by fitting the times against the real audio length, so chapter markers land in the right place.
+      </div>
+
+      <h2>3. Choose what to write and embed</h2>
+      <p>
+        Under <strong>Write to file</strong>, pick any of:
+      </p>
+      <ul>
+        <li><strong>Chapter markers</strong> (ID3 CHAP/CTOC) at each track boundary &mdash; navigable in players that support chapters (VLC, foobar2000, chapter-aware podcast apps).</li>
+        <li><strong>Tracklist comment</strong> &mdash; a timestamped list written to the Comment tag.</li>
+        <li><strong>Mix tags</strong> &mdash; Title, Artist, Album and Date.</li>
+      </ul>
+      <p>
+        Click <strong>Embed into mix file</strong>. Re-embedding replaces any previous chapters. <strong>Reload from cue</strong> discards your edits and re-reads the original <code>.cue</code>.
+      </p>
+      <div class="callout">
+        <strong>Which format keeps chapters?</strong> Chapters need an ID3 container, which <strong>WAV, MP3 and AIFF</strong> provide. <strong>FLAC and M4A/ALAC cannot store chapters</strong> &mdash; for those, Mix Tags still writes the tags and tracklist comment but skips chapters. If you want chapters in a smaller file, export as MP3.
+      </div>
+
+      <h2>4. Share to SoundCloud, Mixcloud and YouTube</h2>
+      <p>
+        Those platforms don&rsquo;t read embedded chapters, so the <strong>Share</strong> panel generates copy-ready text from your edited tracklist: a <strong>timestamped description</strong> (for the SoundCloud description, YouTube, or Mixcloud notes) and a <strong>plain numbered tracklist</strong>. Both update live as you edit, each with a <strong>Copy</strong> button.
+      </p>
+      <figure class="guide-figure">
+        <img src="assets/images/30-mix-cue-share.png" width="1100" height="688" alt="Copy-ready timestamped description and numbered tracklist for streaming platforms">
+        <figcaption><span class="fig-label">Figure 3.</span> Copy-ready description and numbered tracklist for streaming platforms (<code>30-mix-cue-share.png</code>).</figcaption>
+      </figure>
+      <p class="hint">SoundCloud reads Title and Artwork from the file&rsquo;s tags on upload (now written for you); paste the timestamped description into its description field. Mixcloud has a per-track tracklist in its uploader &mdash; enter the tracks from the timestamped list.</p>
+    </main>
+
+    <footer class="guide-footer">
+      <p>DJ MetaManager user guide &middot; Modular HTML in <code>docs/user-guide/</code></p>
+    </footer>
+  </div>
+</body>
+</html>

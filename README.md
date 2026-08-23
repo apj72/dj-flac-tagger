@@ -36,7 +36,7 @@ OBS is still primarily a **video** app: even when you only care about audio, it 
 
 ## What It Does
 
-Twelve pages, via tabs at the top (order: **Extract → Inspect → Fix Metadata → Bulk Fix → Fix List → Normalise → WAV/AIFF → FLAC → Lossless Check → Saved Links → Capture Playlist → Settings**). An optional, experimental **Playlist Builder** tab (browse your Apple Music library and create playlists) is hidden by default; enable **Settings → Show Playlist Builder tab** to reveal it.
+Thirteen pages, via tabs at the top (order: **Extract → Inspect → Fix Metadata → Bulk Fix → Fix List → Normalise → WAV/AIFF → FLAC → Lossless Check → Saved Links → Capture Playlist → Mix Tags → Settings**). An optional, experimental **Playlist Builder** tab (browse your Apple Music library and create playlists) is hidden by default; enable **Settings → Show Playlist Builder tab** to reveal it.
 
 ### Extract (main workflow)
 
@@ -253,6 +253,35 @@ Apple Music  -->  System output: BlackHole 16ch (44.1 kHz)
 **Fix artwork:** external mastering (e.g. Platinum Notes) can strip embedded cover art when it rewrites a file. The **Fix artwork** button at the bottom of the Capture tab re-applies artwork to every completed track in the session — it re-fetches each track's cover from Music and re-embeds it into the current file, touching **only** the picture so tags written by Platinum Notes are preserved. Progress is shown live (`Fixing artwork… 12/31`) with a summary of how many were fixed, skipped (output file no longer at its original path), or failed. Run it **after** your Platinum Notes pass.
 
 **Requirements:** [BlackHole](https://existential.audio/blackhole/) (free, 16-channel version) and [OBS Studio](https://obsproject.com/) (free, includes obs-websocket). See the [Capture Playlist user guide](docs/user-guide/workflow-capture.html) for detailed setup instructions.
+
+### Mix Tags (rekordbox cue → mix file)
+
+When you record a mix in rekordbox it writes a sibling `.cue` file next to the mix
+audio (e.g. `my mix.wav` + `my mix.cue`) listing every track and its start time.
+The **Mix Tags** tab turns that into rich metadata:
+
+1. Pick the folder of recorded mixes (defaults to your Capture output folder). Files
+   with a paired `.cue` show a **cue** badge; click one to load it.
+2. The parsed mix title/artist/date and the full tracklist appear **editable** — fix
+   titles, remove duplicate tracks rekordbox sometimes adds, adjust start times
+   (`m:ss` or `h:mm:ss`).
+3. Choose what to write and click **Embed into mix file**:
+   - **Chapter markers** (ID3 CHAP/CTOC) at each track boundary — navigable in VLC,
+     foobar2000 and podcast/chapter-aware players.
+   - **Tracklist comment** — a timestamped list in the Comment tag.
+   - **Mix tags** — Title, Artist, Album, Date.
+
+Chapters need an ID3 container (WAV/MP3/AIFF); for FLAC/M4A the tags and comment are
+still written and chapters are skipped.
+
+rekordbox writes long-mix cue times as `h:mm:ss` rather than the CUE-standard
+`mm:ss:ff`; the parser detects which by fitting against the real audio length, so
+track markers land at the right place.
+
+**Sharing to SoundCloud / Mixcloud / YouTube:** those platforms don't read embedded
+chapters, so the tab also generates copy-ready text from the (edited) tracklist — a
+**timestamped description** and a **plain numbered list** — with Copy buttons. Paste
+into the track description / tracklist on upload.
 
 ### Default artwork
 

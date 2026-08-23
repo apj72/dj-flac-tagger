@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mix Tags — DJ MetaManager</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <script src="/static/theme-init.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="page-mix-cue">
+  <div class="app">
+    <header>
+      <h1 class="sr-only">DJ MetaManager</h1>
+      <div class="header-logo-wrap">
+        <a href="/" class="header-logo-link" aria-label="DJ MetaManager home">
+          <img src="/static/header-logo-dark-112h.png" alt="" width="366" height="112" class="header-logo header-logo--dark" decoding="async" />
+          <img src="/static/header-logo-light-112h.png" alt="" width="370" height="112" class="header-logo header-logo--light" decoding="async" />
+        </a>
+      </div>
+      <nav class="tab-nav">
+        <a href="/" class="tab-link tab-link--icon-only" data-tooltip="Extract" aria-label="Extract"><span class="tab-icon tab-icon-extract" aria-hidden="true"></span></a>
+        <a href="/inspect" class="tab-link tab-link--icon-only" data-tooltip="Inspect" aria-label="Inspect"><span class="tab-icon tab-icon-inspect" aria-hidden="true"></span></a>
+        <a href="/fix" class="tab-link tab-link--icon-only" data-tooltip="Fix Metadata" aria-label="Fix Metadata"><span class="tab-icon tab-icon-fix" aria-hidden="true"></span></a>
+        <a href="/bulk-fix" class="tab-link tab-link--icon-only" data-tooltip="Bulk Fix" aria-label="Bulk Fix"><span class="tab-icon tab-icon-bulk-fix" aria-hidden="true"></span></a>
+        <a href="/fix-list" class="tab-link tab-link--icon-only" data-tooltip="Fix List" aria-label="Fix List"><span class="tab-icon tab-icon-fix-list" aria-hidden="true"></span></a>
+        <a href="/normalise" class="tab-link tab-link--icon-only" data-tooltip="Normalise" aria-label="Normalise"><span class="tab-icon tab-icon-normalise" aria-hidden="true"></span></a>
+        <a href="/convert" class="tab-link tab-link--icon-only" data-tooltip="WAV/AIFF → FLAC" aria-label="WAV/AIFF to FLAC"><span class="tab-icon tab-icon-convert" aria-hidden="true"></span></a>
+        <a href="/lossless-check" class="tab-link tab-link--icon-only" data-tooltip="Lossless Check" aria-label="Lossless Check"><span class="tab-icon tab-icon-lossless-check" aria-hidden="true"></span></a>
+        <a href="/saved-links" class="tab-link tab-link--icon-only" data-tooltip="Saved Links" aria-label="Saved Links"><span class="tab-icon tab-icon-saved-links" aria-hidden="true"></span></a>
+        <a href="/capture" class="tab-link tab-link--icon-only" data-tooltip="Capture Playlist" aria-label="Capture Playlist"><span class="tab-icon tab-icon-capture" aria-hidden="true"></span></a>
+        <a href="/mix-cue" class="tab-link tab-link--icon-only active" data-tooltip="Mix Tags" aria-label="Mix Tags"><span class="tab-icon tab-icon-mix-cue" aria-hidden="true"></span></a>
+        <a href="/playlist-builder" class="tab-link tab-link--icon-only" data-tooltip="Playlist Builder" aria-label="Playlist Builder"><span class="tab-icon tab-icon-playlist-builder" aria-hidden="true"></span></a>
+        <a href="/settings" class="tab-link tab-link--icon-only" data-tooltip="Settings" aria-label="Settings"><span class="tab-icon tab-icon-settings" aria-hidden="true"></span></a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- Select mix -->
+      <section class="card">
+        <h2>
+          Recorded mix &amp; tracklist
+          <span class="help-tip">
+            <button type="button" class="help-tip-btn" aria-label="About Mix Tags">?</button>
+            <span class="help-tip-bubble" role="tooltip">Reads the <code class="mono">.cue</code> file rekordbox writes next to a recorded mix, lets you edit the tracklist, then embeds <strong>chapter markers</strong>, a timestamped <strong>tracklist comment</strong>, and mix <strong>Title / Artist / Date</strong> into the mix file. Also generates copy-ready descriptions for <strong>SoundCloud</strong>, <strong>Mixcloud</strong> and <strong>YouTube</strong>.</span>
+          </span>
+        </h2>
+        <div class="dir-bar">
+          <input type="text" id="mc-dir" placeholder="~/Music/playlist_recordings" />
+          <button type="button" id="mc-list-btn" class="btn btn-secondary">List mixes</button>
+          <button type="button" id="mc-choose-folder-btn" class="btn btn-secondary" title="Open folder navigator on the server">Choose folder…</button>
+          <button type="button" id="mc-default-dir-btn" class="btn btn-secondary" title="Settings → Capture output (or destination)">Default</button>
+        </div>
+        <div id="mc-file-list" class="file-list" tabindex="0" role="listbox" aria-label="Recorded mixes in folder"></div>
+        <p id="mc-load-status" class="hint hidden" style="margin-top:0.5rem"></p>
+      </section>
+
+      <!-- Edit + embed -->
+      <section class="card hidden" id="mc-editor">
+        <h2>
+          Mix details
+          <span id="mc-audio-info" class="hint" style="font-weight:normal;margin-left:0.5rem"></span>
+        </h2>
+        <p id="mc-existing-warning" class="hint hidden" style="color:var(--danger)"></p>
+
+        <div class="field-row inline-fields">
+          <div class="field-row">
+            <label for="mc-title">Title</label>
+            <input type="text" id="mc-title" autocomplete="off" />
+          </div>
+          <div class="field-row">
+            <label for="mc-artist">Artist</label>
+            <input type="text" id="mc-artist" autocomplete="off" />
+          </div>
+        </div>
+        <div class="field-row inline-fields">
+          <div class="field-row">
+            <label for="mc-album">Album (optional)</label>
+            <input type="text" id="mc-album" autocomplete="off" placeholder="Defaults to Title" />
+          </div>
+          <div class="field-row">
+            <label for="mc-date">Date</label>
+            <input type="text" id="mc-date" autocomplete="off" placeholder="YYYY-MM-DD" />
+          </div>
+        </div>
+
+        <h3 style="margin:1rem 0 0.35rem">Tracklist</h3>
+        <p class="hint" style="margin-top:0">Edit titles, artists and start times. Times are <code>m:ss</code> or <code>h:mm:ss</code>. Drop the checkbox to exclude a track (e.g. a duplicate).</p>
+        <div id="mc-tracks" class="mc-tracks"></div>
+        <button type="button" id="mc-add-track-btn" class="btn btn-secondary btn-sm" style="margin-top:0.5rem">+ Add track</button>
+
+        <h3 style="margin:1rem 0 0.35rem">Write to file</h3>
+        <div class="field-row">
+          <label class="inline"><input type="checkbox" id="mc-opt-chapters" checked /> <span><strong>Chapter markers</strong> (CHAP/CTOC) — navigable in players that support them (VLC, foobar2000, podcast apps)</span></label>
+          <label class="inline"><input type="checkbox" id="mc-opt-comment" checked /> <span><strong>Tracklist comment</strong> — timestamped list in the Comment tag</span></label>
+          <label class="inline"><input type="checkbox" id="mc-opt-tags" checked /> <span><strong>Mix tags</strong> — Title, Artist, Album, Date</span></label>
+        </div>
+        <div class="dir-bar" style="margin-top:0.75rem">
+          <button type="button" id="mc-embed-btn" class="btn btn-primary">Embed into mix file</button>
+          <button type="button" id="mc-reload-btn" class="btn btn-secondary" title="Discard edits and re-read the .cue">Reload from cue</button>
+        </div>
+        <p id="mc-embed-status" class="settings-status hidden" style="margin-top:0.5rem"></p>
+      </section>
+
+      <!-- Share text -->
+      <section class="card hidden" id="mc-share">
+        <h2>Share for SoundCloud / Mixcloud / YouTube</h2>
+        <p class="hint" style="margin-top:0">These platforms don't read embedded chapters, so paste this text into the track's description / tracklist. Updates live as you edit above.</p>
+
+        <div class="field-row">
+          <label for="mc-share-desc">Timestamped description <span class="hint">(SoundCloud description, YouTube, Mixcloud notes)</span></label>
+          <textarea id="mc-share-desc" rows="8" class="modal-field-input mono" style="resize:vertical" spellcheck="false" readonly></textarea>
+          <button type="button" class="btn btn-secondary btn-sm mc-copy-btn" data-target="mc-share-desc" style="margin-top:0.4rem">Copy</button>
+        </div>
+        <div class="field-row">
+          <label for="mc-share-list">Plain numbered tracklist <span class="hint">(where timestamps aren't wanted)</span></label>
+          <textarea id="mc-share-list" rows="8" class="modal-field-input mono" style="resize:vertical" spellcheck="false" readonly></textarea>
+          <button type="button" class="btn btn-secondary btn-sm mc-copy-btn" data-target="mc-share-list" style="margin-top:0.4rem">Copy</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/path-persist.js"></script>
+  <script src="/static/folder-picker.js"></script>
+  <script src="/static/mix-cue.js"></script>
+  <script src="/static/player.js"></script>
+</body>
+</html>

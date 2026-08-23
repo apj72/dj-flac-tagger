@@ -29,6 +29,7 @@ from mutagen.oggvorbis import OggVorbis
 # Tests use ``app_module.XXX`` to access functions / constants.
 # ---------------------------------------------------------------------------
 import config as _config_mod
+import cue as _cue_mod
 from config import *      # noqa: F401,F403
 from scrapers import *    # noqa: F401,F403
 from metadata import *    # noqa: F401,F403
@@ -696,6 +697,11 @@ def settings_page():
 @app.route("/convert")
 def convert_wav_page():
     return app.send_static_file("convert.html")
+
+
+@app.route("/mix-cue")
+def mix_cue_page():
+    return app.send_static_file("mix-cue.html")
 
 
 @app.route("/api/search")
@@ -2568,6 +2574,136 @@ def browse_wav():
         except OSError:
             continue
     return jsonify({"directory": directory, "files": files})
+
+
+@app.route("/api/mix-cue/list")
+def mix_cue_list():
+    """List candidate mix audio files in a folder, flagging those with a paired .cue.
+
+    Defaults to the capture output folder (where rekordbox recordings usually land),
+    then the destination folder.
+    """
+    cfg = load_config()  # noqa: F405
+    default_dir = ((cfg.get("capture") or {}).get("output_dir")
+                   or cfg.get("destination_dir") or cfg.get("source_dir") or "~")
+    directory = request.args.get("dir") or default_dir
+    directory = resolve(directory)  # noqa: F405
+    if not os.path.isdir(directory):
+        return jsonify({"error": f"Directory not found: {directory}"}), 404
+
+    files = []
+    for f in sorted(Path(directory).iterdir()):
+        if not f.is_file() or f.suffix.lower() not in _cue_mod.MIX_AUDIO_EXTS:
+            continue
+        cue_path = f.with_suffix(".cue")
+        has_cue = cue_path.is_file()
+        try:
+            size_mb = round(f.stat().st_size / (1024 * 1024), 1)
+        except OSError:
+            size_mb = None
+        files.append({
+            "name": f.name,
+            "path": str(f),
+            "size_mb": size_mb,
+            "has_cue": has_cue,
+            "cue_path": str(cue_path) if has_cue else None,
+        })
+    return jsonify({"directory": directory, "files": files})
+
+
+@app.route("/api/mix-cue/parse", methods=["POST"])
+def mix_cue_parse():
+    """Parse a rekordbox .cue and return the editable mix + tracklist.
+
+    Body: {audio_path?, cue_path?}. When only audio_path is given, the sibling
+    .cue (same name) is used. Also returns the audio length and any existing tags.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    audio_path = (data.get("audio_path") or "").strip()
+    cue_path = (data.get("cue_path") or "").strip()
+    if not audio_path and not cue_path:
+        return jsonify({"error": "audio_path or cue_path required"}), 400
+
+    try:
+        if audio_path:
+            audio_path = _validate_path_in_allowed_dirs(resolve(audio_path))  # noqa: F405
+        if not cue_path and audio_path:
+            cue_path = str(Path(audio_path).with_suffix(".cue"))
+        cue_path = _validate_path_in_allowed_dirs(resolve(cue_path))  # noqa: F405
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    if not os.path.isfile(cue_path):
+        return jsonify({"error": f"No .cue file found at: {cue_path}"}), 404
+
+    audio_info = {}
+    if audio_path and os.path.isfile(audio_path):
+        try:
+            audio_info = _cue_mod.read_audio_summary(audio_path)
+        except Exception as e:
+            audio_info = {"error": str(e)}
+
+    try:
+        with open(cue_path, "r", encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        parsed = _cue_mod.parse_cue(text, audio_length=audio_info.get("length_seconds"))
+    except Exception as e:
+        return jsonify({"error": f"Failed to parse cue: {e}"}), 400
+
+    return jsonify({
+        "audio_path": audio_path,
+        "cue_path": cue_path,
+        "parsed": parsed,
+        "audio": audio_info,
+    })
+
+
+@app.route("/api/mix-cue/embed", methods=["POST"])
+def mix_cue_embed():
+    """Embed chapters + tracklist comment + mix tags into the mix audio file.
+
+    Body: {audio_path, mix{title,performer,album,date}, tracks[{title,performer,
+    start_seconds}], write_chapters, write_comment, write_tags}.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    audio_path = (data.get("audio_path") or "").strip()
+    if not audio_path:
+        return jsonify({"error": "audio_path required"}), 400
+    try:
+        audio_path = _validate_path_in_allowed_dirs(resolve(audio_path))  # noqa: F405
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    if not os.path.isfile(audio_path):
+        return jsonify({"error": f"Audio file not found: {audio_path}"}), 404
+
+    mix = data.get("mix") or {}
+    raw_tracks = data.get("tracks") or []
+    tracks = []
+    for t in raw_tracks:
+        try:
+            start = float(t.get("start_seconds"))
+        except (TypeError, ValueError):
+            start = 0.0
+        tracks.append({
+            "title": str(t.get("title") or "").strip(),
+            "performer": str(t.get("performer") or "").strip(),
+            "start_seconds": max(0.0, start),
+        })
+    tracks.sort(key=lambda x: x["start_seconds"])
+
+    try:
+        summary = _cue_mod.embed_mix_metadata(
+            audio_path,
+            mix,
+            tracks,
+            write_chapters=bool(data.get("write_chapters", True)),
+            write_comment=bool(data.get("write_comment", True)),
+            write_tags=bool(data.get("write_tags", True)),
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+    return jsonify({"ok": True, "audio_path": audio_path, **summary})
 
 
 @app.route("/api/scan-normalise-bulk")

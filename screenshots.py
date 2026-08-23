@@ -9,7 +9,7 @@ config = {
 scenarios = [
     {
         "name": "01-nav-all-tabs",
-        "caption": "Main navigation header with all eight tab icons",
+        "caption": "Main navigation header with all tab icons",
         "actions": [{"wait": ".tab-nav"}, {"wait": 400}],
     },
     {
@@ -212,6 +212,39 @@ scenarios = [
         "actions": [
             {"wait": 2500},
             {"scroll": "#fl-apply-card"},
+        ],
+    },
+    {
+        "name": "28-mix-cue-load",
+        "caption": "Mix Tags: recorded mixes listed with a cue badge, ready to load",
+        "url": "/mix-cue",
+        "actions": [
+            {"wait": "#mc-file-list .file-item"},
+            {"wait": 600},
+        ],
+    },
+    {
+        "name": "29-mix-cue-editor",
+        "caption": "Mix Tags: editable mix details and tracklist with per-track times, plus write options",
+        "url": "/mix-cue",
+        "actions": [
+            {"wait": "#mc-file-list .file-item"},
+            {"js": "([...document.querySelectorAll('#mc-file-list .file-item')].find(e=>e.textContent.toLowerCase().includes('.wav'))||document.querySelector('#mc-file-list .file-item')).click()"},
+            {"wait": "#mc-tracks .mc-track-row"},
+            {"scroll": "#mc-editor"},
+            {"wait": 800},
+        ],
+    },
+    {
+        "name": "30-mix-cue-share",
+        "caption": "Mix Tags: copy-ready SoundCloud / Mixcloud / YouTube description and tracklist",
+        "url": "/mix-cue",
+        "actions": [
+            {"wait": "#mc-file-list .file-item"},
+            {"js": "([...document.querySelectorAll('#mc-file-list .file-item')].find(e=>e.textContent.toLowerCase().includes('.wav'))||document.querySelector('#mc-file-list .file-item')).click()"},
+            {"wait": "#mc-tracks .mc-track-row"},
+            {"scroll": "#mc-share"},
+            {"wait": 800},
         ],
     },
 ]
